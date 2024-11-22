@@ -4,7 +4,9 @@ from rest_service.models import Task, TelegramUser
 
 
 class RestService:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str = None):
+        if not base_url:
+            base_url = "http://rest_service:8000/api"
         self.base_url = base_url
 
     def create_task(self, user_id: int, text: str) -> Task:
@@ -33,10 +35,26 @@ class RestService:
             f"{self.base_url}/tasks/{task_id}",
             json=update_data,
         )
+
+        # Проверяем на статус 422 перед вызовом raise_for_status
+        if response.status_code == 422:
+            # Логируем подробности об ошибке
+            print("Ошибка 422. Подробности:", response.json())
+            raise requests.exceptions.HTTPError(f"422 Unprocessable Entity: {response.json()}")
+
+        # Проверяем на другие ошибки
         response.raise_for_status()
+
         return Task(**response.json())
 
-    def get_or_create_user(self, telegram_id: str, username: Optional[str] = None) -> TelegramUser:
+    def get_task(self, task_id: int) -> Task:
+        """Получить или создать таску."""
+        response = requests.get(f"{self.base_url}/tasks/{task_id}")
+        if response.status_code != 200:
+            response.raise_for_status()
+        return Task(**response.json())
+
+    def get_or_create_user(self, telegram_id: int, username: Optional[str] = None) -> TelegramUser:
         """Получить или создать пользователя."""
         # Попытка получить пользователя
         response = requests.get(f"{self.base_url}/users", params={"telegram_id": telegram_id})
