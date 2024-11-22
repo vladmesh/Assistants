@@ -4,8 +4,7 @@ from enum import Enum
 
 
 class TaskStatus(str, Enum):
-    CREATED = "Создано"
-    IN_PROGRESS = "В процессе"
+    ACTIVE = "Активно"
     CANCELLED = "Отменено"
     DONE = "Готово"
 
@@ -13,7 +12,7 @@ class TaskStatus(str, Enum):
 class Task(BaseModel):
     id: Optional[int]
     text: Optional[str]
-    status: Optional[TaskStatus] = TaskStatus.CREATED
+    status: Optional[TaskStatus] = TaskStatus.ACTIVE
     user_id: Optional[int]
 
     def update_dict(self) -> dict:
@@ -23,6 +22,6 @@ class Task(BaseModel):
 
 class TelegramUser(BaseModel):
     id: Optional[int]
-    telegram_id: str
+    telegram_id: int
     username: Optional[str]
     tasks: List[Task] = []

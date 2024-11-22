@@ -7,7 +7,7 @@ from app.database import get_session
 router = APIRouter()
 
 class UserCreate(BaseModel):
-    telegram_id: str
+    telegram_id: int
     username: str = None
 
 @router.post("/users/")
@@ -19,7 +19,7 @@ def create_user(user: UserCreate, session: Session = Depends(get_session)):
     return db_user
 
 @router.get("/users/")
-def get_user(telegram_id: str, session: Session = Depends(get_session)):
+def get_user(telegram_id: int, session: Session = Depends(get_session)):
     """Получить пользователя по telegram_id."""
     query = select(TelegramUser).where(TelegramUser.telegram_id == telegram_id)
     user = session.exec(query).first()
