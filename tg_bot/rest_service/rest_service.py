@@ -9,19 +9,18 @@ class RestService:
             base_url = "http://rest_service:8000/api"
         self.base_url = base_url
 
-    def create_task(self, user_id: int, text: str) -> Task:
+    def create_task(self, task: Task) -> Task:
         """Создать новую задачу."""
         response = requests.post(
-            f"{self.base_url}/tasks",
-            json={"user_id": user_id, "text": text},
-        )
+            f"{self.base_url}/tasks/",
+            json=task.update_dict())
         response.raise_for_status()
         return Task(**response.json())
 
     def get_tasks(self, user_id: int) -> List[Task]:
         """Получить список задач пользователя."""
         response = requests.get(
-            f"{self.base_url}/tasks",
+            f"{self.base_url}/tasks/",
             params={"user_id": user_id},
         )
         response.raise_for_status()

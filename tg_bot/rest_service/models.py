@@ -10,14 +10,17 @@ class TaskStatus(str, Enum):
 
 
 class Task(BaseModel):
-    id: Optional[int]
-    text: Optional[str]
+    id: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
     status: Optional[TaskStatus] = TaskStatus.ACTIVE
-    user_id: Optional[int]
+    user_id: Optional[int] = None
 
     def update_dict(self) -> dict:
         """Возвращает словарь с изменёнными полями."""
-        return {key: value for key, value in self.dict(exclude_unset=True).items() if value is not None}
+        data = {key: value for key, value in self.dict(exclude_unset=True).items() if value is not None}
+        print(f"Данные для обновления: {data}")
+        return data
 
 
 class TelegramUser(BaseModel):

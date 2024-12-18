@@ -26,7 +26,8 @@ class TelegramUser(BaseModel, table=True):
 
 class Task(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    text: str
+    title: str
+    description: str
     status: TaskStatus = Field(default=TaskStatus.ACTIVE)
     user_id: Optional[int] = Field(default=None, foreign_key="telegramuser.id")
     user: Optional[TelegramUser] = Relationship(back_populates="tasks")

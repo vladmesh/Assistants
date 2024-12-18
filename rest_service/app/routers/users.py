@@ -12,6 +12,7 @@ class UserCreate(BaseModel):
 
 @router.post("/users/")
 def create_user(user: UserCreate, session: Session = Depends(get_session)):
+    print("post user")
     db_user = TelegramUser(telegram_id=user.telegram_id, username=user.username)
     session.add(db_user)
     session.commit()
