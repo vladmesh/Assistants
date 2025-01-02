@@ -1,6 +1,6 @@
 from typing import List, Optional
 import requests
-from rest_service.models import Task, TelegramUser
+from rest_service.models import Task, TelegramUser, TaskStatus
 
 
 class RestService:
@@ -17,11 +17,14 @@ class RestService:
         response.raise_for_status()
         return Task(**response.json())
 
-    def get_tasks(self, user_id: int) -> List[Task]:
+    def get_active_tasks(self, user_id: int) -> List[Task]:
         """Получить список задач пользователя."""
+        response = requests.get(f"{self.base_url}/users", params={"telegram_id": user_id})
+        response.raise_for_status()
+        user = TelegramUser(**response.json())
+        print(user)
         response = requests.get(
-            f"{self.base_url}/tasks/",
-            params={"user_id": user_id},
+            f"{self.base_url}/tasks/active/{user.id}"
         )
         response.raise_for_status()
         tasks = response.json()

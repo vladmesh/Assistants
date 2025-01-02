@@ -19,14 +19,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.reply_text(
         f"Привет, {user.username or 'пользователь'}! Я помогу управлять твоими задачами. Вот что я умею:\n"
-        "/tasks - посмотреть задачи\n"
+        "/tasks - посмотреть активные задачи\n"
+        "/new_task - добавить новую задачу\n"
     )
 
 async def tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Вывод списка задач с кнопками."""
     telegram_id = str(update.message.from_user.id)
     rest_service = RestService()
-    tasks_list = rest_service.get_tasks(user_id=int(telegram_id))
+    tasks_list = rest_service.get_active_tasks(user_id=int(telegram_id))
 
     if not tasks_list:
         await update.message.reply_text("У тебя пока нет задач.")

@@ -42,6 +42,19 @@ def get_task(task_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
+@router.get("/tasks/active/{user_id}")
+def get_active_tasks_for_user(user_id: int, session: Session = Depends(get_session)):
+    """
+    Get all active tasks for a specific user.
+    """
+    # Define the query to filter by user_id and active status
+    query = select(Task).where(Task.user_id == user_id, Task.status == TaskStatus.ACTIVE)
+    active_tasks = session.exec(query).all()
+
+
+    return active_tasks
+
+
 
 
 
@@ -66,7 +79,6 @@ def create_task(task_data: TaskCreate, session: Session = Depends(get_session)):
     """
     Создание новой задачи.
     """
-    print(f"таска: {task_data}")
     user = session.get(TelegramUser, task_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
