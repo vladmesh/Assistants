@@ -4,11 +4,16 @@ from telegram.ext import ContextTypes
 from rest_service.models import Task, TaskStatus
 from rest_service.rest_service import RestService
 
+from commands.show_menu import show_menu
 
-async def new_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Начало создания новой задачи."""
+
+async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Начало создания новой задачи через инлайн-кнопку."""
+    query = update.callback_query
+    await query.answer()  # Подтверждаем запрос, чтобы убрать "загрузку" на кнопке
+
     context.user_data["new_task_stage"] = "waiting_for_title"
-    await update.message.reply_text("Напиши название новой задачи.")
+    await query.edit_message_text("Напиши название новой задачи.")
 
 async def handle_new_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработка ввода данных для новой задачи."""
@@ -44,6 +49,7 @@ async def handle_new_task(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         await update.message.reply_text(f"Задача создана: {created_task.title}")
         context.user_data.clear()
+        await show_menu(update, context)
 
 async def skip_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработка пропуска описания."""
@@ -66,3 +72,4 @@ async def skip_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     await update.message.reply_text(f"Задача создана: {created_task.title}")
     context.user_data.clear()
+    await show_menu(update, context)
