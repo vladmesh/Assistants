@@ -4,15 +4,23 @@ from telegram.ext import ContextTypes
 from rest_service.models import TaskStatus
 from rest_service.rest_service import RestService
 
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
+from telegram.ext import ContextTypes
+
+from commands.show_menu import show_menu
+
 
 async def tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Вывод списка задач с кнопками."""
-    telegram_id = str(update.message.from_user.id)
+    query = update.callback_query
+    await query.answer()  # Подтверждаем callback, чтобы убрать "загрузку" на кнопке
+
+    telegram_id = str(update.effective_user.id)
     rest_service = RestService()
     tasks_list = rest_service.get_active_tasks(user_id=int(telegram_id))
 
     if not tasks_list:
-        await update.message.reply_text("У тебя пока нет задач.")
+        await query.edit_message_text("У тебя пока нет задач.")
         return
 
     # Создание кнопок для каждой задачи
@@ -22,7 +30,9 @@ async def tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     keyboard = InlineKeyboardMarkup(buttons)
 
-    await update.message.reply_text("Вот список твоих задач:", reply_markup=keyboard)
+    await query.edit_message_text("Вот список твоих задач:", reply_markup=keyboard)
+
+
 
 async def edit_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработка кнопки редактирования задачи."""
@@ -44,25 +54,22 @@ async def edit_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Что ты хочешь сделать с задачей '{task.title}'?", reply_markup=keyboard
     )
 
+
 async def edit_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработка изменения описания задачи."""
     query = update.callback_query
     await query.answer()  # Закрываем всплывающее окно Telegram
-    
-    # Извлечение ID задачи из callback_data
+
     task_id = int(query.data.split("_")[1])
     rest_service = RestService()
-    
-    # Получение текущей задачи
     task = rest_service.get_task(task_id=task_id)
-    
-    # Запрос для ввода нового описания через отдельное сообщение
+
     await query.edit_message_text(f"Текущее описание задачи '{task.title}': {task.description}\n\n"
                                   f"Отправь отдельное сообщение с новым описанием для задачи.")
-    
-    # Ожидание пользовательского ввода
+
     context.user_data["task_id"] = task_id
     context.user_data["awaiting_description"] = True
+
 
 async def set_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Установка нового описания задачи."""
@@ -70,21 +77,21 @@ async def set_description(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text("Нет активного запроса на изменение описания.")
         return
 
-    # Получение новых данных от пользователя
     new_description = update.message.text
     task_id = context.user_data["task_id"]
     rest_service = RestService()
 
-    # Обновление описания задачи
     task = rest_service.get_task(task_id=task_id)
     task.description = new_description
     updated_task = rest_service.update_task(task_id=task_id, task=task)
 
-    # Сброс состояния
     context.user_data.pop("task_id", None)
     context.user_data.pop("awaiting_description", None)
 
     await update.message.reply_text(f"Описание задачи '{updated_task.title}' успешно обновлено.")
+    await show_menu(update, context)
+
+
 
 
 async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -92,17 +99,13 @@ async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     query = update.callback_query
     await query.answer()
 
-    # Извлечение ID задачи из callback_data
     task_id = int(query.data.split("_")[1])
     rest_service = RestService()
-
-    # Получение текущей задачи
     task = rest_service.get_task(task_id=task_id)
 
-    # Кнопки с выбором статуса
     buttons = [
         [InlineKeyboardButton(status.value, callback_data=f"setstatus_{task_id}_{status.name}")]
-        for status in TaskStatus if status.value != task.status.value
+        for status in TaskStatus if status != task.status
     ]
     keyboard = InlineKeyboardMarkup(buttons)
 
@@ -110,28 +113,22 @@ async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         f"Выбери новый статус для задачи '{task.title}':", reply_markup=keyboard
     )
 
-
 async def set_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Установка нового статуса задачи."""
     query = update.callback_query
     await query.answer()
 
-    # Извлечение данных из callback_data
     data = query.data.split("_")
     task_id = int(data[1])
     new_status = data[2]
 
     rest_service = RestService()
-
-    # Получение текущей задачи
     task = rest_service.get_task(task_id=task_id)
-
-    # Обновление статуса в модели задачи
     task.status = TaskStatus[new_status]
 
-    print(task.status)
-
-    # Вызов update_task с обновлённой моделью
     updated_task = rest_service.update_task(task_id=task_id, task=task)
 
     await query.edit_message_text(f"Статус задачи обновлён на {updated_task.status.value}.")
+    await show_menu(update, context)
+
+
