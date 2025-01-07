@@ -26,5 +26,8 @@ class Task(BaseModel):
 class TelegramUser(BaseModel):
     id: Optional[int]
     telegram_id: int
+    chat_id: int
     username: Optional[str]
-    tasks: List[Task] = []
+    from pydantic import Field
+
+    tasks: List[Task] = Field(default_factory=list)

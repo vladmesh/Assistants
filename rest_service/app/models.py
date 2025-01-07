@@ -21,6 +21,7 @@ class TaskStatus(str, enum.Enum):
 class TelegramUser(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     telegram_id: int = Field(unique=True, nullable=False)
+    chat_id: int = Field(unique=True, nullable=False)
     username: Optional[str]
     tasks: List["Task"] = Relationship(back_populates="user")
 
