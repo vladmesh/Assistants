@@ -56,7 +56,7 @@ class RestService:
             response.raise_for_status()
         return Task(**response.json())
 
-    def get_or_create_user(self, telegram_id: int, username: Optional[str] = None) -> TelegramUser:
+    def get_or_create_user(self, telegram_id: int, chat_id: int, username: Optional[str] = None) -> TelegramUser:
         """Получить или создать пользователя."""
         # Попытка получить пользователя
         response = requests.get(f"{self.base_url}/users", params={"telegram_id": telegram_id})
@@ -64,10 +64,17 @@ class RestService:
             # Создать нового пользователя
             response = requests.post(
                 f"{self.base_url}/users",
-                json={"telegram_id": telegram_id, "username": username},
+                json={"telegram_id": telegram_id, "username": username, "chat_id": chat_id},
             )
             response.raise_for_status()
         elif response.status_code != 200:
             response.raise_for_status()  # Другие ошибки
+        else:
+            user = TelegramUser(**response.json())
+            if user.chat_id != chat_id:
+                response = requests.patch(
+                    f"{self.base_url}/users/{user.id}",
+                    json={"chat_id": chat_id},
+                )
 
         return TelegramUser(**response.json())

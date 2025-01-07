@@ -50,6 +50,15 @@ services:
       networks:
         - app_network
 
+  cron_service:
+    build:
+      context: ./cron_service
+    environment:
+      - TG_BOT_URL=http://bot:8000
+      - TELEGRAM_ID=${TELEGRAM_ID}
+    restart: always
+    networks:
+      - app_network
 
 networks:
   app_network:
