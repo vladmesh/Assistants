@@ -18,6 +18,16 @@ class TaskStatus(str, enum.Enum):
     CANCELLED = "Отменено"
     DONE = "Готово"
 
+class CronJobType(str, enum.Enum):
+    NOTIFICATION = "notification"
+    SCHEDULE = "schedule"
+
+class CronJobStatus(str, enum.Enum):
+    CREATED = "created"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
 class TelegramUser(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     telegram_id: int = Field(unique=True, nullable=False)
@@ -32,3 +42,22 @@ class Task(BaseModel, table=True):
     status: TaskStatus = Field(default=TaskStatus.ACTIVE)
     user_id: Optional[int] = Field(default=None, foreign_key="telegramuser.id")
     user: Optional[TelegramUser] = Relationship(back_populates="tasks")
+
+class CronJob(BaseModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    type: CronJobType = Field(default=CronJobType.NOTIFICATION)
+    cron_expression: str
+    user_id: Optional[int] = Field(default=None, foreign_key="telegramuser.id")
+
+class CronJobNotification(BaseModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_cron_id: Optional[int] = Field(default=None, foreign_key="jobcron.id")
+    message: str
+
+class CronJobRecord(BaseModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_cron_id: Optional[int] = Field(default=None, foreign_key="jobcron.id")
+    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    finished_at: Optional[datetime] = None
+    status: CronJobStatus = Field(default=CronJobStatus.CREATED)

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.routers import users, tasks
-from app.database import init_db
+from app.routers import users, tasks, cron_jobs
+from app.database import init_db, create_test_data
 from fastapi.exceptions import RequestValidationError
 import logging
 
@@ -27,9 +27,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Подключение роутеров
 app.include_router(users.router, prefix="/api", tags=["Users"])
 app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
+app.include_router(cron_jobs.router, prefix="/api", tags=["Cron Jobs"])
 
 
 # Создание таблиц при старте сервиса
 @app.on_event("startup")
 def on_startup():
     init_db(True)
+    create_test_data()
