@@ -2,6 +2,7 @@ from sqlmodel import SQLModel, create_engine, Session
 from .models import TelegramUser, Task, CronJob, TaskStatus, CronJobType
 import os
 import random
+from sqlalchemy import text
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
@@ -16,7 +17,10 @@ def init_db(reset: bool = False):
     Если reset=True, база данных пересоздаётся.
     """
     if reset:
-        SQLModel.metadata.drop_all(engine)  # Удаляем все таблицы
+        with engine.begin() as conn:
+            # Удаляем public со всеми таблицами, последовательностями и т.д.
+            conn.execute(text("DROP SCHEMA public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
     SQLModel.metadata.create_all(engine)  # Создаём таблицы
 
 
