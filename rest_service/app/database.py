@@ -58,7 +58,7 @@ def create_test_data():
         job1 = CronJob(
             name="Test Job 1",
             type=CronJobType.NOTIFICATION,
-            cron_expression="0 9 * * *",
+            cron_expression="9 * * * *",
             user=user1
         )
         job2 = CronJob(
