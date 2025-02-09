@@ -1,7 +1,7 @@
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 import enum
-from sqlalchemy import event
+from sqlalchemy import event, Column, BigInteger
 from datetime import datetime
 
 class BaseModel(SQLModel):
@@ -30,8 +30,7 @@ class CronJobStatus(str, enum.Enum):
 
 class TelegramUser(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    telegram_id: int = Field(unique=True, nullable=False)
-    chat_id: int = Field(unique=True, nullable=False)
+    telegram_id: int = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
     username: Optional[str]
     tasks: List["Task"] = Relationship(back_populates="user")
     cronjobs: List["CronJob"] = Relationship(back_populates="user")

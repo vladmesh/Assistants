@@ -8,12 +8,11 @@ router = APIRouter()
 
 class UserCreate(BaseModel):
     telegram_id: int
-    chat_id: int
     username: str = None
 
 @router.post("/users/")
 def create_user(user: UserCreate, session: Session = Depends(get_session)):
-    db_user = TelegramUser(telegram_id=user.telegram_id, username=user.username, chat_id=user.chat_id)
+    db_user = TelegramUser(telegram_id=user.telegram_id, username=user.username)
     session.add(db_user)
     session.commit()
     session.refresh(db_user)

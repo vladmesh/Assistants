@@ -36,7 +36,7 @@ async def handle_new_task(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         description = update.message.text
         title = context.user_data["title"]
         telegram_user = rest_service.get_or_create_user(
-            telegram_id=int(telegram_id), username=update.message.from_user.username, chat_id=update.message.chat_id
+            telegram_id=int(telegram_id), username=update.message.from_user.username
         )
 
         task = Task(title=title, user_id=telegram_user.id, status=TaskStatus.ACTIVE)
@@ -65,7 +65,7 @@ async def skip_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     # Отправить задачу в REST API
     telegram_user = rest_service.get_or_create_user(
-        telegram_id=int(telegram_id), username=update.message.from_user.username, chat_id=update.message.chat_id
+        telegram_id=int(telegram_id), username=update.message.from_user.username
     )
     task = Task(title=title, user_id=telegram_user.id, status=TaskStatus.ACTIVE)
     created_task = rest_service.create_task(task)
