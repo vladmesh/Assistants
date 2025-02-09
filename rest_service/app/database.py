@@ -37,8 +37,8 @@ def create_test_data():
             return
 
         # Создаём тестовых пользователей
-        user1 = TelegramUser(telegram_id=625038902, chat_id=625038902, username="vladmesh")
-        user2 = TelegramUser(telegram_id=54321, chat_id=9876, username="test_user2")
+        user1 = TelegramUser(telegram_id=625038902, username="vladmesh")
+        user2 = TelegramUser(telegram_id=7192117299, username="vladislav_meshk")
 
         # Создаём тестовые задачи
         task1 = Task(

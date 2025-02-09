@@ -26,7 +26,6 @@ class Task(BaseModel):
 class TelegramUser(BaseModel):
     id: Optional[int]
     telegram_id: int
-    chat_id: int
     username: Optional[str]
     from pydantic import Field
 
