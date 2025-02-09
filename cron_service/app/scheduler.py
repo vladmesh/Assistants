@@ -11,7 +11,7 @@ scheduler = BlockingScheduler()
 def start_scheduler():
     """Запускает планировщик задач."""
     # Периодически обновляет задачи из REST-сервиса
-    scheduler.add_job(update_jobs_from_rest, "interval", minutes=5)
+    scheduler.add_job(update_jobs_from_rest, "interval", minutes=1)
 
     scheduler.start()
 
@@ -25,7 +25,7 @@ def update_jobs_from_rest():
         if not scheduler.get_job(job_id):
             scheduler.add_job(
                 execute_job,
-                "cron",
+                trigger="cron",
                 id=job_id,
                 name=job["name"],
                 args=[job],
@@ -34,6 +34,7 @@ def update_jobs_from_rest():
             print(f"Задача {job['name']} добавлена.")
         else:
             print(f"Задача {job['name']} уже существует.")
+    scheduler.print_jobs()
 
 
 def parse_cron_expression(cron_expression: str) -> dict:

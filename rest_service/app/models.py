@@ -34,6 +34,7 @@ class TelegramUser(BaseModel, table=True):
     chat_id: int = Field(unique=True, nullable=False)
     username: Optional[str]
     tasks: List["Task"] = Relationship(back_populates="user")
+    cronjobs: List["CronJob"] = Relationship(back_populates="user")
 
 class Task(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -49,6 +50,7 @@ class CronJob(BaseModel, table=True):
     type: CronJobType = Field(default=CronJobType.NOTIFICATION)
     cron_expression: str
     user_id: Optional[int] = Field(default=None, foreign_key="telegramuser.id")
+    user: Optional[TelegramUser] = Relationship(back_populates="cronjobs")
 
 class CronJobNotification(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
