@@ -5,6 +5,10 @@ from app.models import *
 from app.main import app
 from app.database import engine as main_engine, get_session
 from fastapi.testclient import TestClient
+import os
+
+# Отключаем создание __pycache__ при запуске тестов
+os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 
 # Создаем отдельный engine для тестов
 TEST_DATABASE_URL = "postgresql://test_user:test_password@localhost:5433/test_db"
@@ -24,7 +28,7 @@ def db_session(test_db):
     
     # Очищаем все таблицы перед каждым тестом
     for table in reversed(SQLModel.metadata.sorted_tables):
-        session.execute(text(f"TRUNCATE TABLE {table.name} CASCADE"))
+        session.exec(text(f"TRUNCATE TABLE {table.name} CASCADE"))
     session.commit()
     
     yield session

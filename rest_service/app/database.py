@@ -32,7 +32,7 @@ def create_test_data():
     """
     with Session(engine) as session:
         # Проверяем, есть ли уже данные, чтобы не создавать дубликаты
-        if session.query(TelegramUser).first():
+        if session.exec(TelegramUser).first():
             print("Тестовые данные уже существуют. Пропускаем.")
             return
 
