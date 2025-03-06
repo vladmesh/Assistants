@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from app.utils.keyboard import get_main_menu_keyboard, format_task_message
-from app.handlers.base import BaseHandler
+from app.handlers.base import BaseHandler, require_user
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 class TaskHandler(BaseHandler):
     """Обработчик для работы с задачами."""
     
+    @require_user
     async def add_task(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик добавления новой задачи."""
         try:
@@ -21,6 +22,7 @@ class TaskHandler(BaseHandler):
         except Exception as e:
             await self.handle_error(update, context, e)
     
+    @require_user
     async def handle_new_task(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик ввода новой задачи."""
         try:
@@ -43,6 +45,7 @@ class TaskHandler(BaseHandler):
         except Exception as e:
             await self.handle_error(update, context, e)
     
+    @require_user
     async def skip_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик пропуска описания задачи."""
         try:
@@ -78,6 +81,7 @@ class TaskHandler(BaseHandler):
         )
         self.clear_user_state(context)
     
+    @require_user
     async def list_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показывает список задач."""
         try:
@@ -110,6 +114,7 @@ class TaskHandler(BaseHandler):
         except Exception as e:
             await self.handle_error(update, context, e)
     
+    @require_user
     async def update_task_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обновляет статус задачи."""
         try:

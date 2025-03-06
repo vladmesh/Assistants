@@ -13,9 +13,31 @@ class CommandHandler(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start."""
         try:
+            # Проверяем, существует ли пользователь
+            user = self.rest_client.get_user(telegram_id=update.effective_user.id)
+            
+            if user:
+                message = (
+                    "С возвращением! 👋\n"
+                    "Используйте меню ниже для управления задачами:"
+                )
+            else:
+                # Создаем нового пользователя
+                user = self.rest_client.create_user(
+                    telegram_id=update.effective_user.id,
+                    username=update.effective_user.username
+                )
+                message = (
+                    "Добро пожаловать! 👋\n"
+                    "Я бот для управления задачами. С моей помощью вы можете:\n"
+                    "• Создавать новые задачи\n"
+                    "• Просматривать список задач\n"
+                    "• Отмечать задачи как выполненные\n\n"
+                    "Используйте меню ниже для навигации:"
+                )
+            
             await update.message.reply_text(
-                "👋 Привет! Я бот для управления задачами.\n"
-                "Используйте меню ниже для навигации:",
+                message,
                 reply_markup=get_main_menu_keyboard()
             )
             logger.info(f"User {update.effective_user.id} started the bot")
