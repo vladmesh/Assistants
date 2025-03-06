@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, create_engine, Session
+from sqlmodel import SQLModel, create_engine, Session, select
 from .models import TelegramUser, Task, CronJob, TaskStatus, CronJobType
 import os
 import random
@@ -32,7 +32,7 @@ def create_test_data():
     """
     with Session(engine) as session:
         # Проверяем, есть ли уже данные, чтобы не создавать дубликаты
-        if session.exec(TelegramUser).first():
+        if session.exec(select(TelegramUser)).first():
             print("Тестовые данные уже существуют. Пропускаем.")
             return
 
@@ -58,7 +58,7 @@ def create_test_data():
         job1 = CronJob(
             name="Test Job 1",
             type=CronJobType.NOTIFICATION,
-            cron_expression="9 * * * *",
+            cron_expression="29 * * * *",
             user=user1
         )
         job2 = CronJob(

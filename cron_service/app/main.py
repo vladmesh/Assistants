@@ -1,7 +1,10 @@
 from scheduler import start_scheduler
+import logging
+
+logger = logging.getLogger(__name__)
 
 def main():
-    print("Запускаем Cron Service...")
+    logger.info("Запускаем Cron Service...")
     start_scheduler()
 
 if __name__ == "__main__":

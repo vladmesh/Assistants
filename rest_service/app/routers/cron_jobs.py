@@ -20,7 +20,7 @@ class CronJobUpdateRequest(BaseModel):
 
     def dict_for_update(self):
         """Возвращает словарь только с установленными полями."""
-        return {key: value for key, value in self.dict(exclude_unset=True).items() if value is not None}
+        return {key: value for key, value in self.model_dump(exclude_unset=True).items() if value is not None}
 
 
 @router.get("/cronjobs/")
