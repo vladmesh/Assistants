@@ -10,6 +10,11 @@ import os
 # Отключаем создание __pycache__ при запуске тестов
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 
+# Настраиваем pytest-asyncio
+pytest_plugins = ('pytest_asyncio',)
+pytest_asyncio_mode = "strict"
+pytest_asyncio_default_fixture_loop_scope = "function"
+
 # Создаем отдельный engine для тестов
 TEST_DATABASE_URL = "postgresql://test_user:test_password@localhost:5433/test_db"
 test_engine = create_engine(TEST_DATABASE_URL, echo=True)
