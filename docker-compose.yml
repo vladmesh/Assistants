@@ -17,10 +17,12 @@ services:
     container_name: telegram_bot
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - REST_SERVICE_URL=http://rest_service:8000
     depends_on:
       - assistant
       - db
       - notification_service
+      - rest_service
     networks:
       - app_network
 
