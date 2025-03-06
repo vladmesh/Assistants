@@ -1,10 +1,48 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable
 from telegram import Update
 from telegram.ext import ContextTypes
 from app.utils.keyboard import get_main_menu_keyboard
 import logging
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+
+def require_user(func: Callable):
+    """Декоратор для проверки существования пользователя."""
+    @wraps(func)
+    async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        try:
+            # Проверяем существование пользователя
+            user = self.rest_client.get_user(telegram_id=update.effective_user.id)
+            if not user:
+                message = "Пожалуйста, сначала нажмите /start для регистрации."
+                if update.callback_query:
+                    await update.callback_query.message.reply_text(
+                        message,
+                        reply_markup=get_main_menu_keyboard()
+                    )
+                else:
+                    await update.message.reply_text(
+                        message,
+                        reply_markup=get_main_menu_keyboard()
+                    )
+                return
+            return await func(self, update, context, *args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error checking user {update.effective_user.id}: {str(e)}")
+            message = "Произошла ошибка при проверке пользователя. Попробуйте позже."
+            if update.callback_query:
+                await update.callback_query.message.reply_text(
+                    message,
+                    reply_markup=get_main_menu_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    message,
+                    reply_markup=get_main_menu_keyboard()
+                )
+    return wrapper
 
 
 class BaseHandler:

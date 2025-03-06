@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 class RestClient:
@@ -20,29 +20,49 @@ class RestClient:
         response.raise_for_status()
         return response.json()
     
-    def get_or_create_user(self, telegram_id: int, username: Optional[str] = None) -> Dict[str, Any]:
-        """Получает или создает пользователя."""
+    def get_user(self, telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Получает пользователя по telegram_id."""
         try:
-            # Пробуем найти пользователя
             response = self._make_request(
                 "GET",
                 "/users/",
                 params={"telegram_id": telegram_id}
             )
-            if response:
-                return response
+            # Если API вернул пустой список или словарь без данных
+            if not response:
+                return None
+            # Если API вернул список пользователей
+            if isinstance(response, list):
+                return response[0] if response else None
+            # Если API вернул одного пользователя как словарь
+            return response
+        except requests.exceptions.RequestException as e:
+            print(f"Error in get_user: {e}")
+            return None
+    
+    def create_user(self, telegram_id: int, username: Optional[str] = None) -> Dict[str, Any]:
+        """Создает нового пользователя."""
+        return self._make_request(
+            "POST",
+            "/users/",
+            json={
+                "telegram_id": telegram_id,
+                "username": username
+            }
+        )
+    
+    def get_or_create_user(self, telegram_id: int, username: Optional[str] = None) -> Dict[str, Any]:
+        """Получает или создает пользователя."""
+        try:
+            # Пробуем найти пользователя
+            user = self.get_user(telegram_id)
+            if user:
+                return user
             
             # Если пользователь не найден, создаем нового
-            return self._make_request(
-                "POST",
-                "/users/",
-                json={
-                    "telegram_id": telegram_id,
-                    "username": username
-                }
-            )
+            return self.create_user(telegram_id, username)
         except requests.exceptions.RequestException as e:
-            print(f"Error in get_or_create_user: {e}")  # Добавляем логирование
+            print(f"Error in get_or_create_user: {e}")
             # В случае ошибки возвращаем базовую информацию о пользователе
             return {
                 "id": telegram_id,
@@ -50,7 +70,7 @@ class RestClient:
                 "username": username
             }
     
-    def get_user_tasks(self, user_id: int) -> list[Dict[str, Any]]:
+    def get_user_tasks(self, user_id: int) -> List[Dict[str, Any]]:
         """Получает список задач пользователя."""
         try:
             return self._make_request(
@@ -58,7 +78,7 @@ class RestClient:
                 f"/tasks/active/{user_id}"
             )
         except requests.exceptions.RequestException as e:
-            print(f"Error in get_user_tasks: {e}")  # Добавляем логирование
+            print(f"Error in get_user_tasks: {e}")
             return []
     
     def create_task(self, user_id: int, name: str, description: Optional[str] = None) -> Dict[str, Any]:
