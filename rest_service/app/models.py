@@ -2,16 +2,16 @@ from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 import enum
 from sqlalchemy import event, Column, BigInteger
-from datetime import datetime
+from datetime import datetime, UTC
 
 class BaseModel(SQLModel):
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)
 
 # События для автоматического обновления
 @event.listens_for(BaseModel, "before_update", propagate=True)
 def before_update(mapper, connection, target):
-    target.updated_at = datetime.utcnow()
+    target.updated_at = datetime.now(UTC)
 
 class TaskStatus(str, enum.Enum):
     ACTIVE = "Активно"
@@ -59,6 +59,6 @@ class CronJobNotification(BaseModel, table=True):
 class CronJobRecord(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     cron_job_id: Optional[int] = Field(default=None, foreign_key="cronjob.id")
-    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)
     finished_at: Optional[datetime] = None
     status: CronJobStatus = Field(default=CronJobStatus.CREATED)
