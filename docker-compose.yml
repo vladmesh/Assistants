@@ -20,6 +20,7 @@ services:
     depends_on:
       - assistant
       - db
+      - notification_service
     networks:
       - app_network
 
@@ -54,9 +55,38 @@ services:
     build:
       context: ./cron_service
     environment:
-      - TG_BOT_URL=http://bot:8000
+      - NOTIFICATION_SERVICE_URL=http://notification_service:8000
       - TELEGRAM_ID=${TELEGRAM_ID}
-    restart: always
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      - rest_service
+      - notification_service
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  notification_service:
+    build:
+      context: ./notification_service
+    container_name: notification_service
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - app_network
 
@@ -66,3 +96,4 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:
