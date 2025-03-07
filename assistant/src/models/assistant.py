@@ -1,10 +1,8 @@
 from typing import List, Dict, Any
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.tools import BaseTool
 import os
 import logging
+from langchain.agents.openai_assistant import OpenAIAssistantRunnable
+from langchain.tools import BaseTool
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,47 +12,46 @@ class Assistant:
     def __init__(
         self,
         tools: List[BaseTool],
-        model_name: str = "gpt-3.5-turbo",
-        temperature: float = 0.7,
+        name: str = "Секретарь",
+        instructions: str = """Ты - умный секретарь, который помогает пользователю управлять различными аспектами жизни.
+        Твои основные задачи:
+        1. Управление календарем (создание, изменение, удаление встреч)
+        2. Ответы на вопросы пользователя
+        3. Помощь в планировании дня
+        
+        Всегда отвечай на русском языке.
+        Будь точным с датами и временем.
+        Если не уверен в чем-то - переспроси у пользователя.
+        """,
+        model: str = "gpt-4-1106-preview"
     ):
         self.tools = tools
-        api_key = os.getenv("OPENAI_API_KEY")
-        logger.info(f"Initializing ChatOpenAI with key prefix: {api_key[:10]}...")
         
-        self.llm = ChatOpenAI(
-            model_name=model_name,
-            temperature=temperature
+        # Convert LangChain tools to OpenAI format
+        openai_tools = [tool.openai_schema for tool in tools]
+        
+        logger.info(f"Creating assistant with {len(tools)} tools")
+        self.assistant = OpenAIAssistantRunnable.create_assistant(
+            name=name,
+            instructions=instructions,
+            tools=openai_tools,
+            model=model
         )
-        
-        # Create the prompt template
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful assistant that can use various tools to help users. "
-                      "Always think carefully about which tool to use and explain your reasoning."),
-            ("user", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad")
-        ])
-        
-        # Create the agent
-        self.agent = create_openai_tools_agent(
-            llm=self.llm,
-            tools=self.tools,
-            prompt=prompt
-        )
-        
-        # Create the agent executor
-        self.agent_executor = AgentExecutor.from_agent_and_tools(
-            agent=self.agent,
-            tools=self.tools,
-            verbose=True
-        )
+        logger.info(f"Assistant created successfully")
     
-    async def process_message(self, message: str) -> Dict[str, Any]:
-        """
-        Process a user message and return the response.
-        """
+    async def process_message(self, message: str, user_id: str = None, chat_id: str = None) -> Dict[str, Any]:
+        """Process a user message and return the response."""
         try:
-            logger.info(f"Processing message: {message}")
-            response = await self.agent_executor.ainvoke({"input": message})
+            logger.info(f"Processing message from user {user_id}: {message}")
+            
+            # Use thread_id based on user_id and chat_id to maintain context
+            thread = {"user_id": user_id, "chat_id": chat_id} if user_id and chat_id else None
+            
+            response = await self.assistant.ainvoke({
+                "content": message,
+                "thread": thread
+            })
+            
             logger.info(f"Got response: {response}")
             return {
                 "status": "success",

@@ -26,12 +26,28 @@ class AssistantOrchestrator:
         ]
         
         # Initialize assistant
-        self.assistant = Assistant(tools=self.tools)
+        self.assistant = Assistant(
+            tools=self.tools,
+            name="Секретарь",
+            instructions="""Ты - умный секретарь, который помогает пользователю управлять различными аспектами жизни.
+            Твои основные задачи:
+            1. Управление календарем (создание, изменение, удаление встреч)
+            2. Ответы на вопросы пользователя
+            3. Помощь в планировании дня
+            
+            Всегда отвечай на русском языке.
+            Будь точным с датами и временем.
+            Если не уверен в чем-то - переспроси у пользователя."""
+        )
     
     async def process_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process a message and return the response."""
         try:
-            result = await self.assistant.process_message(data["message"])
+            result = await self.assistant.process_message(
+                message=data["message"],
+                user_id=data["user_id"],
+                chat_id=data.get("chat_id")
+            )
             return {
                 "user_id": data["user_id"],
                 "chat_id": data.get("chat_id"),
