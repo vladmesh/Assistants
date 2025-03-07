@@ -89,9 +89,48 @@ python assistant/src/main.py
 
 ## Тестирование
 
+Каждый сервис содержит свой набор тестов. Для запуска всех тестов используйте:
+
 ```bash
-pytest rest_service/tests/
+# Запуск всех тестов
+./run_tests.sh
 ```
+
+### REST Service
+- Тесты для CRUD операций с задачами
+- Тесты для управления пользователями
+- Тесты для работы с cron-задачами
+```bash
+cd rest_service
+docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+```
+
+### Notification Service
+- Тесты отправки уведомлений
+- Тесты обработки приоритетов
+- Тесты работы с Redis
+```bash
+cd notification_service
+./run_tests.sh
+```
+
+### Cron Service
+- Тесты парсинга cron-выражений
+- Тесты отправки уведомлений
+- Тесты получения запланированных задач
+```bash
+cd cron_service
+docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+```
+
+### Статус тестов
+| Сервис | Кол-во тестов | Статус |
+|--------|---------------|---------|
+| REST Service | 21 | ✅ |
+| Notification Service | 12 | ✅ |
+| Cron Service | 6 | ✅ |
+| Telegram Bot | - | ⚠️ В разработке |
+| Assistant Service | - | ⚠️ В разработке |
 
 ## Документация
 
