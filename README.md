@@ -1,37 +1,37 @@
 # Smart Assistant
 
-Умный ассистент с поддержкой естественного языка, построенный на LangChain и различных моделях OpenAI.
+An intelligent assistant powered by LangChain and OpenAI Assistants API, designed to help manage various aspects of daily life through natural language interaction.
 
-## Возможности
+## Features
 
-- 🗓️ Управление календарем
-- 🌤️ Информация о погоде
-- ✅ Управление задачами
-- ❤️ Интеграция с устройствами здоровья
-- 📍 Геолокационные функции
+- 🗓️ Calendar Management
+- 🌤️ Weather Information
+- ✅ Task Management
+- ❤️ Health Device Integration
+- 📍 Geofencing Features
 
-## Технологии
+## Technologies
 
 - Python
-- LangChain
+- LangChain with OpenAI Assistants API
 - OpenAI Models:
-  - GPT-4
-  - GPT-3.5-turbo
-  - GPT-3.5-turbo-16k
+  - GPT-4 (main assistant)
+  - GPT-3.5-turbo (simple queries)
+  - GPT-3.5-turbo-16k (large context)
 - FastAPI
 - Redis
 - PostgreSQL
 - Docker
 
-## Установка
+## Installation
 
-1. Клонируйте репозиторий:
+1. Clone the repository:
 ```bash
 git clone <repository-url>
 cd Assistants
 ```
 
-2. Создайте файл `.env` с необходимыми переменными окружения:
+2. Create `.env` file with required environment variables:
 ```bash
 OPENAI_API_KEY=your_openai_api_key
 TELEGRAM_TOKEN=your_telegram_bot_token
@@ -41,97 +41,80 @@ POSTGRES_DB=your_db_name
 DATABASE_URL=postgresql://user:password@db:5432/dbname
 ```
 
-3. Запустите сервисы через Docker Compose:
+3. Start services with Docker Compose:
 ```bash
 docker compose up -d
 ```
 
-## Структура проекта
+## Project Structure
 
 ```
 .
-├── assistant/          # Сервис ассистента
-│   ├── src/           # Исходный код
-│   │   ├── models/    # Модели данных
-│   │   ├── tools/     # Инструменты LangChain
-│   │   └── utils/     # Вспомогательные функции
+├── assistant/          # Assistant service
+│   ├── src/           # Source code
+│   │   ├── models/    # Data models
+│   │   ├── tools/     # LangChain tools
+│   │   └── utils/     # Helper functions
 │   ├── Dockerfile     
 │   └── requirements.txt
-├── rest_service/      # REST API сервис
-├── tg_bot/           # Telegram бот
-├── notification_service/ # Сервис уведомлений
-├── cron_service/     # Сервис для выполнения задач по расписанию
+├── rest_service/      # REST API service
+├── tg_bot/           # Telegram bot
+├── notification_service/ # Notification service
+├── cron_service/     # Scheduled tasks service
 └── docker-compose.yml
 ```
 
-## Разработка
+## Development
 
-Для локальной разработки:
+For local development:
 
-1. Создайте виртуальное окружение:
+1. Create virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# или
+# or
 venv\Scripts\activate  # Windows
 ```
 
-2. Установите зависимости:
+2. Install dependencies:
 ```bash
 pip install -r assistant/requirements.txt
 ```
 
-3. Запустите сервисы в режиме разработки:
+3. Start services in development mode:
 ```bash
 docker compose up -d db redis
 python assistant/src/main.py
 ```
 
-## Тестирование
+## Testing
 
-Каждый сервис содержит свой набор тестов. Для запуска всех тестов используйте:
-
+Run all tests:
 ```bash
-# Запуск всех тестов
 ./run_tests.sh
 ```
 
-### REST Service
-- Тесты для CRUD операций с задачами
-- Тесты для управления пользователями
-- Тесты для работы с cron-задачами
+Individual service tests:
 ```bash
-cd rest_service
-docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+# REST Service tests
+cd rest_service && pytest tests/
+
+# Notification Service tests
+cd notification_service && pytest tests/
+
+# Cron Service tests
+cd cron_service && pytest tests/
 ```
 
-### Notification Service
-- Тесты отправки уведомлений
-- Тесты обработки приоритетов
-- Тесты работы с Redis
-```bash
-cd notification_service
-./run_tests.sh
-```
-
-### Cron Service
-- Тесты парсинга cron-выражений
-- Тесты отправки уведомлений
-- Тесты получения запланированных задач
-```bash
-cd cron_service
-docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
-```
-
-### Статус тестов
-| Сервис | Кол-во тестов | Статус |
-|--------|---------------|---------|
+Test status:
+| Service | Tests | Status |
+|---------|-------|--------|
 | REST Service | 21 | ✅ |
 | Notification Service | 12 | ✅ |
 | Cron Service | 6 | ✅ |
-| Telegram Bot | - | ⚠️ В разработке |
-| Assistant Service | - | ⚠️ В разработке |
+| Assistant Service | - | 🚧 |
+| Telegram Bot | - | 🚧 |
 
-## Документация
+## Documentation
 
-Подробная документация доступна в [project_overview.md](project_overview.md). 
+For detailed documentation, see [project_overview.md](project_overview.md). 

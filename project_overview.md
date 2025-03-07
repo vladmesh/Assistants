@@ -43,11 +43,11 @@ Telegram Bot – a user-friendly and accessible entry point for users.
 
 ### Core Components
 - **Programming Language**: Python
-- **LLM Framework**: LangChain
+- **LLM Framework**: LangChain with OpenAI Assistants API
 - **Chat Models**: 
-  - OpenAI GPT-4 (для сложных задач и рассуждений)
-  - GPT-3.5-turbo (для простых запросов)
-  - GPT-3.5-turbo-16k (для задач с большим контекстом)
+  - GPT-4 (for complex reasoning and main assistant)
+  - GPT-3.5-turbo (for simple queries)
+  - GPT-3.5-turbo-16k (for tasks with large context)
 - **Web Framework**: FastAPI
 - **Message Queue**: Redis
 - **Database**: PostgreSQL
@@ -55,9 +55,10 @@ Telegram Bot – a user-friendly and accessible entry point for users.
 
 ### Service Architecture
 - **Assistant Service**: 
-  - Core service using LangChain and OpenAI
-  - Handles natural language processing
+  - Core service using LangChain and OpenAI Assistants API
+  - Maintains conversation threads and context
   - Manages tool execution
+  - Specialized assistants for different domains (Secretary, Health, etc.)
 - **REST Service**: 
   - External API integrations
   - Data persistence
@@ -75,7 +76,7 @@ Telegram Bot – a user-friendly and accessible entry point for users.
 ### Request Flow
 1. User sends a message to the Telegram Bot
 2. Message is queued in Redis
-3. Assistant Service processes the message using LangChain and GPT-4
+3. Assistant Service processes the message using LangChain and OpenAI Assistants API
 4. Based on the intent:
    - Direct response: returns text to user
    - Tool execution: calls appropriate service
@@ -84,8 +85,9 @@ Telegram Bot – a user-friendly and accessible entry point for users.
 
 ### LangChain Configuration
 The Assistant uses:
+- OpenAI Assistants API for persistent context and specialized assistants
 - Custom tools for each service integration
-- Conversation memory for context
+- Thread management for conversation history
 - Structured output parsing
 - Error handling and retry logic
 
@@ -93,9 +95,10 @@ The Assistant uses:
 
 ### Completed
 1. Basic service architecture
-2. LangChain integration
+2. LangChain integration with Assistants API
 3. Redis message queuing
 4. Calendar tool implementation
+5. Secretary assistant implementation
 
 ### In Progress
 1. Weather integration
@@ -104,14 +107,15 @@ The Assistant uses:
 4. Geofencing system
 
 ### Planned
-1. User preferences
-2. Advanced notifications
-3. Analytics and reporting
-4. Multi-language support
+1. Health assistant implementation
+2. Study assistant implementation
+3. Habits assistant implementation
+4. Analytics and reporting
+5. Multi-language support
 
 ## Advantages
-- **Natural Language**: Гибкое использование различных моделей OpenAI
-- **Модульный дизайн**: Easy to add new tools and services
+- **Context Awareness**: Persistent conversation threads via Assistants API
+- **Modular Design**: Easy to add new tools and assistants
 - **Scalable**: Independent service scaling
 - **Maintainable**: Clean code structure
 - **Reliable**: Queue-based architecture
