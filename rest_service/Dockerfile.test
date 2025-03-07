@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Копируем только requirements.txt сначала, чтобы кэшировать слой с зависимостями
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install pytest pytest-asyncio
+
+# Копируем код приложения и тесты
+COPY . .
+
+# Добавляем текущую директорию в PYTHONPATH
+ENV PYTHONPATH=/app
+
+# Запускаем тесты
+CMD ["pytest", "tests/", "-v"] 

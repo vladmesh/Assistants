@@ -3,24 +3,20 @@ from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy import text
 from app.models import *
 from app.main import app
-from app.database import engine as main_engine, get_session
+from app.database import get_session
 from fastapi.testclient import TestClient
 import os
 
 # Отключаем создание __pycache__ при запуске тестов
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 
-# Настраиваем pytest-asyncio
-pytest_plugins = ('pytest_asyncio',)
-pytest_asyncio_mode = "strict"
-pytest_asyncio_default_fixture_loop_scope = "function"
-
 # Создаем отдельный engine для тестов
-TEST_DATABASE_URL = "postgresql://test_user:test_password@localhost:5433/test_db"
+TEST_DATABASE_URL = "postgresql://test_user:test_password@test-db:5432/test_db"
 test_engine = create_engine(TEST_DATABASE_URL, echo=True)
 
 @pytest.fixture(scope="session")
 def test_db():
+    """Create test database"""
     SQLModel.metadata.create_all(test_engine)
     yield
     SQLModel.metadata.drop_all(test_engine)
