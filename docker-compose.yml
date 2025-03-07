@@ -5,9 +5,10 @@ services:
     container_name: assistant_service
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_ASSISTANT_ID=${OPENAI_ASSISTANT_ID}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
-      - db
+      - redis
     networks:
       - app_network
 
