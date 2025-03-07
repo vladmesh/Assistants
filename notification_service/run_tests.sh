@@ -1,22 +1,16 @@
 #!/bin/bash
 
-# Создаем сеть, если её нет
-docker network create notification_service_default 2>/dev/null || true
+# Остановить и удалить существующие контейнеры
+docker compose -f docker-compose.test.yml down
 
-# Запускаем Redis для тестов
-docker run -d --name notification_service-test-redis \
-  --network notification_service_default \
-  redis:7-alpine
+# Запустить тесты
+docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
 
-# Ждем, пока Redis будет готов
-echo "Waiting for Redis to be ready..."
-sleep 2
+# Получить статус выполнения тестов
+TEST_EXIT_CODE=$(docker compose -f docker-compose.test.yml ps -q tests | xargs docker inspect -f '{{.State.ExitCode}}')
 
-# Запускаем тесты
-echo "Running tests..."
-pytest tests/ -v
+# Очистка
+docker compose -f docker-compose.test.yml down
 
-# Очищаем
-echo "Cleaning up..."
-docker rm -f notification_service-test-redis
-docker network rm notification_service_default 
+# Выход с кодом завершения тестов
+exit $TEST_EXIT_CODE 
