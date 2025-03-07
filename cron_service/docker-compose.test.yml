@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - REST_SERVICE_URL=http://mock:8000
+      - NOTIFICATION_SERVICE_URL=http://mock:8001
+
+volumes:
+  test_db_data: 

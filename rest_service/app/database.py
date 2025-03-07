@@ -5,6 +5,7 @@ import random
 from sqlalchemy import text
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+
 engine = create_engine(DATABASE_URL)
 
 def get_session():
@@ -22,9 +23,6 @@ def init_db(reset: bool = False):
             conn.execute(text("DROP SCHEMA public CASCADE"))
             conn.execute(text("CREATE SCHEMA public"))
     SQLModel.metadata.create_all(engine)  # Создаём таблицы
-
-
-
 
 def create_test_data():
     """

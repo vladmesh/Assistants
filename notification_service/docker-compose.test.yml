@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  test-redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - REDIS_HOST=test-redis
+      - REDIS_PORT=6379
+      - TELEGRAM_TOKEN=test_token
+    depends_on:
+      test-redis:
+        condition: service_healthy
+    command: pytest tests/ -v 
