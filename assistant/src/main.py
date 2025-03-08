@@ -67,14 +67,14 @@ class AssistantOrchestrator:
         while True:
             try:
                 # Get message from input queue
-                _, message = await self.redis.brpop("assistant_input_queue")
+                _, message = await self.redis.brpop("telegram_input_queue")
                 data = json.loads(message)
                 
                 # Process message
                 result = await self.process_message(data)
                 
                 # Send result to output queue
-                await self.redis.lpush("assistant_output_queue", json.dumps(result))
+                await self.redis.lpush("telegram_output_queue", json.dumps(result))
                 
             except Exception as e:
                 print(f"Error processing message: {e}")

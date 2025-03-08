@@ -3,6 +3,7 @@ import os
 import logging
 from langchain.agents.openai_assistant import OpenAIAssistantRunnable
 from langchain.tools import BaseTool
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,22 +45,82 @@ class Assistant:
         try:
             logger.info(f"Processing message from user {user_id}: {message}")
             
-            # Use thread_id based on user_id and chat_id to maintain context
-            thread = {"user_id": user_id, "chat_id": chat_id} if user_id and chat_id else None
+            # Create thread context
+            thread_context = {"user_id": user_id, "chat_id": chat_id} if user_id and chat_id else None
             
+            # Invoke assistant
+            logger.info("Invoking assistant...")
             response = await self.assistant.ainvoke({
                 "content": message,
-                "thread": thread
+                "thread": thread_context
             })
             
-            logger.info(f"Got response: {response}")
+            logger.info(f"Got initial response: {response}")
+            
+            # Extract response text or handle tool calls
+            if response and len(response) > 0:
+                message = response[0]
+                logger.info(f"Processing message type: {type(message)}")
+                
+                # Handle tool calls
+                if hasattr(message, 'function'):
+                    logger.info(f"Handling tool call for {message.function.name}")
+                    # Find the tool
+                    tool_name = message.function.name
+                    tool = next((t for t in self.tools if t.name == tool_name), None)
+                    
+                    if not tool:
+                        raise RuntimeError(f"Tool {tool_name} not found")
+                    
+                    # Parse arguments and run the tool
+                    args = json.loads(message.function.arguments)
+                    logger.info(f"Running tool {tool_name} with args: {args}")
+                    tool_response = await tool._arun(**args)
+                    logger.info(f"Tool response: {tool_response}")
+                    
+                    # Submit tool output back to assistant
+                    logger.info("Submitting tool response back to assistant...")
+                    final_response = await self.assistant.ainvoke({
+                        "content": tool_response,
+                        "thread": thread_context
+                    })
+                    
+                    logger.info(f"Final response after tool call: {final_response}")
+                    
+                    if final_response and len(final_response) > 0:
+                        final_message = final_response[0]
+                        logger.info(f"Final message type: {type(final_message)}")
+                        
+                        if hasattr(final_message, 'content') and final_message.content:
+                            return {
+                                "status": "success",
+                                "response": final_message.content[0].text.value,
+                                "error": None
+                            }
+                        else:
+                            logger.error(f"Unexpected final message format: {final_message}")
+                
+                # Handle direct text responses
+                elif hasattr(message, 'content') and message.content:
+                    logger.info("Processing direct text response")
+                    return {
+                        "status": "success",
+                        "response": message.content[0].text.value,
+                        "error": None
+                    }
+                else:
+                    logger.error(f"Message has no content or function: {message}")
+            else:
+                logger.error("Empty response from assistant")
+            
             return {
-                "status": "success",
-                "response": response["output"],
-                "error": None
+                "status": "error",
+                "response": None,
+                "error": "Не получен ответ от ассистента"
             }
+                
         except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
+            logger.error(f"Error processing message: {str(e)}", exc_info=True)
             return {
                 "status": "error",
                 "response": None,
