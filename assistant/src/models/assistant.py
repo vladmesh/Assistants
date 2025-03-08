@@ -1,13 +1,20 @@
 from typing import List, Dict, Any
 import os
-import logging
 from langchain.agents.openai_assistant import OpenAIAssistantRunnable
 from langchain.tools import BaseTool
 import json
+from config.logger import get_logger
+from utils.retry import with_retry
+from utils.error_handler import (
+    handle_error,
+    AssistantError,
+    ToolError,
+    ModelError,
+    RateLimitError,
+    is_retryable_error
+)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class Assistant:
     def __init__(
@@ -27,102 +34,201 @@ class Assistant:
         model: str = "gpt-4-1106-preview"
     ):
         self.tools = tools
+        self.name = name
+        self.model = model
         
         # Convert LangChain tools to OpenAI format
         openai_tools = [tool.openai_schema for tool in tools]
         
-        logger.info(f"Creating assistant with {len(tools)} tools")
+        logger.info("Creating assistant",
+                   name=name,
+                   model=model,
+                   tools_count=len(tools),
+                   tools=[tool.name for tool in tools])
+        
         self.assistant = OpenAIAssistantRunnable.create_assistant(
             name=name,
             instructions=instructions,
             tools=openai_tools,
             model=model
         )
-        logger.info(f"Assistant created successfully")
+        logger.info("Assistant created successfully", name=name)
+    
+    async def _invoke_assistant(self, message: str, thread_context: Dict[str, Any]) -> List[Any]:
+        """Invoke the assistant with retry mechanism"""
+        return await with_retry(
+            self.assistant.ainvoke,
+            {"content": message, "thread": thread_context},
+            max_attempts=3,
+            delay=1.0,
+            backoff=2.0,
+            exceptions=(RateLimitError, ConnectionError, TimeoutError),
+            context={"assistant_name": self.name, "model": self.model}
+        )
+    
+    async def _execute_tool(self, tool: BaseTool, args: Dict[str, Any]) -> str:
+        """Execute a tool with retry mechanism"""
+        return await with_retry(
+            tool._arun,
+            **args,
+            max_attempts=2,
+            delay=0.5,
+            backoff=1.5,
+            exceptions=(ConnectionError, TimeoutError),
+            context={"assistant_name": self.name, "tool_name": tool.name}
+        )
     
     async def process_message(self, message: str, user_id: str = None, chat_id: str = None) -> Dict[str, Any]:
         """Process a user message and return the response."""
         try:
-            logger.info(f"Processing message from user {user_id}: {message}")
+            logger.info("Processing message",
+                       assistant_name=self.name,
+                       user_id=user_id,
+                       chat_id=chat_id,
+                       message_length=len(message),
+                       message_preview=message[:100] + "..." if len(message) > 100 else message)
             
             # Create thread context
             thread_context = {"user_id": user_id, "chat_id": chat_id} if user_id and chat_id else None
             
-            # Invoke assistant
-            logger.info("Invoking assistant...")
-            response = await self.assistant.ainvoke({
-                "content": message,
-                "thread": thread_context
-            })
+            # Invoke assistant with retry
+            try:
+                response = await self._invoke_assistant(message, thread_context)
+            except Exception as e:
+                if is_retryable_error(e):
+                    raise ModelError(
+                        message="Ошибка при обращении к модели",
+                        error_code="MODEL_ERROR",
+                        details={"original_error": str(e)}
+                    )
+                raise
             
-            logger.info(f"Got initial response: {response}")
+            logger.info("Got initial response",
+                       assistant_name=self.name,
+                       response_type=type(response[0]).__name__ if response else None)
             
             # Extract response text or handle tool calls
             if response and len(response) > 0:
                 message = response[0]
-                logger.info(f"Processing message type: {type(message)}")
                 
                 # Handle tool calls
                 if hasattr(message, 'function'):
-                    logger.info(f"Handling tool call for {message.function.name}")
+                    logger.info("Handling tool call",
+                              assistant_name=self.name,
+                              tool_name=message.function.name,
+                              arguments=message.function.arguments)
+                    
                     # Find the tool
                     tool_name = message.function.name
                     tool = next((t for t in self.tools if t.name == tool_name), None)
                     
                     if not tool:
-                        raise RuntimeError(f"Tool {tool_name} not found")
+                        raise ToolError(
+                            message=f"Инструмент {tool_name} не найден",
+                            error_code="TOOL_NOT_FOUND",
+                            details={"available_tools": [t.name for t in self.tools]}
+                        )
                     
                     # Parse arguments and run the tool
-                    args = json.loads(message.function.arguments)
-                    logger.info(f"Running tool {tool_name} with args: {args}")
-                    tool_response = await tool._arun(**args)
-                    logger.info(f"Tool response: {tool_response}")
+                    try:
+                        args = json.loads(message.function.arguments)
+                    except json.JSONDecodeError as e:
+                        raise ValidationError(
+                            message="Неверный формат аргументов инструмента",
+                            error_code="INVALID_TOOL_ARGS",
+                            details={"original_error": str(e)}
+                        )
+                    
+                    logger.info("Running tool",
+                              assistant_name=self.name,
+                              tool_name=tool_name,
+                              arguments=args)
+                              
+                    try:
+                        tool_response = await self._execute_tool(tool, args)
+                    except Exception as e:
+                        if is_retryable_error(e):
+                            raise ToolError(
+                                message=f"Ошибка при выполнении инструмента {tool_name}",
+                                error_code="TOOL_EXECUTION_ERROR",
+                                details={"original_error": str(e)}
+                            )
+                        raise
+                    
+                    logger.info("Tool execution completed",
+                              assistant_name=self.name,
+                              tool_name=tool_name,
+                              response_length=len(str(tool_response)))
                     
                     # Submit tool output back to assistant
-                    logger.info("Submitting tool response back to assistant...")
-                    final_response = await self.assistant.ainvoke({
-                        "content": tool_response,
-                        "thread": thread_context
-                    })
+                    logger.info("Submitting tool response back to assistant",
+                              assistant_name=self.name,
+                              tool_name=tool_name)
+                              
+                    try:
+                        final_response = await self._invoke_assistant(tool_response, thread_context)
+                    except Exception as e:
+                        if is_retryable_error(e):
+                            raise ModelError(
+                                message="Ошибка при обработке ответа инструмента",
+                                error_code="MODEL_ERROR",
+                                details={"original_error": str(e)}
+                            )
+                        raise
                     
-                    logger.info(f"Final response after tool call: {final_response}")
+                    logger.info("Got final response after tool call",
+                              assistant_name=self.name,
+                              tool_name=tool_name,
+                              response_type=type(final_response[0]).__name__ if final_response else None)
                     
                     if final_response and len(final_response) > 0:
                         final_message = final_response[0]
-                        logger.info(f"Final message type: {type(final_message)}")
                         
                         if hasattr(final_message, 'content') and final_message.content:
+                            response_text = final_message.content[0].text.value
+                            logger.info("Successfully processed tool response",
+                                      assistant_name=self.name,
+                                      tool_name=tool_name,
+                                      response_length=len(response_text))
                             return {
                                 "status": "success",
-                                "response": final_message.content[0].text.value,
+                                "response": response_text,
                                 "error": None
                             }
                         else:
-                            logger.error(f"Unexpected final message format: {final_message}")
+                            raise ModelError(
+                                message="Неверный формат ответа от модели",
+                                error_code="INVALID_MODEL_RESPONSE",
+                                details={"message_type": type(final_message).__name__}
+                            )
                 
                 # Handle direct text responses
                 elif hasattr(message, 'content') and message.content:
-                    logger.info("Processing direct text response")
+                    response_text = message.content[0].text.value
+                    logger.info("Processing direct text response",
+                              assistant_name=self.name,
+                              response_length=len(response_text))
                     return {
                         "status": "success",
-                        "response": message.content[0].text.value,
+                        "response": response_text,
                         "error": None
                     }
                 else:
-                    logger.error(f"Message has no content or function: {message}")
+                    raise ModelError(
+                        message="Ответ не содержит ни текста, ни вызова инструмента",
+                        error_code="INVALID_MODEL_RESPONSE",
+                        details={"message_type": type(message).__name__}
+                    )
             else:
-                logger.error("Empty response from assistant")
-            
-            return {
-                "status": "error",
-                "response": None,
-                "error": "Не получен ответ от ассистента"
-            }
+                raise ModelError(
+                    message="Получен пустой ответ от модели",
+                    error_code="EMPTY_MODEL_RESPONSE"
+                )
                 
         except Exception as e:
-            logger.error(f"Error processing message: {str(e)}", exc_info=True)
-            return {
-                "status": "error",
-                "response": None,
-                "error": str(e)
-            } 
+            return handle_error(e, {
+                "assistant_name": self.name,
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "message_length": len(message)
+            }) 

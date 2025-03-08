@@ -7,6 +7,12 @@ from dotenv import load_dotenv
 
 from models.assistant import Assistant
 from tools.calendar_tool import CalendarTool
+from config.settings import settings
+from config.logger import configure_logger, get_logger
+
+# Configure logger
+configure_logger(settings.ENVIRONMENT)
+logger = get_logger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -14,8 +20,8 @@ load_dotenv()
 class AssistantOrchestrator:
     def __init__(self):
         self.redis = redis.Redis(
-            host=os.getenv("REDIS_HOST", "redis"),
-            port=int(os.getenv("REDIS_PORT", 6379)),
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
             decode_responses=True
         )
         
@@ -39,21 +45,38 @@ class AssistantOrchestrator:
             Будь точным с датами и временем.
             Если не уверен в чем-то - переспроси у пользователя."""
         )
+        logger.info("Assistant orchestrator initialized", tools_count=len(self.tools))
     
     async def process_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process a message and return the response."""
         try:
+            logger.info("Processing message", 
+                       user_id=data["user_id"],
+                       chat_id=data.get("chat_id"),
+                       message_length=len(data["message"]))
+            
             result = await self.assistant.process_message(
                 message=data["message"],
                 user_id=data["user_id"],
                 chat_id=data.get("chat_id")
             )
+            
+            logger.info("Message processed successfully",
+                       user_id=data["user_id"],
+                       chat_id=data.get("chat_id"))
+            
             return {
                 "user_id": data["user_id"],
                 "chat_id": data.get("chat_id"),
                 **result
             }
         except Exception as e:
+            logger.error("Error processing message",
+                        user_id=data["user_id"],
+                        chat_id=data.get("chat_id"),
+                        error=str(e),
+                        exc_info=True)
+            
             return {
                 "user_id": data["user_id"],
                 "chat_id": data.get("chat_id"),
@@ -64,6 +87,7 @@ class AssistantOrchestrator:
     
     async def listen_for_messages(self):
         """Listen for messages in the Redis queue."""
+        logger.info("Starting message listener")
         while True:
             try:
                 # Get message from input queue
@@ -77,10 +101,11 @@ class AssistantOrchestrator:
                 await self.redis.lpush("telegram_output_queue", json.dumps(result))
                 
             except Exception as e:
-                print(f"Error processing message: {e}")
+                logger.error("Error in message listener", error=str(e), exc_info=True)
                 continue
 
 async def main():
+    logger.info("Starting assistant service", environment=settings.ENVIRONMENT)
     orchestrator = AssistantOrchestrator()
     await orchestrator.listen_for_messages()
 
