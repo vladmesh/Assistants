@@ -66,8 +66,12 @@ class Assistant:
             context={"assistant_name": self.name, "model": self.model}
         )
     
-    async def _execute_tool(self, tool: BaseTool, args: Dict[str, Any]) -> str:
+    async def _execute_tool(self, tool: BaseTool, args: Dict[str, Any], thread_context: Dict[str, Any] = None) -> str:
         """Execute a tool with retry mechanism"""
+        # Добавляем user_id из контекста
+        if thread_context and "user_id" in thread_context:
+            args["user_id"] = thread_context["user_id"]
+            
         return await with_retry(
             tool._arun,
             **args,
@@ -148,7 +152,7 @@ class Assistant:
                               arguments=args)
                               
                     try:
-                        tool_response = await self._execute_tool(tool, args)
+                        tool_response = await self._execute_tool(tool, args, thread_context)
                     except Exception as e:
                         if is_retryable_error(e):
                             raise ToolError(
