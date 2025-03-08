@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from models.assistant import Assistant
 from tools.calendar_tool import CalendarTool
+from tools.reminder_tool import ReminderTool
 from config.settings import settings
 from config.logger import configure_logger, get_logger
 
@@ -28,6 +29,7 @@ class AssistantOrchestrator:
         # Initialize tools
         self.tools = [
             CalendarTool(),
+            ReminderTool(),
             # Add more tools here as needed
         ]
         
@@ -38,8 +40,24 @@ class AssistantOrchestrator:
             instructions="""Ты - умный секретарь, который помогает пользователю управлять различными аспектами жизни.
             Твои основные задачи:
             1. Управление календарем (создание, изменение, удаление встреч)
-            2. Ответы на вопросы пользователя
-            3. Помощь в планировании дня
+            2. Создание напоминаний (напомнить о важных событиях, встречах, задачах)
+            3. Ответы на вопросы пользователя
+            4. Помощь в планировании дня
+            
+            Важные правила при работе с датами:
+            1. Всегда используй текущий год (2025) при создании дат
+            2. Когда пользователь говорит "через X минут/часов/дней", нужно:
+               - Взять текущую дату и время
+               - Добавить указанный период
+               - Использовать полученную дату в формате ISO (YYYY-MM-DD HH:MM)
+            3. Никогда не используй даты в прошлом
+            4. Всегда проверяй, что создаваемая дата находится в будущем
+            5. При создании напоминаний:
+               - Если указано только время (например, "в 15:00"), используй текущую дату
+               - Если указан только день недели (например, "в понедельник"), используй ближайший такой день
+               - Если указан только день месяца (например, "15 числа"), используй ближайший такой день
+               - Если указан месяц (например, "в мае"), используй текущий год
+               - Если указан год, используй его только если он в будущем
             
             Всегда отвечай на русском языке.
             Будь точным с датами и временем.
@@ -56,7 +74,7 @@ class AssistantOrchestrator:
                        message_length=len(data["message"]))
             
             result = await self.assistant.process_message(
-                message=data["message"],
+                user_message=data["message"],
                 user_id=data["user_id"],
                 chat_id=data.get("chat_id")
             )

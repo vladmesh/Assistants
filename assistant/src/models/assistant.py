@@ -78,22 +78,22 @@ class Assistant:
             context={"assistant_name": self.name, "tool_name": tool.name}
         )
     
-    async def process_message(self, message: str, user_id: str = None, chat_id: str = None) -> Dict[str, Any]:
+    async def process_message(self, user_message: str, user_id: str = None, chat_id: str = None) -> Dict[str, Any]:
         """Process a user message and return the response."""
         try:
             logger.info("Processing message",
                        assistant_name=self.name,
                        user_id=user_id,
                        chat_id=chat_id,
-                       message_length=len(message),
-                       message_preview=message[:100] + "..." if len(message) > 100 else message)
+                       message_length=len(user_message),
+                       message_preview=user_message[:100] + "..." if len(user_message) > 100 else user_message)
             
             # Create thread context
             thread_context = {"user_id": user_id, "chat_id": chat_id} if user_id and chat_id else None
             
             # Invoke assistant with retry
             try:
-                response = await self._invoke_assistant(message, thread_context)
+                response = await self._invoke_assistant(user_message, thread_context)
             except Exception as e:
                 if is_retryable_error(e):
                     raise ModelError(
@@ -109,17 +109,17 @@ class Assistant:
             
             # Extract response text or handle tool calls
             if response and len(response) > 0:
-                message = response[0]
+                assistant_message = response[0]
                 
                 # Handle tool calls
-                if hasattr(message, 'function'):
+                if hasattr(assistant_message, 'function'):
                     logger.info("Handling tool call",
                               assistant_name=self.name,
-                              tool_name=message.function.name,
-                              arguments=message.function.arguments)
+                              tool_name=assistant_message.function.name,
+                              arguments=assistant_message.function.arguments)
                     
                     # Find the tool
-                    tool_name = message.function.name
+                    tool_name = assistant_message.function.name
                     tool = next((t for t in self.tools if t.name == tool_name), None)
                     
                     if not tool:
@@ -131,7 +131,10 @@ class Assistant:
                     
                     # Parse arguments and run the tool
                     try:
-                        args = json.loads(message.function.arguments)
+                        args = json.loads(assistant_message.function.arguments)
+                        # Добавляем user_id из контекста
+                        if thread_context and "user_id" in thread_context:
+                            args["user_id"] = thread_context["user_id"]
                     except json.JSONDecodeError as e:
                         raise ValidationError(
                             message="Неверный формат аргументов инструмента",
@@ -203,8 +206,8 @@ class Assistant:
                             )
                 
                 # Handle direct text responses
-                elif hasattr(message, 'content') and message.content:
-                    response_text = message.content[0].text.value
+                elif hasattr(assistant_message, 'content') and assistant_message.content:
+                    response_text = assistant_message.content[0].text.value
                     logger.info("Processing direct text response",
                               assistant_name=self.name,
                               response_length=len(response_text))
@@ -217,7 +220,7 @@ class Assistant:
                     raise ModelError(
                         message="Ответ не содержит ни текста, ни вызова инструмента",
                         error_code="INVALID_MODEL_RESPONSE",
-                        details={"message_type": type(message).__name__}
+                        details={"message_type": type(assistant_message).__name__}
                     )
             else:
                 raise ModelError(
@@ -230,5 +233,5 @@ class Assistant:
                 "assistant_name": self.name,
                 "user_id": user_id,
                 "chat_id": chat_id,
-                "message_length": len(message)
+                "message_length": len(user_message)
             }) 
