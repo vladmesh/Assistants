@@ -7,4 +7,5 @@ httpx>=0.25.1
 structlog>=24.1.0
 langchain>=0.1.0
 langchain-openai>=0.0.2
+langchain-community>=0.0.10
 aiohttp>=3.8.5
