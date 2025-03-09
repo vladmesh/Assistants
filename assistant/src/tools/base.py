@@ -15,7 +15,7 @@ class BaseAssistantTool(BaseTool):
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": self.args_schema.schema() if self.args_schema else {"type": "object", "properties": {}}
+                "parameters": self.args_schema.model_json_schema() if self.args_schema else {"type": "object", "properties": {}}
             }
         }
         return schema

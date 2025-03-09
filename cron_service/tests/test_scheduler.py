@@ -1,9 +1,9 @@
 import pytest
 from scheduler import parse_cron_expression
-from notify_client import send_notification
+from redis_client import send_notification, OUTPUT_QUEUE
 from rest_client import fetch_scheduled_jobs
 import requests
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 
 def test_parse_cron_expression_valid():
@@ -51,37 +51,33 @@ def test_parse_cron_expression_invalid():
         parse_cron_expression("* * * * * *")
 
 
-@patch('requests.post')
-def test_send_notification_success(mock_post):
+@patch('redis_client.redis_client')
+def test_send_notification_success(mock_redis):
     """Test successful notification sending"""
     # Setup mock
-    mock_post.return_value.status_code = 200
+    mock_redis.rpush.return_value = 1
     
     # Call function
     send_notification(123, "test message")
     
     # Verify the request was made correctly
-    mock_post.assert_called_once()
-    args, kwargs = mock_post.call_args
-    assert kwargs['json'] == {
-        "chat_id": 123,
-        "message": "test message",
-        "priority": "normal"
-    }
+    mock_redis.rpush.assert_called_once()
+    args, kwargs = mock_redis.rpush.call_args
+    assert args[0] == OUTPUT_QUEUE
+    assert args[1] == '{"chat_id": 123, "response": "test message", "status": "success"}'
 
 
-@patch('requests.post')
-def test_send_notification_failure(mock_post):
+@patch('redis_client.redis_client')
+def test_send_notification_failure(mock_redis):
     """Test notification sending failure"""
     # Setup mock to simulate error
-    mock_post.return_value.status_code = 500
-    mock_post.return_value.text = "Internal Server Error"
+    mock_redis.rpush.side_effect = Exception("Redis error")
     
     # Call function (should not raise exception)
     send_notification(123, "test message")
     
     # Verify the request was made
-    mock_post.assert_called_once()
+    mock_redis.rpush.assert_called_once()
 
 
 @patch('requests.get')

@@ -1,5 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from notify_client import send_notification
+from redis_client import send_notification
 from rest_client import fetch_scheduled_jobs
 import os
 import time
