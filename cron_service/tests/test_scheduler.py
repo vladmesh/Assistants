@@ -4,6 +4,7 @@ from redis_client import send_notification, OUTPUT_QUEUE
 from rest_client import fetch_scheduled_jobs
 import requests
 from unittest.mock import patch, MagicMock
+from pytz import utc
 
 
 def test_parse_cron_expression_valid():
@@ -14,7 +15,8 @@ def test_parse_cron_expression_valid():
         "hour": "*",
         "day": "*",
         "month": "*",
-        "day_of_week": "*"
+        "day_of_week": "*",
+        "timezone": utc
     }
     
     # Test specific values
@@ -23,7 +25,8 @@ def test_parse_cron_expression_valid():
         "hour": "12",
         "day": "*",
         "month": "*",
-        "day_of_week": "1"
+        "day_of_week": "1",
+        "timezone": utc
     }
     
     # Test complex expression
@@ -32,7 +35,8 @@ def test_parse_cron_expression_valid():
         "hour": "2,12",
         "day": "1-15",
         "month": "*",
-        "day_of_week": "1-5"
+        "day_of_week": "1-5",
+        "timezone": utc
     }
 
 

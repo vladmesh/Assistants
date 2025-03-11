@@ -4,6 +4,7 @@ from rest_client import fetch_scheduled_jobs
 import os
 import time
 import logging
+from pytz import utc
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -13,7 +14,8 @@ CHAT_ID = int(os.getenv("TELEGRAM_ID", "0"))
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # секунды
 
-scheduler = BackgroundScheduler()
+# Создаем планировщик с явным указанием UTC
+scheduler = BackgroundScheduler(timezone=utc)
 
 
 def start_scheduler():
@@ -96,6 +98,7 @@ def update_jobs_from_rest():
 def parse_cron_expression(cron_expression: str) -> dict:
     """
     Парсит строку CRON-выражения и преобразует её в аргументы для APScheduler.
+    Все времена интерпретируются как UTC.
     """
     parts = cron_expression.split()
     if len(parts) != 5:
@@ -107,6 +110,7 @@ def parse_cron_expression(cron_expression: str) -> dict:
         "day": parts[2],
         "month": parts[3],
         "day_of_week": parts[4],
+        "timezone": utc  # Явно указываем UTC для каждой задачи
     }
 
 

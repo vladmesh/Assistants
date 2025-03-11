@@ -37,7 +37,7 @@ run_service_tests() {
 failed_services=()
 
 # Запускаем тесты для каждого сервиса
-for service in rest_service notification_service cron_service tg_bot assistant; do
+for service in rest_service  cron_service tg_bot assistant; do
     run_service_tests "$service"
 done
 

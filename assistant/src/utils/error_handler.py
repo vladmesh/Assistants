@@ -12,9 +12,17 @@ class AssistantError(Exception):
 
 class ToolError(Exception):
     """Base exception for all tool-related errors"""
-    def __init__(self, message: str, tool_name: Optional[str] = None):
+    def __init__(
+        self, 
+        message: str, 
+        tool_name: Optional[str] = None,
+        error_code: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
         self.tool_name = tool_name
-        super().__init__(f"[{tool_name or 'Unknown'}] {message}")
+        self.error_code = error_code
+        self.details = details or {}
+        super().__init__(f"[{tool_name or 'Unknown'}] {message} (code: {error_code})")
 
 class MessageProcessingError(AssistantError):
     """Raised when an assistant fails to process a message"""

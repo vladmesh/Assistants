@@ -1,5 +1,5 @@
 from typing import Optional, Type, ClassVar
-from datetime import datetime
+from datetime import datetime, timezone
 from tools.base import BaseTool
 import httpx
 from config.logger import get_logger
@@ -11,13 +11,15 @@ logger = get_logger(__name__)
 class ReminderSchema(BaseModel):
     """Schema for reminder creation."""
     message: str = Field(..., description="Текст напоминания")
-    datetime_str: str = Field(..., description="Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM)")
+    datetime_str: str = Field(..., description="Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM) в UTC времени") 
     
 
 class ReminderTool(BaseTool):
     NAME: ClassVar[str] = "reminder"
     DESCRIPTION: ClassVar[str] = """Инструмент для создания напоминаний.
     Используйте его, когда пользователь просит напомнить о чем-то в определенное время.
+    Он принимает дату и время СТРОГО в UTC времени. Если пользователь указывает время в своем часовом поясе, 
+    то нужно будет вычислить, какое это будет время в UTC.
     
     Примеры использования:
     - "Напомни мне позвонить маме завтра в 15:00"
@@ -26,7 +28,7 @@ class ReminderTool(BaseTool):
     
     Параметры:
     - message: Текст напоминания
-    - datetime_str: Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM)
+    - datetime_str: Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM) в UTC времени
     """
     
     name: str = NAME
@@ -54,6 +56,7 @@ class ReminderTool(BaseTool):
         if not self.user_id:
             raise ToolError(
                 message="User ID is required for creating reminders",
+                tool_name=self.name,
                 error_code="USER_ID_REQUIRED"
             )
 
@@ -61,24 +64,28 @@ class ReminderTool(BaseTool):
                    message=message,
                    datetime_str=datetime_str,
                    user_id=self.user_id,
-                   current_time=datetime.now().isoformat())
+                   current_time=datetime.now(timezone.utc).isoformat())
         
         # Парсинг даты и времени
         try:
             logger.info("Parsing datetime",
                        datetime_str=datetime_str,
-                       current_time=datetime.now().isoformat())
+                       current_time=datetime.now(timezone.utc).isoformat())
             
+            # Преобразуем строку в datetime и добавляем UTC timezone если его нет
             reminder_datetime = datetime.fromisoformat(datetime_str)
+            if reminder_datetime.tzinfo is None:
+                reminder_datetime = reminder_datetime.replace(tzinfo=timezone.utc)
             
             logger.info("Parsed datetime",
                        reminder_datetime=reminder_datetime.isoformat(),
-                       current_time=datetime.now().isoformat(),
-                       is_past=reminder_datetime < datetime.now())
+                       current_time=datetime.now(timezone.utc).isoformat(),
+                       is_past=reminder_datetime < datetime.now(timezone.utc))
             
-            if reminder_datetime < datetime.now():
+            if reminder_datetime < datetime.now(timezone.utc):
                 raise ToolError(
                     message="Дата напоминания не может быть в прошлом",
+                    tool_name=self.name,
                     error_code="INVALID_DATETIME",
                     details={"datetime": datetime_str}
                 )
@@ -88,6 +95,7 @@ class ReminderTool(BaseTool):
                         error=str(e))
             raise ToolError(
                 message="Неверный формат даты и времени",
+                tool_name=self.name,
                 error_code="INVALID_DATETIME_FORMAT",
                 details={"datetime": datetime_str, "error": str(e)}
             )
