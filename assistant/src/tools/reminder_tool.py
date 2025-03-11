@@ -1,6 +1,6 @@
-from typing import Dict, Any, Optional, Type
+from typing import Optional, Type, ClassVar
 from datetime import datetime
-from langchain.tools import BaseTool
+from tools.base import BaseTool
 import httpx
 from config.logger import get_logger
 from utils.error_handler import ToolError
@@ -11,12 +11,12 @@ logger = get_logger(__name__)
 class ReminderSchema(BaseModel):
     """Schema for reminder creation."""
     message: str = Field(..., description="Текст напоминания")
-    datetime: str = Field(..., description="Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM)")
-    priority: str = Field(default="normal", description="Приоритет (normal, high, low)")
+    datetime_str: str = Field(..., description="Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM)")
+    
 
 class ReminderTool(BaseTool):
-    name: str = "reminder"
-    description: str = """Инструмент для создания напоминаний.
+    NAME: ClassVar[str] = "reminder"
+    DESCRIPTION: ClassVar[str] = """Инструмент для создания напоминаний.
     Используйте его, когда пользователь просит напомнить о чем-то в определенное время.
     
     Примеры использования:
@@ -26,55 +26,50 @@ class ReminderTool(BaseTool):
     
     Параметры:
     - message: Текст напоминания
-    - datetime: Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM)
-    - priority: Приоритет (normal, high, low)
+    - datetime_str: Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM)
     """
+    
+    name: str = NAME
+    description: str = DESCRIPTION
     rest_service_url: str = "http://rest_service:8000"
     client: Optional[httpx.AsyncClient] = None
     args_schema: Type[BaseModel] = ReminderSchema
     
-    @property
-    def openai_schema(self) -> Dict[str, Any]:
-        """Возвращает схему инструмента в формате OpenAI"""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": ReminderSchema.schema()
-            }
-        }
-    
-    def __init__(self, rest_service_url: str = "http://rest_service:8000"):
-        super().__init__()
+    def __init__(self, user_id: Optional[str] = None, rest_service_url: str = "http://rest_service:8000"):
+        super().__init__(
+            name=self.NAME,
+            description=self.DESCRIPTION,
+            args_schema=ReminderSchema,
+            user_id=user_id
+        )
         self.rest_service_url = rest_service_url
         self.client = httpx.AsyncClient(timeout=30.0)
     
-    def _run(self, message: str, datetime_str: str, priority: str = "normal") -> str:
+    def _run(self, message: str, datetime_str: str) -> str:
         """Синхронный метод не используется"""
         raise NotImplementedError("Этот инструмент поддерживает только асинхронные вызовы")
     
-    async def _arun(self, **kwargs) -> str:
+    async def _execute(self, message: str, datetime_str: str) -> str:
         """Создает напоминание через REST API"""
-        logger.info("Starting reminder creation",
-                   kwargs=kwargs,
-                   current_time=datetime.now().isoformat())
-        
-        # Валидация приоритета
-        if kwargs.get("priority", "normal") not in ["normal", "high", "low"]:
+        if not self.user_id:
             raise ToolError(
-                message="Неверный приоритет",
-                error_code="INVALID_PRIORITY",
-                details={"priority": kwargs.get("priority"), "allowed_values": ["normal", "high", "low"]}
+                message="User ID is required for creating reminders",
+                error_code="USER_ID_REQUIRED"
             )
+
+        logger.info("Starting reminder creation",
+                   message=message,
+                   datetime_str=datetime_str,
+                   user_id=self.user_id,
+                   current_time=datetime.now().isoformat())
         
         # Парсинг даты и времени
         try:
             logger.info("Parsing datetime",
-                       datetime_str=kwargs["datetime"],
+                       datetime_str=datetime_str,
                        current_time=datetime.now().isoformat())
             
-            reminder_datetime = datetime.fromisoformat(kwargs["datetime"])
+            reminder_datetime = datetime.fromisoformat(datetime_str)
             
             logger.info("Parsed datetime",
                        reminder_datetime=reminder_datetime.isoformat(),
@@ -85,16 +80,16 @@ class ReminderTool(BaseTool):
                 raise ToolError(
                     message="Дата напоминания не может быть в прошлом",
                     error_code="INVALID_DATETIME",
-                    details={"datetime": kwargs["datetime"]}
+                    details={"datetime": datetime_str}
                 )
         except ValueError as e:
             logger.error("Failed to parse datetime",
-                        datetime_str=kwargs["datetime"],
+                        datetime_str=datetime_str,
                         error=str(e))
             raise ToolError(
                 message="Неверный формат даты и времени",
                 error_code="INVALID_DATETIME_FORMAT",
-                details={"datetime": kwargs["datetime"], "error": str(e)}
+                details={"datetime": datetime_str, "error": str(e)}
             )
         
         # Создание CRON-выражения
@@ -104,7 +99,7 @@ class ReminderTool(BaseTool):
         try:
             user_response = await self.client.get(
                 f"{self.rest_service_url}/api/users/",
-                params={"telegram_id": int(kwargs.get("user_id"))}
+                params={"telegram_id": int(self.user_id)}
             )
             
             if user_response.status_code != 200:
@@ -114,7 +109,7 @@ class ReminderTool(BaseTool):
                 raise ToolError(
                     message="Пользователь не найден",
                     error_code="USER_NOT_FOUND",
-                    details={"telegram_id": kwargs.get("user_id")}
+                    details={"telegram_id": self.user_id}
                 )
             
             user_data = user_response.json()
@@ -131,17 +126,15 @@ class ReminderTool(BaseTool):
         
         # Подготовка данных для API
         data = {
-            "name": kwargs["message"],
+            "name": message,
             "cron_expression": cron_expression,
-            "priority": kwargs.get("priority", "normal"),
             "type": "notification",
             "user_id": user_id
         }
         
         logger.info("Preparing API request",
-                   message=kwargs["message"],
-                   datetime=kwargs["datetime"],
-                   priority=kwargs.get("priority", "normal"),
+                   message=message,
+                   datetime=datetime_str,
                    cron_expression=cron_expression)
         
         try:
@@ -167,9 +160,9 @@ class ReminderTool(BaseTool):
             job_data = response.json()
             logger.info("Reminder created successfully",
                        job_id=job_data["id"],
-                       message=kwargs["message"])
+                       message=message)
             
-            return f"Напоминание создано: {kwargs['message']} на {kwargs['datetime']}"
+            return f"Напоминание создано: {message} на {datetime_str}"
             
         except ToolError:
             raise

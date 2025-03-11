@@ -1,3 +1,4 @@
+"""Error handling utilities for assistants"""
 from typing import Dict, Any, Optional, Type
 from src.config.logger import get_logger
 
@@ -5,14 +6,30 @@ logger = get_logger(__name__)
 
 class AssistantError(Exception):
     """Base exception for all assistant-related errors"""
-    def __init__(self, message: str, error_code: str, details: Optional[Dict[str, Any]] = None):
-        self.message = message
-        self.error_code = error_code
-        self.details = details or {}
-        super().__init__(message)
+    def __init__(self, message: str, assistant_name: Optional[str] = None):
+        self.assistant_name = assistant_name
+        super().__init__(f"[{assistant_name or 'Unknown'}] {message}")
 
-class ToolError(AssistantError):
-    """Error raised when a tool fails to execute"""
+class ToolError(Exception):
+    """Base exception for all tool-related errors"""
+    def __init__(self, message: str, tool_name: Optional[str] = None):
+        self.tool_name = tool_name
+        super().__init__(f"[{tool_name or 'Unknown'}] {message}")
+
+class MessageProcessingError(AssistantError):
+    """Raised when an assistant fails to process a message"""
+    pass
+
+class ToolExecutionError(ToolError):
+    """Raised when a tool fails to execute"""
+    pass
+
+class InvalidInputError(Exception):
+    """Raised when input validation fails"""
+    pass
+
+class ConfigurationError(Exception):
+    """Raised when there is a configuration error"""
     pass
 
 class ModelError(AssistantError):
@@ -27,42 +44,30 @@ class RateLimitError(AssistantError):
     """Error raised when rate limits are exceeded"""
     pass
 
-def handle_error(error: Exception, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Handle an error and return a formatted error response
+def handle_assistant_error(error: Exception, assistant_name: Optional[str] = None) -> str:
+    """Handle assistant errors and return user-friendly message
     
     Args:
         error: The exception that occurred
-        context: Additional context for error handling
+        assistant_name: Name of the assistant where error occurred
         
     Returns:
-        Dict containing error information
+        User-friendly error message
     """
-    error_context = context or {}
-    
     if isinstance(error, AssistantError):
-        error_code = error.error_code
-        message = error.message
-        details = error.details
+        return f"Ошибка ассистента: {str(error)}"
+    elif isinstance(error, ToolError):
+        return f"Ошибка инструмента: {str(error)}"
     else:
-        error_code = "INTERNAL_ERROR"
-        message = "Произошла внутренняя ошибка"
-        details = {"original_error": str(error)}
-    
-    log_context = {
-        "error_code": error_code,
-        "error_message": message,
-        "error_details": details,
-        **error_context
-    }
-    
-    logger.error("Error occurred", **log_context)
-    
+        return "Произошла внутренняя ошибка. Пожалуйста, попробуйте позже."
+
+def handle_error(error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle errors and return structured response"""
+    error_message = handle_assistant_error(error, context.get("assistant_name"))
     return {
         "status": "error",
-        "error_code": error_code,
-        "message": message,
-        "details": details
+        "response": None,
+        "error": error_message
     }
 
 def is_retryable_error(error: Exception) -> bool:
