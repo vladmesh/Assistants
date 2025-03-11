@@ -5,11 +5,12 @@ from typing import Dict, Any
 import redis.asyncio as redis
 from dotenv import load_dotenv
 
-from models.assistant import Assistant
-from tools.calendar_tool import CalendarTool
+from assistants.openai_assistant import OpenAIAssistant
+from tools.time_tool import TimeToolWrapper
 from tools.reminder_tool import ReminderTool
 from config.settings import settings
 from config.logger import configure_logger, get_logger
+from config.instructions import ASSISTANT_INSTRUCTIONS
 
 # Configure logger
 configure_logger(settings.ENVIRONMENT)
@@ -28,13 +29,19 @@ class AssistantOrchestrator:
         
         # Initialize tools
         self.tools = [
-            ReminderTool(),
-            CalendarTool()
+            TimeToolWrapper(),
+            ReminderTool()
         ]
         
-        # Initialize assistant and update its configuration
-        self.assistant = Assistant()
-        self.assistant.update_assistant(self.tools)
+        # Initialize OpenAI assistant
+        self.assistant = OpenAIAssistant(
+            assistant_id=settings.OPEN_API_SECRETAR_ID,
+            name="Секретарь",
+            instructions=ASSISTANT_INSTRUCTIONS,
+            model="gpt-4-1106-preview",
+            tools=[tool.openai_schema for tool in self.tools],
+            tool_instances=self.tools
+        )
         logger.info("Assistant orchestrator initialized", tools_count=len(self.tools))
     
     async def process_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -46,9 +53,8 @@ class AssistantOrchestrator:
                        message_length=len(data["message"]))
             
             result = await self.assistant.process_message(
-                user_message=data["message"],
-                user_id=data["user_id"],
-                chat_id=data.get("chat_id")
+                message=data["message"],
+                user_id=str(data["user_id"])  # Convert to string as tools expect string user_id
             )
             
             logger.info("Message processed successfully",
@@ -58,7 +64,9 @@ class AssistantOrchestrator:
             return {
                 "user_id": data["user_id"],
                 "chat_id": data.get("chat_id"),
-                **result
+                "status": "success",
+                "response": result,
+                "error": None
             }
         except Exception as e:
             logger.error("Error processing message",

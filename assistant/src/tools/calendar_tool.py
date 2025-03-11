@@ -1,6 +1,6 @@
 from typing import Optional, Any, Dict, Type
 from pydantic import BaseModel, Field
-from langchain.tools import BaseTool
+from tools.base import BaseTool
 import logging
 import json
 
@@ -17,6 +17,14 @@ class CalendarTool(BaseTool):
     name: str = "calendar"
     description: str = "Create, update, or delete calendar events"
     args_schema: Type[BaseModel] = CalendarEventSchema
+    
+    def __init__(self, user_id: Optional[str] = None):
+        super().__init__(
+            name=self.name,
+            description=self.description,
+            args_schema=self.args_schema,
+            user_id=user_id
+        )
     
     @property
     def openai_schema(self) -> dict:
@@ -35,6 +43,9 @@ class CalendarTool(BaseTool):
         Create a calendar event asynchronously.
         This is a placeholder implementation - you'll need to add actual Google Calendar API integration.
         """
+        if not self.user_id:
+            raise RuntimeError("User ID is required for calendar operations")
+
         try:
             # Parse arguments
             title = kwargs.get("title", "")
@@ -43,11 +54,12 @@ class CalendarTool(BaseTool):
             description = kwargs.get("description")
             
             logger.info(
-                f"Creating calendar event: title={title}, start={start_time}, end={end_time}, description={description}"
+                f"Creating calendar event for user {self.user_id}: title={title}, start={start_time}, end={end_time}, description={description}"
             )
             
             # Here you would integrate with Google Calendar API
             event_details = {
+                "user_id": self.user_id,
                 "title": title,
                 "start_time": start_time,
                 "end_time": end_time,
