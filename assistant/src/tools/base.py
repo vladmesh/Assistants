@@ -1,5 +1,5 @@
 """Base classes for tools"""
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, Type
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool as LangBaseTool
 from pydantic import BaseModel, Field, ValidationError
@@ -117,3 +117,7 @@ class ToolAssistant(BaseTool):
             return await self.assistant.process_message(message)
         except Exception as e:
             raise ToolExecutionError(f"Assistant execution failed: {str(e)}", self.name)
+
+class SubAssistantSchema(BaseModel):
+    """Base schema for all sub-assistant based tools."""
+    message: str = Field(..., description="Запрос для LLM в виде текста")

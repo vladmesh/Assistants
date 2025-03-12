@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "assistant"
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
+    INPUT_QUEUE: str = "telegram_input_queue"
+    OUTPUT_QUEUE: str = "telegram_output_queue"
     
     class Config:
         env_file = ".env"
