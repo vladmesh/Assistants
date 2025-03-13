@@ -14,12 +14,14 @@ services:
 
   tests:
     build:
-      context: .
-      dockerfile: Dockerfile.test
+      context: ..
+      dockerfile: rest_service/Dockerfile.test
     depends_on:
       - test-db
     environment:
       - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/test_db
+    volumes:
+      - ./tests:/app/tests
 
 volumes:
   test_db_data: 
