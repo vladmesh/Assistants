@@ -1,7 +1,7 @@
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 import enum
-from sqlalchemy import event, Column, BigInteger
+from sqlalchemy import event, Column, BigInteger, String, DateTime, ForeignKey
 from datetime import datetime, UTC
 
 class BaseModel(SQLModel):
@@ -34,6 +34,19 @@ class TelegramUser(BaseModel, table=True):
     username: Optional[str]
     tasks: List["Task"] = Relationship(back_populates="user")
     cronjobs: List["CronJob"] = Relationship(back_populates="user")
+    calendar_credentials: Optional["CalendarCredentials"] = Relationship(back_populates="user")
+
+class CalendarCredentials(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="telegramuser.id")
+    access_token: str
+    refresh_token: str
+    token_expiry: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    user: Optional[TelegramUser] = Relationship(back_populates="calendar_credentials")
 
 class Task(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
