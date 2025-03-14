@@ -5,7 +5,7 @@ from config.settings import Settings
 from tools.time_tool import TimeToolWrapper
 from tools.sub_assistant_tool import SubAssistantTool
 from tools.reminder_tool import ReminderTool
-from tools.calendar_tool import CalendarTool
+from tools.calendar_tool import CalendarCreateTool, CalendarListTool
 from assistants.factory import AssistantFactory
 
 logger = get_logger(__name__)
@@ -52,9 +52,10 @@ class AssistantOrchestrator:
         reminder_tool = ReminderTool()
         self.tools.append(reminder_tool)
 
-        # Add calendar tool
-        calendar_tool = CalendarTool(settings, user_id=None)
-        self.tools.append(calendar_tool)
+        # Add calendar tools
+        calendar_create_tool = CalendarCreateTool(settings, user_id=None)
+        calendar_list_tool = CalendarListTool(settings, user_id=None)
+        self.tools.extend([calendar_create_tool, calendar_list_tool])
         
         # Initialize main assistant
         self.assistant = AssistantFactory.create_main_assistant(settings, self.tools)
@@ -75,6 +76,11 @@ class AssistantOrchestrator:
                        chat_id=chat_id,
                        message_length=len(text),
                        user_data=user_data)  # Log user data
+            
+            # Update user_id for calendar tools
+            for tool in self.tools:
+                if isinstance(tool, (CalendarCreateTool, CalendarListTool)):
+                    tool.user_id = user_id
             
             response = await self.assistant.process_message(text, user_id)
             
