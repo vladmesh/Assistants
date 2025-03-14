@@ -52,10 +52,16 @@ async def get_rest_service(request: Request) -> RestService:
     """Get REST service from app state"""
     return request.app.state.rest_service
 
+async def get_calendar_service(request: Request) -> GoogleCalendarService:
+    """Get Google Calendar service from app state"""
+    return request.app.state.calendar_service
+
 @router.get("/auth/url/{user_id}")
 async def get_auth_url(
     user_id: str,
-    rest_service: RestService = Depends(get_rest_service)
+    request: Request,
+    rest_service: RestService = Depends(get_rest_service),
+    calendar_service: GoogleCalendarService = Depends(get_calendar_service)
 ) -> Dict[str, str]:
     """Get Google OAuth URL for user authorization"""
     try:
@@ -70,7 +76,6 @@ async def get_auth_url(
             raise HTTPException(status_code=400, detail="User already authorized")
         
         # Get auth URL
-        calendar_service = GoogleCalendarService(settings)
         auth_url = calendar_service.get_auth_url(user_id)
         
         return {"auth_url": auth_url}
@@ -87,12 +92,12 @@ async def get_auth_url(
 async def handle_callback(
     code: str,
     state: str,
-    rest_service: RestService = Depends(get_rest_service)
+    rest_service: RestService = Depends(get_rest_service),
+    calendar_service: GoogleCalendarService = Depends(get_calendar_service)
 ) -> Dict[str, str]:
     """Handle OAuth callback"""
     try:
         # Handle callback
-        calendar_service = GoogleCalendarService(settings)
         credentials = await calendar_service.handle_callback(code)
         
         # Save credentials to REST service
@@ -117,7 +122,8 @@ async def get_events(
     user_id: str,
     time_min: Optional[datetime] = None,
     time_max: Optional[datetime] = None,
-    rest_service: RestService = Depends(get_rest_service)
+    rest_service: RestService = Depends(get_rest_service),
+    calendar_service: GoogleCalendarService = Depends(get_calendar_service)
 ) -> List[Dict[str, Any]]:
     """Get user's calendar events"""
     try:
@@ -127,7 +133,6 @@ async def get_events(
             raise HTTPException(status_code=401, detail="User not authorized")
         
         # Get events
-        calendar_service = GoogleCalendarService(settings)
         events = await calendar_service.get_events(credentials, time_min, time_max)
         
         return events
@@ -142,7 +147,8 @@ async def get_events(
 async def create_event(
     user_id: str,
     event: CreateEventRequest = Body(..., description="Event details"),
-    rest_service: RestService = Depends(get_rest_service)
+    rest_service: RestService = Depends(get_rest_service),
+    calendar_service: GoogleCalendarService = Depends(get_calendar_service)
 ) -> Dict[str, Any]:
     """Create new calendar event using simplified data model"""
     try:
@@ -157,7 +163,6 @@ async def create_event(
                    event_data=event.dict())
         
         # Create event
-        calendar_service = GoogleCalendarService(settings)
         created_event = await calendar_service.create_event(credentials, event)
         
         logger.info("Event created successfully",
