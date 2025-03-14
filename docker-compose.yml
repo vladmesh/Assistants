@@ -41,6 +41,11 @@ services:
         - "5432:5432"
       networks:
         - app_network
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
 
   rest_service:
       build:
@@ -69,6 +74,23 @@ services:
       - rest_service
       - redis
     restart: unless-stopped
+    networks:
+      - app_network
+
+  google_calendar_service:
+    build:
+      context: ./google_calendar_service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - REST_SERVICE_URL=http://rest_service:8000
+    depends_on:
+      - rest_service
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
     networks:
       - app_network
 
