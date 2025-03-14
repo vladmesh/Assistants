@@ -1,24 +1,14 @@
-import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.config.settings import Settings
+from src.config.logger import get_logger
 from src.api.routes import router
 from src.services.rest_service import RestService
+from src.services.calendar import GoogleCalendarService
+from src.services.redis_service import RedisService
 
-# Configure logging
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
-    ],
-    logger_factory=structlog.PrintLoggerFactory(),
-    cache_logger_on_first_use=True
-)
-
-logger = structlog.get_logger().bind(service="calendar")
+# Get configured logger
+logger = get_logger(__name__)
 
 # Create settings instance
 settings = Settings()
@@ -39,22 +29,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create REST service client
+# Create services
 rest_service = RestService(settings)
-app.state.rest_service = rest_service
+calendar_service = GoogleCalendarService(settings)
+redis_service = RedisService(settings)
 
-# Include router
+# Add services to app state
+app.state.rest_service = rest_service
+app.state.calendar_service = calendar_service
+app.state.redis_service = redis_service
+
+# Include API routes
 app.include_router(router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Log startup event"""
+    """Startup event handler"""
     logger.info("Starting Google Calendar service")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Close REST service client"""
+    """Close service connections"""
     await rest_service.close()
+    await redis_service.close()
     logger.info("Shutting down Google Calendar service")
 
 if __name__ == "__main__":

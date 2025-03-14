@@ -44,14 +44,16 @@ class CalendarCreateTool(BaseTool):
     description: str = DESCRIPTION
     base_url: str = "http://google_calendar_service:8000"
     rest_url: str = "http://rest_service:8000/api"
+    chat_id: Optional[str] = None
     
-    def __init__(self, settings: Settings, user_id: Optional[str] = None):
+    def __init__(self, settings: Settings, user_id: Optional[str] = None, chat_id: Optional[str] = None):
         super().__init__(
             name=self.NAME,
             description=self.DESCRIPTION,
             args_schema=CreateEventRequest,
             user_id=user_id
         )
+        self.chat_id = chat_id
     
     async def _check_auth(self, client: httpx.AsyncClient) -> Optional[str]:
         """Check if user is authorized and return auth URL if not"""
@@ -60,7 +62,10 @@ class CalendarCreateTool(BaseTool):
             response = await client.get(f"{self.rest_url}/calendar/user/{self.user_id}/token")
             if response.status_code == 404 or not response.json():
                 # Get auth URL
-                auth_response = await client.get(f"{self.base_url}/auth/url/{self.user_id}")
+                auth_response = await client.get(
+                    f"{self.base_url}/auth/url/{self.user_id}",
+                    params={"chat_id": self.chat_id}
+                )
                 return auth_response.json()["auth_url"]
             return None
         except Exception as e:
@@ -137,14 +142,16 @@ class CalendarListTool(BaseTool):
     description: str = DESCRIPTION
     base_url: str = "http://google_calendar_service:8000"
     rest_url: str = "http://rest_service:8000/api"
+    chat_id: Optional[str] = None
     
-    def __init__(self, settings: Settings, user_id: Optional[str] = None):
+    def __init__(self, settings: Settings, user_id: Optional[str] = None, chat_id: Optional[str] = None):
         super().__init__(
             name=self.NAME,
             description=self.DESCRIPTION,
             args_schema=ListEventsRequest,
             user_id=user_id
         )
+        self.chat_id = chat_id
     
     async def _check_auth(self, client: httpx.AsyncClient) -> Optional[str]:
         """Check if user is authorized and return auth URL if not"""
@@ -153,7 +160,10 @@ class CalendarListTool(BaseTool):
             response = await client.get(f"{self.rest_url}/calendar/user/{self.user_id}/token")
             if response.status_code == 404 or not response.json():
                 # Get auth URL
-                auth_response = await client.get(f"{self.base_url}/auth/url/{self.user_id}")
+                auth_response = await client.get(
+                    f"{self.base_url}/auth/url/{self.user_id}",
+                    params={"chat_id": self.chat_id}
+                )
                 return auth_response.json()["auth_url"]
             return None
         except Exception as e:
@@ -170,10 +180,16 @@ class CalendarListTool(BaseTool):
             if not self.user_id:
                 raise ValueError("User ID is required")
             
+            logger.info("Fetching calendar events", 
+                       user_id=self.user_id,
+                       time_min=time_min,
+                       time_max=time_max)
+            
             async with httpx.AsyncClient() as client:
                 # Check authorization first
                 auth_url = await self._check_auth(client)
                 if auth_url:
+                    logger.info("User needs authorization", user_id=self.user_id)
                     return f"Для просмотра событий необходимо авторизоваться. Перейдите по ссылке: {auth_url}"
                 
                 params = {}
@@ -181,6 +197,10 @@ class CalendarListTool(BaseTool):
                     params["time_min"] = time_min.isoformat()
                 if time_max:
                     params["time_max"] = time_max.isoformat()
+                
+                logger.debug("Making request to calendar service", 
+                           url=f"{self.base_url}/events/{self.user_id}",
+                           params=params)
                 
                 response = await client.get(
                     f"{self.base_url}/events/{self.user_id}",
@@ -190,26 +210,61 @@ class CalendarListTool(BaseTool):
                 response.raise_for_status()
                 events = response.json()
                 
+                logger.info("Received calendar events", 
+                           user_id=self.user_id,
+                           event_count=len(events),
+                           calendar_events=events)
+                
                 if not events:
                     return "У вас нет событий в указанный период"
                 
                 result = "Ваши события:\n\n"
                 for event in events:
-                    start = datetime.fromisoformat(event["start"]["dateTime"].replace("Z", "+00:00"))
-                    end = datetime.fromisoformat(event["end"]["dateTime"].replace("Z", "+00:00"))
+                    # Log raw event data for debugging
+                    logger.debug("Processing calendar event", calendar_event=event)
+                    
+                    # Handle both dateTime and date formats
+                    start_data = event["start"]
+                    end_data = event["end"]
+                    
+                    logger.debug("Calendar event time data", 
+                               start_data=start_data,
+                               end_data=end_data)
+                    
+                    if "dateTime" in start_data:
+                        # Event with specific time
+                        start = datetime.fromisoformat(start_data["dateTime"].replace("Z", "+00:00"))
+                        end = datetime.fromisoformat(end_data["dateTime"].replace("Z", "+00:00"))
+                        time_str = f"{start.strftime('%d.%m.%Y %H:%M')} - {end.strftime('%H:%M')}"
+                    else:
+                        # All-day event
+                        start = datetime.fromisoformat(start_data["date"])
+                        time_str = f"{start.strftime('%d.%m.%Y')} (весь день)"
+                    
                     result += f"📅 {event['summary']}\n"
-                    result += f"🕒 {start.strftime('%d.%m.%Y %H:%M')} - {end.strftime('%H:%M')}\n"
+                    result += f"🕒 {time_str}\n"
                     if event.get("location"):
                         result += f"📍 {event['location']}\n"
                     if event.get("description"):
                         result += f"📝 {event['description']}\n"
                     result += "\n"
                 
+                logger.info("Successfully formatted calendar events",
+                           user_id=self.user_id,
+                           formatted_event_count=len(events))
                 return result
                 
         except httpx.HTTPError as e:
-            logger.error("HTTP error", error=str(e), exc_info=True)
+            logger.error("HTTP error while fetching calendar events",
+                        error=str(e),
+                        user_id=self.user_id,
+                        status_code=getattr(e.response, 'status_code', None),
+                        response_text=getattr(e.response, 'text', None),
+                        exc_info=True)
             raise
         except Exception as e:
-            logger.error("Calendar list tool error", error=str(e), exc_info=True)
+            logger.error("Calendar list tool error",
+                        error=str(e),
+                        user_id=self.user_id,
+                        exc_info=True)
             raise 

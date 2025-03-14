@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
     
+    # Telegram settings
+    TELEGRAM_BOT_USERNAME: str
+    TELEGRAM_DEEP_LINK_URL: str = "https://t.me/{TELEGRAM_BOT_USERNAME}"
+    
     # REST service settings
     REST_SERVICE_URL: str = "http://rest_service:8000"
     
@@ -23,5 +27,6 @@ class Settings(BaseSettings):
     # Queue names
     INPUT_QUEUE: str = "calendar_input_queue"
     OUTPUT_QUEUE: str = "calendar_output_queue"
+    ASSISTANT_INPUT_QUEUE: str = "telegram_input_queue"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8") 

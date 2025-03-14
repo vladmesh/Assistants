@@ -27,12 +27,7 @@ def configure_logger(environment: str = "development") -> None:
             # Add logger name
             structlog.contextvars.merge_contextvars,
             # Add file and line number
-            structlog.processors.CallsiteParameterAdder(
-                parameters={
-                    "filename": structlog.processors.CallsiteParameter.FILENAME,
-                    "lineno": structlog.processors.CallsiteParameter.LINENO,
-                }
-            ),
+            structlog.processors.CallsiteParameterAdder(),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
@@ -59,5 +54,8 @@ def get_logger(name: str) -> structlog.BoundLogger:
     """
     return structlog.get_logger(name)
 
+# Configure logger on import
+configure_logger()
+
 # Default logger instance
-logger = get_logger("assistant") 
+logger = get_logger("calendar_service") 

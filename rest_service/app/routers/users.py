@@ -27,6 +27,14 @@ def get_user(telegram_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+@router.get("/users/{user_id}")
+def get_user_by_id(user_id: int, session: Session = Depends(get_session)):
+    """Получить пользователя по ID."""
+    user = session.get(TelegramUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
 @router.get("/users/all/")
 def list_users(session: Session = Depends(get_session)):
     """Получить список всех пользователей."""
