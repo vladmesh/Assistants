@@ -70,7 +70,8 @@ class GoogleCalendarService:
             logger.error("Failed to refresh credentials", error=str(e))
             raise
     
-    async def get_events(self, credentials_data: Dict[str, Any], time_min: Optional[datetime] = None,
+    async def get_events(self, credentials_data: Dict[str, Any], 
+                        time_min: Optional[datetime] = None,
                         time_max: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """Get user's calendar events"""
         try:

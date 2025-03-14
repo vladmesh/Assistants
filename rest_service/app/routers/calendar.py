@@ -47,4 +47,29 @@ async def update_calendar_token(
         
     except Exception as e:
         logger.error("Failed to update token", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to update token") 
+        raise HTTPException(status_code=500, detail="Failed to update token")
+
+@router.get("/user/{user_id}/token")
+async def get_calendar_token(
+    user_id: int,
+    db: Session = Depends(get_session)
+) -> Optional[Dict[str, Any]]:
+    """Get user's Google Calendar token"""
+    try:
+        # Get credentials
+        credentials = db.exec(select(CalendarCredentials).where(
+            CalendarCredentials.user_id == user_id
+        )).first()
+        
+        if not credentials:
+            return None
+            
+        return {
+            "access_token": credentials.access_token,
+            "refresh_token": credentials.refresh_token,
+            "token_expiry": credentials.token_expiry.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error("Failed to get token", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get token") 
