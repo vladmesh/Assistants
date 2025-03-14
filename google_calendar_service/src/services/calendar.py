@@ -5,10 +5,11 @@ from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from src.config.settings import Settings
+from src.config.logger import get_logger
 from src.schemas.calendar import CreateEventRequest
-import structlog
+import google_auth_oauthlib.flow
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 class GoogleCalendarService:
     """Service for working with Google Calendar API"""
@@ -41,13 +42,15 @@ class GoogleCalendarService:
             redirect_uri=settings.GOOGLE_REDIRECT_URI
         )
     
-    def get_auth_url(self, user_id: str) -> str:
+    def get_auth_url(self, state: str) -> str:
         """Get Google OAuth URL for user authorization"""
-        return self._flow.authorization_url(
+        auth_url, _ = self._flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
-            state=str(user_id)
-        )[0]
+            state=state
+        )
+        
+        return auth_url
     
     async def handle_callback(self, code: str) -> Credentials:
         """Handle OAuth callback and return credentials"""

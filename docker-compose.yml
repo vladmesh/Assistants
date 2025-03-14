@@ -88,6 +88,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
       - REST_SERVICE_URL=http://rest_service:8000
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
     depends_on:
       - rest_service
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000

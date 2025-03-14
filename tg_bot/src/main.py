@@ -19,30 +19,36 @@ async def process_message(
     try:
         message = message_data.get("message")
         chat_id = message_data.get("chat_id")
-        user = {
-            "id": message_data.get("user_id"),
-            "username": message_data.get("username")
-        }
+        telegram_id = message_data.get("user_id")
+        username = message_data.get("username")
         
         logger.info(
             "Processing message",
             message=message,
             chat_id=chat_id,
-            user=user
+            telegram_id=telegram_id
         )
         
+        # Get user data from REST service
+        user = await rest.get_or_create_user(int(telegram_id), username)
+        if not user:
+            logger.error("Failed to get or create user", telegram_id=telegram_id)
+            return
+            
         if message == "/start":
             await handle_start(telegram, rest, chat_id, user)
         else:
-            # Send message to assistant queue
+            # Send message to assistant queue with full user data
             redis = aioredis.from_url(settings.redis_url, **settings.redis_settings)
             await redis.lpush(
                 settings.input_queue,
                 json.dumps({
-                    "user_id": user["id"],
+                    "user_id": user["id"],  # Use actual user ID from database
+                    "telegram_id": telegram_id,  # Keep telegram_id for reference
                     "chat_id": chat_id,
                     "message": message,
-                    "username": user["username"]
+                    "username": username,
+                    "user_data": user  # Pass full user data
                 })
             )
             logger.info("Message sent to assistant queue", message=message)

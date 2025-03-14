@@ -66,21 +66,20 @@ class AssistantOrchestrator:
     async def process_message(self, message: dict) -> dict:
         """Process an incoming message."""
         try:
-            user_data = message.get("user_data", {})
-            user_id = str(user_data.get("id", ""))  # Use ID from user_data
+            user_id = str(message.get("user_id", ""))  # Get user_id directly from message
             chat_id = str(message.get("chat_id", ""))
             text = message["message"]
             
             logger.info("Processing message",
                        user_id=user_id,
                        chat_id=chat_id,
-                       message_length=len(text),
-                       user_data=user_data)  # Log user data
+                       message_length=len(text))
             
             # Update user_id for calendar tools
             for tool in self.tools:
                 if isinstance(tool, (CalendarCreateTool, CalendarListTool)):
                     tool.user_id = user_id
+                    tool.chat_id = chat_id
             
             response = await self.assistant.process_message(text, user_id)
             

@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Body, Request
+from fastapi import APIRouter, Depends, HTTPException, Body, Request, Response
 from pydantic import BaseModel, Field
 from src.config.settings import Settings
 from src.services.calendar import GoogleCalendarService
 from src.services.rest_service import RestService
+from src.services.redis_service import RedisService
 from src.schemas.calendar import CreateEventRequest
 import structlog
 
@@ -56,9 +57,14 @@ async def get_calendar_service(request: Request) -> GoogleCalendarService:
     """Get Google Calendar service from app state"""
     return request.app.state.calendar_service
 
+async def get_redis_service(request: Request) -> RedisService:
+    """Get Redis service from app state"""
+    return request.app.state.redis_service
+
 @router.get("/auth/url/{user_id}")
 async def get_auth_url(
     user_id: str,
+    chat_id: str,
     request: Request,
     rest_service: RestService = Depends(get_rest_service),
     calendar_service: GoogleCalendarService = Depends(get_calendar_service)
@@ -75,8 +81,9 @@ async def get_auth_url(
         if credentials:
             raise HTTPException(status_code=400, detail="User already authorized")
         
-        # Get auth URL
-        auth_url = calendar_service.get_auth_url(user_id)
+        # Get auth URL with combined state
+        state = f"{user_id}_{chat_id}"
+        auth_url = calendar_service.get_auth_url(state)
         
         return {"auth_url": auth_url}
         
@@ -92,17 +99,22 @@ async def get_auth_url(
 async def handle_callback(
     code: str,
     state: str,
+    request: Request,
     rest_service: RestService = Depends(get_rest_service),
-    calendar_service: GoogleCalendarService = Depends(get_calendar_service)
-) -> Dict[str, str]:
+    calendar_service: GoogleCalendarService = Depends(get_calendar_service),
+    redis_service: RedisService = Depends(get_redis_service)
+) -> Response:
     """Handle OAuth callback"""
     try:
+        # Parse user_id and chat_id from state
+        user_id, chat_id = map(int, state.split('_'))
+        
         # Handle callback
         credentials = await calendar_service.handle_callback(code)
         
         # Save credentials to REST service
         success = await rest_service.update_calendar_token(
-            user_id=int(state),
+            user_id=user_id,
             access_token=credentials.token,
             refresh_token=credentials.refresh_token,
             token_expiry=credentials.expiry
@@ -111,7 +123,21 @@ async def handle_callback(
         if not success:
             raise HTTPException(status_code=500, detail="Failed to save credentials")
         
-        return {"status": "success"}
+        # Send message to assistant
+        await redis_service.send_to_assistant(
+            user_id=user_id,
+            chat_id=chat_id,
+            message="✅ Авторизация в Google Calendar успешно завершена!"
+        )
+        
+        # Redirect to Telegram
+        telegram_url = settings.TELEGRAM_DEEP_LINK_URL.format(
+            TELEGRAM_BOT_USERNAME=settings.TELEGRAM_BOT_USERNAME
+        )
+        return Response(
+            status_code=302,
+            headers={"Location": telegram_url}
+        )
         
     except Exception as e:
         logger.error("Failed to handle callback", error=str(e))
@@ -137,6 +163,8 @@ async def get_events(
         
         return events
         
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
