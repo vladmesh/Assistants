@@ -54,12 +54,15 @@ class OpenAIAssistant(BaseAssistant):
         # Create or retrieve assistant
         if assistant_id:
             self.assistant = self.client.beta.assistants.retrieve(assistant_id)
+            update_params = {}
             if tools is not None:
-                # Update assistant with new tools if provided
+                update_params["tools"] = tools
+            if instructions is not None:
+                update_params["instructions"] = instructions
+            if update_params:
                 self.assistant = self.client.beta.assistants.update(
                     assistant_id=assistant_id,
-                    tools=tools,
-                    instructions=instructions
+                    **update_params
                 )
         else:
             self.assistant = self.client.beta.assistants.create(

@@ -5,6 +5,7 @@ from config.settings import Settings
 from tools.time_tool import TimeToolWrapper
 from tools.sub_assistant_tool import SubAssistantTool
 from tools.reminder_tool import ReminderTool
+from tools.calendar_tool import CalendarTool
 from assistants.factory import AssistantFactory
 
 logger = get_logger(__name__)
@@ -50,6 +51,10 @@ class AssistantOrchestrator:
         # Add reminder tool
         reminder_tool = ReminderTool()
         self.tools.append(reminder_tool)
+
+        # Add calendar tool
+        calendar_tool = CalendarTool(settings, user_id=None)
+        self.tools.append(calendar_tool)
         
         # Initialize main assistant
         self.assistant = AssistantFactory.create_main_assistant(settings, self.tools)
@@ -60,14 +65,16 @@ class AssistantOrchestrator:
     async def process_message(self, message: dict) -> dict:
         """Process an incoming message."""
         try:
-            user_id = str(message.get("user_id", ""))
+            user_data = message.get("user_data", {})
+            user_id = str(user_data.get("id", ""))  # Use ID from user_data
             chat_id = str(message.get("chat_id", ""))
             text = message["message"]
             
             logger.info("Processing message",
                        user_id=user_id,
                        chat_id=chat_id,
-                       message_length=len(text))
+                       message_length=len(text),
+                       user_data=user_data)  # Log user data
             
             response = await self.assistant.process_message(text, user_id)
             
