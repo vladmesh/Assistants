@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install pytest pytest-asyncio pytest-cov
+
+ENV PYTHONPATH=/app
+
+# Copy source code and tests
+COPY . .
+
+# Run tests with coverage
+CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "tests/"] 

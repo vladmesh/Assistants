@@ -7,6 +7,14 @@ print_colored() {
     echo -e "\e[${color}m${text}\e[0m"
 }
 
+# Функция для вывода справки
+print_help() {
+    echo "Usage: $0 [service1 service2 ...]"
+    echo "If no services specified, runs tests for all services"
+    echo "Available services: rest_service, cron_service, tg_bot, assistant"
+    exit 1
+}
+
 # Функция для запуска тестов сервиса
 run_service_tests() {
     service=$1
@@ -36,8 +44,28 @@ run_service_tests() {
 # Массив для хранения сервисов с упавшими тестами
 failed_services=()
 
-# Запускаем тесты для каждого сервиса
-for service in rest_service  cron_service tg_bot assistant; do
+# Список всех доступных сервисов
+all_services=("rest_service" "cron_service" "tg_bot" "assistant")
+
+# Проверяем, есть ли аргументы командной строки
+if [ $# -eq 0 ]; then
+    # Если аргументов нет, запускаем все сервисы
+    services_to_run=("${all_services[@]}")
+else
+    # Если есть аргументы, проверяем их валидность
+    services_to_run=()
+    for service in "$@"; do
+        if [[ " ${all_services[@]} " =~ " ${service} " ]]; then
+            services_to_run+=("$service")
+        else
+            print_colored "31" "❌ Unknown service: $service\n"
+            print_help
+        fi
+    done
+fi
+
+# Запускаем тесты для выбранных сервисов
+for service in "${services_to_run[@]}"; do
     run_service_tests "$service"
 done
 
