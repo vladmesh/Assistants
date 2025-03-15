@@ -1,7 +1,8 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import CronJob, CronJobType, CronJobStatus, TelegramUser
 from app.database import get_session
 
@@ -24,23 +25,24 @@ class CronJobUpdateRequest(BaseModel):
 
 
 @router.get("/cronjobs/")
-def list_cronjobs(session: Session = Depends(get_session)):
+async def list_cronjobs(session: AsyncSession = Depends(get_session)):
     """Получить список всех CronJob."""
     query = select(CronJob)
-    return session.exec(query).all()
+    result = await session.execute(query)
+    return result.scalars().all()
 
 @router.get("/cronjobs/{cronjob_id}")
-def get_cronjob(cronjob_id: int, session: Session = Depends(get_session)):
+async def get_cronjob(cronjob_id: int, session: AsyncSession = Depends(get_session)):
     """Получить CronJob по ID."""
-    cronjob = session.get(CronJob, cronjob_id)
+    cronjob = await session.get(CronJob, cronjob_id)
     if not cronjob:
         raise HTTPException(status_code=404, detail="CronJob not found")
     return cronjob
 
 @router.post("/cronjobs/")
-def create_cronjob(cronjob_data: CronJobCreate, session: Session = Depends(get_session)):
+async def create_cronjob(cronjob_data: CronJobCreate, session: AsyncSession = Depends(get_session)):
     """Создать новый CronJob."""
-    user = session.get(TelegramUser, cronjob_data.user_id)
+    user = await session.get(TelegramUser, cronjob_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -52,14 +54,14 @@ def create_cronjob(cronjob_data: CronJobCreate, session: Session = Depends(get_s
     )
 
     session.add(cronjob)
-    session.commit()
-    session.refresh(cronjob)
+    await session.commit()
+    await session.refresh(cronjob)
     return cronjob
 
 @router.patch("/cronjobs/{cronjob_id}")
-def update_cronjob(cronjob_id: int, update_data: CronJobUpdateRequest, session: Session = Depends(get_session)):
+async def update_cronjob(cronjob_id: int, update_data: CronJobUpdateRequest, session: AsyncSession = Depends(get_session)):
     """Обновить CronJob по ID."""
-    cronjob = session.get(CronJob, cronjob_id)
+    cronjob = await session.get(CronJob, cronjob_id)
     if not cronjob:
         raise HTTPException(status_code=404, detail="CronJob not found")
 
@@ -68,17 +70,17 @@ def update_cronjob(cronjob_id: int, update_data: CronJobUpdateRequest, session: 
         setattr(cronjob, key, value)
 
     session.add(cronjob)
-    session.commit()
-    session.refresh(cronjob)
+    await session.commit()
+    await session.refresh(cronjob)
     return cronjob
 
 @router.delete("/cronjobs/{cronjob_id}")
-def delete_cronjob(cronjob_id: int, session: Session = Depends(get_session)):
+async def delete_cronjob(cronjob_id: int, session: AsyncSession = Depends(get_session)):
     """Удалить CronJob по ID."""
-    cronjob = session.get(CronJob, cronjob_id)
+    cronjob = await session.get(CronJob, cronjob_id)
     if not cronjob:
         raise HTTPException(status_code=404, detail="CronJob not found")
 
-    session.delete(cronjob)
-    session.commit()
+    await session.delete(cronjob)
+    await session.commit()
     return {"message": f"CronJob with ID {cronjob_id} has been deleted"}

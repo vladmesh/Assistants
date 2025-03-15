@@ -1,72 +1,52 @@
-from sqlmodel import SQLModel, create_engine, Session, select
-from .models import TelegramUser, Task, CronJob, TaskStatus, CronJobType
-import os
-import random
-from sqlalchemy import text
+"""Database initialization and session management"""
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from sqlalchemy.orm import sessionmaker
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+from app.config import settings
+from app.scripts.test_data import create_test_data
 
-engine = create_engine(DATABASE_URL)
+# Create async engine
+async_engine = create_async_engine(
+    settings.ASYNC_DATABASE_URL,
+    echo=settings.DB_ECHO,
+    pool_pre_ping=True,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW
+)
 
-def get_session():
-    with Session(engine) as session:
+# Create session factory
+AsyncSessionLocal = sessionmaker(
+    async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+async def drop_all_tables() -> None:
+    """Drop all tables in the database"""
+    async with async_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
+
+async def init_db() -> None:
+    """Initialize database with tables and test data"""
+    # Drop all tables first
+    await drop_all_tables()
+    # Create all tables
+    async with async_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+    # Create test data
+    async with AsyncSessionLocal() as session:
+        await create_test_data(session)
+
+async def get_session() -> AsyncSession:
+    """Get database session"""
+    session = AsyncSessionLocal()
+    try:
         yield session
-
-def init_db(reset: bool = False):
-    """
-    Инициализация базы данных.
-    Если reset=True, база данных пересоздаётся.
-    """
-    if reset:
-        with engine.begin() as conn:
-            # Удаляем public со всеми таблицами, последовательностями и т.д.
-            conn.execute(text("DROP SCHEMA public CASCADE"))
-            conn.execute(text("CREATE SCHEMA public"))
-    SQLModel.metadata.create_all(engine)  # Создаём таблицы
-
-def create_test_data():
-    """
-    Создаёт тестовые данные для базы данных.
-    """
-    with Session(engine) as session:
-        # Проверяем, есть ли уже данные, чтобы не создавать дубликаты
-        if session.exec(select(TelegramUser)).first():
-            print("Тестовые данные уже существуют. Пропускаем.")
-            return
-
-        # Создаём тестовых пользователей
-        user1 = TelegramUser(telegram_id=625038902, username="vladmesh")
-        user2 = TelegramUser(telegram_id=7192299, username="vladislav_mesh88k")
-
-        # Создаём тестовые задачи
-        task1 = Task(
-            title="Test Task 1",
-            description="Description for task 1",
-            status=random.choice(list(TaskStatus)),
-            user=user1
-        )
-        task2 = Task(
-            title="Test Task 2",
-            description="Description for task 2",
-            status=random.choice(list(TaskStatus)),
-            user=user2
-        )
-
-        # Создаём тестовые CronJob
-        job1 = CronJob(
-            name="Test Job 1",
-            type=CronJobType.NOTIFICATION,
-            cron_expression="29 * * * *",
-            user=user1
-        )
-        job2 = CronJob(
-            name="Test Job 2",
-            type=CronJobType.SCHEDULE,
-            cron_expression="0 12 * * *",
-            user=user2
-        )
-
-        # Сохраняем в базу
-        session.add_all([user1, user2, task1, task2, job1, job2])
-        session.commit()
-        print("Тестовые данные успешно созданы.")
+    finally:
+        await session.close()

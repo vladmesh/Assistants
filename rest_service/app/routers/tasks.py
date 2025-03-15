@@ -2,7 +2,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import Task, TaskStatus
 from app.database import get_session
 
@@ -27,40 +28,37 @@ class TaskUpdateRequest(BaseModel):
 
 
 @router.get("/tasks/")
-def list_tasks(session: Session = Depends(get_session)):
+async def list_tasks(session: AsyncSession = Depends(get_session)):
     print("Получаем все")
     query = select(Task)
-    return session.exec(query).all()
+    result = await session.execute(query)
+    return result.scalars().all()
 
 @router.get("/tasks/{task_id}")
-def get_task(task_id: int, session: Session = Depends(get_session)):
+async def get_task(task_id: int, session: AsyncSession = Depends(get_session)):
     """Получить таску по id."""
     print("Получаем одну")
     query = select(Task).where(Task.id == task_id)
-    task = session.exec(query).first()
+    result = await session.execute(query)
+    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
 @router.get("/tasks/active/{user_id}")
-def get_active_tasks_for_user(user_id: int, session: Session = Depends(get_session)):
+async def get_active_tasks_for_user(user_id: int, session: AsyncSession = Depends(get_session)):
     """
     Get all active tasks for a specific user.
     """
     # Define the query to filter by user_id and active status
     query = select(Task).where(Task.user_id == user_id, Task.status == TaskStatus.ACTIVE)
-    active_tasks = session.exec(query).all()
-
-
+    result = await session.execute(query)
+    active_tasks = result.scalars().all()
     return active_tasks
 
-
-
-
-
 @router.patch("/tasks/{task_id}")
-def update_task(task_id: int, update_data: TaskUpdateRequest, session: Session = Depends(get_session)):
-    task = session.get(Task, task_id)
+async def update_task(task_id: int, update_data: TaskUpdateRequest, session: AsyncSession = Depends(get_session)):
+    task = await session.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -70,16 +68,16 @@ def update_task(task_id: int, update_data: TaskUpdateRequest, session: Session =
         setattr(task, key, value)
 
     session.add(task)
-    session.commit()
-    session.refresh(task)
+    await session.commit()
+    await session.refresh(task)
     return task
 
 @router.post("/tasks/")
-def create_task(task_data: TaskCreate, session: Session = Depends(get_session)):
+async def create_task(task_data: TaskCreate, session: AsyncSession = Depends(get_session)):
     """
     Создание новой задачи.
     """
-    user = session.get(TelegramUser, task_data.user_id)
+    user = await session.get(TelegramUser, task_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -93,7 +91,7 @@ def create_task(task_data: TaskCreate, session: Session = Depends(get_session)):
 
     # Сохраняем задачу в базе данных
     session.add(task)
-    session.commit()
-    session.refresh(task)
+    await session.commit()
+    await session.refresh(task)
 
     return task

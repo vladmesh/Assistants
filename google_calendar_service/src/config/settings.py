@@ -25,8 +25,6 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     
     # Queue names
-    INPUT_QUEUE: str = "calendar_input_queue"
-    OUTPUT_QUEUE: str = "calendar_output_queue"
-    ASSISTANT_INPUT_QUEUE: str = "telegram_input_queue"
+    REDIS_QUEUE_TO_SECRETARY: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8") 

@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 from app.database import get_session
 from app.models import TelegramUser, CalendarCredentials
 import structlog
@@ -15,18 +16,20 @@ async def update_calendar_token(
     access_token: str,
     refresh_token: str,
     token_expiry: datetime,
-    db: Session = Depends(get_session)
+    db: AsyncSession = Depends(get_session)
 ):
     """Update user's Google Calendar token"""
-    user = db.exec(select(TelegramUser).where(TelegramUser.id == user_id)).first()
+    result = await db.execute(select(TelegramUser).where(TelegramUser.id == user_id))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
     try:
         # Get or create credentials
-        credentials = db.exec(select(CalendarCredentials).where(
+        result = await db.execute(select(CalendarCredentials).where(
             CalendarCredentials.user_id == user_id
-        )).first()
+        ))
+        credentials = result.scalar_one_or_none()
         
         if not credentials:
             credentials = CalendarCredentials(
@@ -42,7 +45,7 @@ async def update_calendar_token(
             credentials.token_expiry = token_expiry
             credentials.updated_at = datetime.utcnow()
             
-        db.commit()
+        await db.commit()
         return {"message": "Token updated successfully"}
         
     except Exception as e:
@@ -52,14 +55,15 @@ async def update_calendar_token(
 @router.get("/user/{user_id}/token")
 async def get_calendar_token(
     user_id: int,
-    db: Session = Depends(get_session)
+    db: AsyncSession = Depends(get_session)
 ) -> Optional[Dict[str, Any]]:
     """Get user's Google Calendar token"""
     try:
         # Get credentials
-        credentials = db.exec(select(CalendarCredentials).where(
+        result = await db.execute(select(CalendarCredentials).where(
             CalendarCredentials.user_id == user_id
-        )).first()
+        ))
+        credentials = result.scalar_one_or_none()
         
         if not credentials:
             return None

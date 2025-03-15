@@ -62,7 +62,7 @@ services:
         context: ./rest_service
       container_name: rest_service
       environment:
-        DATABASE_URL: ${DATABASE_URL}
+        ASYNC_DATABASE_URL: ${ASYNC_DATABASE_URL}
       ports:
         - "8000:8000"
       depends_on:
@@ -75,7 +75,6 @@ services:
       context: ./cron_service
     environment:
       - TELEGRAM_ID=${TELEGRAM_ID}
-      - DATABASE_URL=${DATABASE_URL}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_DB=${REDIS_DB}
