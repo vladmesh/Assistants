@@ -17,15 +17,19 @@ class RedisService:
             decode_responses=True
         )
     
-    async def send_to_assistant(self, user_id: int, chat_id: int, message: str) -> bool:
+    async def send_to_assistant(self, user_id: int, message: str) -> bool:
         """Send message to assistant input queue"""
         try:
             data = {
                 "user_id": user_id,
-                "chat_id": chat_id,
-                "message": message
+                "text": message
             }
-            await self.redis.lpush(self.settings.ASSISTANT_INPUT_QUEUE, json.dumps(data))
+            logger.info("Sending message to Redis", 
+                       user_id=user_id,
+                       message=message,
+                       queue=self.settings.REDIS_QUEUE_TO_SECRETARY)
+            await self.redis.lpush(self.settings.REDIS_QUEUE_TO_SECRETARY, json.dumps(data))
+            logger.info("Message sent successfully")
             return True
         except Exception as e:
             logger.error("Failed to send message to assistant", error=str(e))
