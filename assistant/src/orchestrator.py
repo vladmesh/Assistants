@@ -66,28 +66,33 @@ class AssistantOrchestrator:
     async def process_message(self, message: dict) -> dict:
         """Process an incoming message."""
         try:
-            user_id = str(message.get("user_id", ""))  # Get user_id directly from message
-            chat_id = str(message.get("chat_id", ""))
-            text = message["message"]
+            # Get message data
+            user_id = str(message.get("user_id", ""))
+            text = message.get("text", "")
+            
+            # Initialize tools with user context
+            tools = [
+                CalendarCreateTool(
+                    settings=self.settings,
+                    user_id=user_id,
+                ),
+                CalendarListTool(
+                    settings=self.settings,
+                    user_id=user_id,
+                )
+            ]
             
             logger.info("Processing message",
                        user_id=user_id,
-                       chat_id=chat_id,
                        message_length=len(text))
-            
-            # Update user_id for calendar tools
-            for tool in self.tools:
-                if isinstance(tool, (CalendarCreateTool, CalendarListTool)):
-                    tool.user_id = user_id
-                    tool.chat_id = chat_id
             
             response = await self.assistant.process_message(text, user_id)
             
             return {
                 "user_id": user_id,
-                "chat_id": chat_id,
-                "status": "ok",
-                "response": response
+                "text": text,
+                "response": response,
+                "status": "success"
             }
             
         except Exception as e:
@@ -96,7 +101,7 @@ class AssistantOrchestrator:
                         exc_info=True)
             return {
                 "user_id": message.get("user_id", ""),
-                "chat_id": message.get("chat_id", ""),
+                "text": message.get("text", ""),
                 "status": "error",
                 "error": str(e)
             }
