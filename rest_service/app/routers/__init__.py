@@ -1,1 +1,1 @@
-from . import users, tasks, cron_jobs, calendar
+from . import users, tasks, cron_jobs, calendar, assistants
