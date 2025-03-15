@@ -20,6 +20,8 @@ services:
       - test-db
     environment:
       - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/test_db
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./tests:/app/tests
 
