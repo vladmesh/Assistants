@@ -17,7 +17,7 @@ services:
     depends_on:
       - test-db
     environment:
-      - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/test_db
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://test_user:test_password@test-db:5432/test_db
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     volumes:

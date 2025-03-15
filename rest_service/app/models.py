@@ -9,7 +9,7 @@ from .models.cron import (
     CronJobNotification,
     CronJobRecord
 )
-
+from .models.assistant import Assistant, AssistantType, AssistantInstructions
 __all__ = [
     'BaseModel',
     'TelegramUser',
@@ -20,5 +20,8 @@ __all__ = [
     'CronJobType',
     'CronJobStatus',
     'CronJobNotification',
-    'CronJobRecord'
+    'CronJobRecord',
+    'Assistant',
+    'AssistantType',
+    'AssistantInstructions',
 ]

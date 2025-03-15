@@ -1,6 +1,7 @@
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -27,31 +28,31 @@ class AssistantUpdate(BaseModel):
     is_active: bool = None
 
 @router.get("/assistants/")
-def list_assistants(
-    session: Session = Depends(get_session),
+async def list_assistants(
+    session: AsyncSession = Depends(get_session),
     skip: int = 0,
     limit: int = 100
 ):
     """Получить список всех ассистентов"""
     query = select(Assistant).offset(skip).limit(limit)
-    result = session.exec(query).all()
-    return result
+    result = await session.execute(query)
+    return result.scalars().all()
 
 @router.get("/assistants/{assistant_id}")
-def get_assistant(
+async def get_assistant(
     assistant_id: UUID,
-    session: Session = Depends(get_session)
+    session: AsyncSession = Depends(get_session)
 ):
     """Получить ассистента по ID"""
-    assistant = session.get(Assistant, assistant_id)
+    assistant = await session.get(Assistant, assistant_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
     return assistant
 
 @router.post("/assistants/")
-def create_assistant(
+async def create_assistant(
     assistant: AssistantCreate,
-    session: Session = Depends(get_session)
+    session: AsyncSession = Depends(get_session)
 ):
     """Создать нового ассистента"""
     # Преобразуем строку в enum
@@ -62,18 +63,18 @@ def create_assistant(
     
     db_assistant = Assistant(**assistant_data)
     session.add(db_assistant)
-    session.commit()
-    session.refresh(db_assistant)
+    await session.commit()
+    await session.refresh(db_assistant)
     return db_assistant
 
 @router.put("/assistants/{assistant_id}")
-def update_assistant(
+async def update_assistant(
     assistant_id: UUID,
     assistant_update: AssistantUpdate,
-    session: Session = Depends(get_session)
+    session: AsyncSession = Depends(get_session)
 ):
     """Обновить ассистента"""
-    db_assistant = session.get(Assistant, assistant_id)
+    db_assistant = await session.get(Assistant, assistant_id)
     if not db_assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
     
@@ -88,20 +89,20 @@ def update_assistant(
     for key, value in assistant_data.items():
         setattr(db_assistant, key, value)
     
-    session.commit()
-    session.refresh(db_assistant)
+    await session.commit()
+    await session.refresh(db_assistant)
     return db_assistant
 
 @router.delete("/assistants/{assistant_id}")
-def delete_assistant(
+async def delete_assistant(
     assistant_id: UUID,
-    session: Session = Depends(get_session)
+    session: AsyncSession = Depends(get_session)
 ):
     """Удалить ассистента"""
-    assistant = session.get(Assistant, assistant_id)
+    assistant = await session.get(Assistant, assistant_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
     
-    session.delete(assistant)
-    session.commit()
+    await session.delete(assistant)
+    await session.commit()
     return {"message": "Assistant deleted successfully"} 
