@@ -44,16 +44,14 @@ class CalendarCreateTool(BaseTool):
     description: str = DESCRIPTION
     base_url: str = "http://google_calendar_service:8000"
     rest_url: str = "http://rest_service:8000/api"
-    chat_id: Optional[str] = None
     
-    def __init__(self, settings: Settings, user_id: Optional[str] = None, chat_id: Optional[str] = None):
+    def __init__(self, settings: Settings, user_id: Optional[str] = None):
         super().__init__(
             name=self.NAME,
             description=self.DESCRIPTION,
             args_schema=CreateEventRequest,
             user_id=user_id
         )
-        self.chat_id = chat_id
     
     async def _check_auth(self, client: httpx.AsyncClient) -> Optional[str]:
         """Check if user is authorized and return auth URL if not"""
@@ -63,8 +61,7 @@ class CalendarCreateTool(BaseTool):
             if response.status_code == 404 or not response.json():
                 # Get auth URL
                 auth_response = await client.get(
-                    f"{self.base_url}/auth/url/{self.user_id}",
-                    params={"chat_id": self.chat_id}
+                    f"{self.base_url}/auth/url/{self.user_id}"
                 )
                 return auth_response.json()["auth_url"]
             return None
@@ -142,16 +139,14 @@ class CalendarListTool(BaseTool):
     description: str = DESCRIPTION
     base_url: str = "http://google_calendar_service:8000"
     rest_url: str = "http://rest_service:8000/api"
-    chat_id: Optional[str] = None
     
-    def __init__(self, settings: Settings, user_id: Optional[str] = None, chat_id: Optional[str] = None):
+    def __init__(self, settings: Settings, user_id: Optional[str] = None):
         super().__init__(
             name=self.NAME,
             description=self.DESCRIPTION,
             args_schema=ListEventsRequest,
             user_id=user_id
         )
-        self.chat_id = chat_id
     
     async def _check_auth(self, client: httpx.AsyncClient) -> Optional[str]:
         """Check if user is authorized and return auth URL if not"""
@@ -161,8 +156,7 @@ class CalendarListTool(BaseTool):
             if response.status_code == 404 or not response.json():
                 # Get auth URL
                 auth_response = await client.get(
-                    f"{self.base_url}/auth/url/{self.user_id}",
-                    params={"chat_id": self.chat_id}
+                    f"{self.base_url}/auth/url/{self.user_id}"
                 )
                 return auth_response.json()["auth_url"]
             return None

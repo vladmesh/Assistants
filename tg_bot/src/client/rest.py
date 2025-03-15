@@ -89,4 +89,15 @@ class RestClient:
                 "id": telegram_id,
                 "telegram_id": telegram_id,
                 "username": username
-            } 
+            }
+            
+    async def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get user by user_id."""
+        try:
+            return await self._make_request(
+                "GET",
+                f"/users/{user_id}"
+            )
+        except aiohttp.ClientError as e:
+            logger.error("Error getting user by id", user_id=user_id, error=str(e))
+            return None 

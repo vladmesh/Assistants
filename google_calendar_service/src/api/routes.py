@@ -64,7 +64,6 @@ async def get_redis_service(request: Request) -> RedisService:
 @router.get("/auth/url/{user_id}")
 async def get_auth_url(
     user_id: str,
-    chat_id: str,
     request: Request,
     rest_service: RestService = Depends(get_rest_service),
     calendar_service: GoogleCalendarService = Depends(get_calendar_service)
@@ -81,9 +80,8 @@ async def get_auth_url(
         if credentials:
             raise HTTPException(status_code=400, detail="User already authorized")
         
-        # Get auth URL with combined state
-        state = f"{user_id}_{chat_id}"
-        auth_url = calendar_service.get_auth_url(state)
+        # Get auth URL with state
+        auth_url = calendar_service.get_auth_url(user_id)
         
         return {"auth_url": auth_url}
         
@@ -106,8 +104,8 @@ async def handle_callback(
 ) -> Response:
     """Handle OAuth callback"""
     try:
-        # Parse user_id and chat_id from state
-        user_id, chat_id = map(int, state.split('_'))
+        # Parse user_id from state
+        user_id = int(state)
         
         # Handle callback
         credentials = await calendar_service.handle_callback(code)
@@ -126,7 +124,6 @@ async def handle_callback(
         # Send message to assistant
         await redis_service.send_to_assistant(
             user_id=user_id,
-            chat_id=chat_id,
             message="✅ Авторизация в Google Calendar успешно завершена!"
         )
         

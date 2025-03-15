@@ -17,15 +17,13 @@ async def process_message(
 ) -> None:
     """Process single message."""
     try:
-        message = message_data.get("message")
-        chat_id = message_data.get("chat_id")
-        telegram_id = message_data.get("user_id")
+        message = message_data.get("text")
         username = message_data.get("username")
+        telegram_id = message_data.get("user_id")
         
         logger.info(
             "Processing message",
             message=message,
-            chat_id=chat_id,
             telegram_id=telegram_id
         )
         
@@ -36,19 +34,16 @@ async def process_message(
             return
             
         if message == "/start":
-            await handle_start(telegram, rest, chat_id, user)
+            await handle_start(telegram, rest, message_data.get("chat_id"), user)
         else:
-            # Send message to assistant queue with full user data
+            # Send message to assistant queue
             redis = aioredis.from_url(settings.redis_url, **settings.redis_settings)
             await redis.lpush(
                 settings.input_queue,
                 json.dumps({
-                    "user_id": user["id"],  # Use actual user ID from database
-                    "telegram_id": telegram_id,  # Keep telegram_id for reference
-                    "chat_id": chat_id,
-                    "message": message,
-                    "username": username,
-                    "user_data": user  # Pass full user data
+                    "user_id": user["id"],
+                    "text": message,
+                    "username": username
                 })
             )
             logger.info("Message sent to assistant queue", message=message)
@@ -71,8 +66,8 @@ async def handle_telegram_update(
         from_user = message.get("from", {})
         
         message_data = {
-            "message": message.get("text"),
-            "chat_id": chat.get("id"),
+            "text": message.get("text"),
+            "chat_id": chat.get("id"),  # Нужен только для handle_start
             "user_id": str(from_user.get("id")),
             "username": from_user.get("username")
         }
