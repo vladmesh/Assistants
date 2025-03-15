@@ -4,8 +4,7 @@ WORKDIR /app
 
 # Копируем зависимости
 COPY rest_service/requirements.txt .
-RUN pip install -r requirements.txt
-RUN pip install pytest pytest-asyncio
+RUN pip install --no-cache-dir -r requirements.txt pytest pytest-asyncio
 
 # Копируем код приложения
 COPY rest_service/app/ app/
@@ -15,4 +14,4 @@ COPY rest_service/tests/ tests/
 ENV PYTHONPATH=/app
 
 # Запускаем тесты
-CMD ["pytest", "tests/", "-v"] 
+CMD ["pytest", "-vv"] 
