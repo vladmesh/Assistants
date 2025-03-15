@@ -45,7 +45,7 @@ run_service_tests() {
 failed_services=()
 
 # Список всех доступных сервисов
-all_services=("rest_service" "cron_service" "tg_bot" "assistant")
+all_services=("rest_service" "cron_service" "tg_bot" "assistant" "google_calendar_service")
 
 # Проверяем, есть ли аргументы командной строки
 if [ $# -eq 0 ]; then

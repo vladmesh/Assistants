@@ -27,7 +27,7 @@ async def test_get_auth_url():
 
     try:
         async with AsyncClient(app=app, base_url="http://test") as client:
-            response = await client.get("/auth/url/123")
+            response = await client.get("/auth/url/123?chat_id=456")
             
             # Verify response
             assert response.status_code == 200
@@ -37,7 +37,7 @@ async def test_get_auth_url():
             # Verify service calls
             mock_rest_service.get_user.assert_called_once_with(123)
             mock_rest_service.get_calendar_token.assert_called_once_with("123")
-            mock_calendar_service.get_auth_url.assert_called_once_with("123")
+            mock_calendar_service.get_auth_url.assert_called_once_with("123_456")
     finally:
         # Restore original services
         app.state.rest_service = original_rest_service

@@ -2,6 +2,7 @@ from typing import Dict
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import structlog
+import os
 
 logger = structlog.get_logger()
 
@@ -14,8 +15,8 @@ class Settings(BaseSettings):
     redis_host: str = "redis"
     redis_port: int = 6379
     redis_db: int = 0
-    input_queue: str = "telegram_input_queue"
-    assistant_output_queue: str = "telegram_output_queue"  # Queue for assistant responses (changed to match assistant service)
+    input_queue: str = os.getenv("REDIS_QUEUE_TO_SECRETARY", "queue:to_secretary")
+    assistant_output_queue: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram")
     user_messages_prefix: str = "user_messages:"
     
     # REST service settings

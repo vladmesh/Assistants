@@ -1,37 +1,35 @@
-import redis
-import json
 import sys
+import json
+import redis
+import os
 
-def monitor_queue(queue_name="assistant_output_queue"):
-    r = redis.Redis(host='redis', port=6379, decode_responses=True)
-    
+def monitor_queue(queue_name=None):
+    """Monitor Redis queue for messages."""
+    if queue_name is None:
+        queue_name = os.getenv("REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram")
+        
     print(f"Мониторинг очереди {queue_name}. Для выхода нажмите Ctrl+C")
+    
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    
     try:
         while True:
-            try:
-                # Wait for message
-                result = r.brpop(queue_name, timeout=5)
-                if result:
-                    _, message = result
-                    data = json.loads(message)
-                    
-                    # Pretty print
-                    print("\n=== Новое сообщение ===")
-                    print(f"От пользователя: {data.get('user_id')}")
-                    print(f"Чат: {data.get('chat_id')}")
-                    print(f"Статус: {data.get('status')}")
-                    print(f"Ответ: {data.get('response')}")
-                    if data.get('error'):
-                        print(f"Ошибка: {data.get('error')}")
-                    print("=====================\n")
-            except json.JSONDecodeError:
-                print(f"Ошибка декодирования JSON: {message}")
-            except Exception as e:
-                print(f"Ошибка: {e}")
-                
+            result = r.brpop(queue_name, timeout=5)
+            if result:
+                channel, data = result
+                try:
+                    message = json.loads(data)
+                    print("\nПолучено сообщение:")
+                    print(json.dumps(message, indent=2, ensure_ascii=False))
+                except json.JSONDecodeError:
+                    print("\nПолучены данные (не JSON):")
+                    print(data.decode('utf-8'))
     except KeyboardInterrupt:
-        print("\nМониторинг завершен")
+        print("\nМониторинг остановлен")
+    finally:
+        r.close()
 
 if __name__ == "__main__":
-    queue_name = sys.argv[1] if len(sys.argv) > 1 else "assistant_output_queue"
+    # Если передано имя очереди как аргумент, используем его
+    queue_name = sys.argv[1] if len(sys.argv) > 1 else None
     monitor_queue(queue_name) 
