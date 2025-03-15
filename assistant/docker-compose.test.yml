@@ -17,9 +17,15 @@ services:
       dockerfile: Dockerfile.test
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_ASSISTANT_ID=asst_djbIGegxw5REvKxwleTmI8r7
+      - OPENAI_ASSISTANT_ID=${OPENAI_ASSISTANT_ID}
+      - OPEN_API_SECRETAR_ID=test_secretary_id
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM:-queue:to_telegram}
+      - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY:-queue:to_secretary}
+    env_file:
+      - ./tests/.env.test
     volumes:
       - .:/app
       - ./tests/.env.test:/app/tests/.env.test

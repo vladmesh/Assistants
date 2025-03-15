@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
+import os
 
 class Settings(BaseSettings):
     """Application settings"""
@@ -18,8 +19,8 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     
     # Queue names
-    INPUT_QUEUE: str = "telegram_input_queue"
-    OUTPUT_QUEUE: str = "telegram_output_queue"
+    INPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_SECRETARY", "queue:to_secretary")
+    OUTPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram")
     
     # Assistant configuration
     MAIN_ASSISTANT_TYPE: str = "openai"  # openai or llm

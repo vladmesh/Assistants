@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
-OUTPUT_QUEUE = os.getenv("OUTPUT_QUEUE", "telegram_output_queue")
+OUTPUT_QUEUE = os.getenv("REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram")
 
 redis_client = redis.Redis(
     host=REDIS_HOST,
