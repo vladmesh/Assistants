@@ -188,8 +188,12 @@ class CalendarListTool(BaseTool):
                 
                 params = {}
                 if time_min:
+                    if isinstance(time_min, str):
+                        time_min = datetime.fromisoformat(time_min.replace('Z', '+00:00'))
                     params["time_min"] = time_min.isoformat()
                 if time_max:
+                    if isinstance(time_max, str):
+                        time_max = datetime.fromisoformat(time_max.replace('Z', '+00:00'))
                     params["time_max"] = time_max.isoformat()
                 
                 logger.debug("Making request to calendar service", 

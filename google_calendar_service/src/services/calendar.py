@@ -97,8 +97,13 @@ class GoogleCalendarService:
             # Set default time range if not provided
             if not time_min:
                 time_min = datetime.utcnow()
+            elif isinstance(time_min, str):
+                time_min = datetime.fromisoformat(time_min)
+                
             if not time_max:
                 time_max = time_min + timedelta(days=7)
+            elif isinstance(time_max, str):
+                time_max = datetime.fromisoformat(time_max)
             
             events_result = service.events().list(
                 calendarId='primary',
