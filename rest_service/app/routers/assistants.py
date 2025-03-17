@@ -36,7 +36,13 @@ async def list_assistants(
     """Получить список всех ассистентов"""
     query = select(Assistant).offset(skip).limit(limit)
     result = await session.execute(query)
-    return result.scalars().all()
+    assistants = result.scalars().all()
+    
+    # Загружаем связи с инструментами для каждого ассистента
+    for assistant in assistants:
+        await session.refresh(assistant, ['tools'])
+    
+    return assistants
 
 @router.get("/assistants/{assistant_id}")
 async def get_assistant(
@@ -47,6 +53,10 @@ async def get_assistant(
     assistant = await session.get(Assistant, assistant_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
+    
+    # Загружаем связи с инструментами
+    await session.refresh(assistant, ['tools'])
+    
     return assistant
 
 @router.post("/assistants/")
