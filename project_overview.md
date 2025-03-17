@@ -1,128 +1,174 @@
-# Smart Assistant
+# Smart Assistant - Детальное описание реализации
 
-## Project Goal
-Develop a virtual assistant capable of engaging in natural language dialogue and executing tasks via API integrations. The initial version focuses on:
+## Архитектура системы
 
-- Google Calendar: Event management and reminders
-- Weather: Real-time weather information and forecasts
-- Tasks: Task management and reminders
-- Health Data: Integration with health monitoring devices
-- Geofencing: Location-based automation
+### Сервис ассистента (assistant)
 
-## Main Interface
-Telegram Bot – a user-friendly and accessible entry point for users.
+#### Основные компоненты
+- **OpenAI Assistant**
+  - Реализация на OpenAI Assistants API
+  - Поддержка различных моделей (gpt-4-turbo-preview)
+  - Управление контекстом и историей диалогов
+  - Система инструментов для выполнения задач
 
-## Features
+- **Инструменты**
+  - Calendar Tool - работа с календарем
+  - Reminder Tool - управление напоминаниями
+  - Time Tool - работа со временем
+  - Sub Assistant Tool - управление под-ассистентами
+  - Weather Tool - информация о погоде
 
-### Google Calendar
-- Create, edit, and delete events based on natural language requests
-- Automatic reminders and notifications
-- Support for recurring events
+- **Система сообщений**
+  - Асинхронная обработка сообщений
+  - Хранение истории диалогов
+  - Поддержка различных типов сообщений
+  - Управление контекстом диалога
 
-### Weather
-- Current weather conditions
-- Weather forecasts
-- Location-based weather updates
+- **Хранение данных**
+  - Redis для кэширования и очередей
+  - Хранение истории диалогов
+  - Кэширование результатов инструментов
+  - Управление сессиями
 
-### Tasks
-- Create and manage tasks
-- Set priorities and deadlines
-- Track task completion
+### REST API сервис (rest_service)
 
-### Health Data
-- Integration with health monitoring devices
-- Activity tracking
-- Health data analysis
+#### Модели данных
+- **Assistant**
+  - Конфигурация ассистента
+  - Типы ассистентов (LLM, OpenAI API)
+  - Связи с инструментами
+  - Настройки модели
 
-### Geofencing
-- Location-based triggers
-- Automated notifications
-- Custom location zones
+- **User**
+  - Данные пользователя
+  - Настройки пользователя
+  - История взаимодействий
 
-## Technical Architecture
+- **Calendar**
+  - События календаря
+  - Настройки календаря
+  - Интеграция с Google Calendar
 
-### Core Components
-- **Programming Language**: Python
-- **LLM Framework**: LangChain with OpenAI Assistants API
-- **Chat Models**: 
-  - GPT-4 (for complex reasoning and main assistant)
-  - GPT-3.5-turbo (for simple queries)
-  - GPT-3.5-turbo-16k (for tasks with large context)
-- **Web Framework**: FastAPI
-- **Message Queue**: Redis
-- **Database**: PostgreSQL
-- **Container Platform**: Docker
+- **Task**
+  - Задачи и напоминания
+  - Приоритеты и сроки
+  - Статусы выполнения
 
-### Service Architecture
-- **Assistant Service**: 
-  - Core service using LangChain and OpenAI Assistants API
-  - Maintains conversation threads and context
-  - Manages tool execution
-  - Specialized assistants for different domains (Secretary, Health, etc.)
-- **REST Service**: 
-  - External API integrations
-  - Data persistence
-  - Business logic
-- **Telegram Bot**: 
-  - User interface
-  - Message handling
-- **Notification Service**: 
-  - Manages notifications
-  - Handles alerts
-- **Cron Service**: 
-  - Scheduled tasks
-  - Recurring jobs
+#### API Endpoints
+- Управление ассистентами
+- Управление пользователями
+- Работа с календарем
+- Управление задачами
+- Интеграция с внешними сервисами
 
-### Request Flow
-1. User sends a message to the Telegram Bot
-2. Message is queued in Redis
-3. Assistant Service processes the message using LangChain and OpenAI Assistants API
-4. Based on the intent:
-   - Direct response: returns text to user
-   - Tool execution: calls appropriate service
-5. Response is sent back through Redis queue
-6. Bot delivers the response to user
+### Google Calendar сервис (google_calendar_service)
 
-### LangChain Configuration
-The Assistant uses:
-- OpenAI Assistants API for persistent context and specialized assistants
-- Custom tools for each service integration
-- Thread management for conversation history
-- Structured output parsing
-- Error handling and retry logic
+#### Функциональность
+- Создание и редактирование событий
+- Управление календарями
+- Интеграция с Google API
+- Обработка уведомлений
 
-## Development Status
+#### Модели данных
+- Event
+  - Заголовок и описание
+  - Время начала и окончания
+  - Участники
+  - Локация
 
-### Completed
-1. Basic service architecture
-2. LangChain integration with Assistants API
-3. Redis message queuing
-4. Calendar tool implementation
-5. Secretary assistant implementation
+### Сервис планировщика (cron_service)
 
-### In Progress
-1. Weather integration
-2. Task management
-3. Health data collection
-4. Geofencing system
+#### Функциональность
+- Планирование задач
+- Выполнение периодических операций
+- Управление напоминаниями
+- Обработка событий
 
-### Planned
-1. Health assistant implementation
-2. Study assistant implementation
-3. Habits assistant implementation
-4. Analytics and reporting
-5. Multi-language support
+#### Модели данных
+- ScheduledTask
+  - Расписание выполнения
+  - Параметры задачи
+  - Статус выполнения
+  - История выполнения
 
-## Advantages
-- **Context Awareness**: Persistent conversation threads via Assistants API
-- **Modular Design**: Easy to add new tools and assistants
-- **Scalable**: Independent service scaling
-- **Maintainable**: Clean code structure
-- **Reliable**: Queue-based architecture
+### Telegram бот (tg_bot)
 
-## Future Enhancements
-- Voice interface
-- Mobile app
-- Additional LLM providers
-- Smart home integration
-- Advanced analytics
+#### Функциональность
+- Обработка сообщений
+- Управление диалогами
+- Интеграция с ассистентом
+- Обработка команд
+
+## Технические детали
+
+### База данных
+
+#### PostgreSQL
+- Хранение пользовательских данных
+- Конфигурации ассистентов
+- История взаимодействий
+- Настройки сервисов
+
+#### Redis
+- Очереди сообщений
+- Кэширование данных
+- Хранение сессий
+- Управление состоянием
+
+### Асинхронность
+- Асинхронная обработка запросов
+- Асинхронные операции с базой данных
+- Асинхронные очереди сообщений
+- Асинхронные вызовы внешних API
+
+### Безопасность
+- Аутентификация пользователей
+- Авторизация запросов
+- Шифрование данных
+- Защита API endpoints
+
+### Мониторинг
+- Структурированное логирование
+- Мониторинг очередей
+- Отслеживание ошибок
+- Метрики производительности
+
+## Тестирование
+
+### Инфраструктура
+- Docker-окружение для тестов
+- Изолированные тестовые базы данных
+- Моки внешних сервисов
+- Автоматизированный запуск тестов
+
+### Типы тестов
+- Unit тесты
+- Интеграционные тесты
+- End-to-end тесты
+- Нагрузочные тесты
+
+### CI/CD
+- Автоматический запуск тестов
+- Проверка качества кода
+- Автоматическое развертывание
+- Мониторинг деплоя
+
+## Разработка
+
+### Локальное окружение
+- Docker Compose для сервисов
+- Виртуальное окружение Python
+- Локальные базы данных
+- Тестовые API ключи
+
+### Инструменты разработки
+- Линтеры и форматтеры
+- Типизация Python
+- Документация API
+- Инструменты отладки
+
+### Процесс разработки
+- Ветвление и слияние
+- Code review
+- Автоматические проверки
+- Деплой в тестовое окружение

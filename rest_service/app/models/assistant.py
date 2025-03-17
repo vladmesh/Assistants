@@ -66,11 +66,13 @@ class Assistant(BaseModel, table=True):
 class Tool(BaseModel, table=True):
     """Модель инструмента"""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(index=True)  # Название инструмента
     tool_type: Annotated[str, ToolType] = Field(
         sa_column=Column(String),
         default=ToolType.TIME.value
     )
     description: str
+    input_schema: Optional[str] = Field(default=None)  # JSON схема входных данных в виде строки
     is_active: bool = Field(default=True, index=True)
     
     # Relationships
@@ -88,6 +90,15 @@ class Tool(BaseModel, table=True):
         """Проверяет корректность типа инструмента"""
         if self.tool_type not in [t.value for t in ToolType]:
             raise ValueError("Invalid tool type")
+
+    def validate_schema(self) -> None:
+        """Проверяет корректность JSON схемы"""
+        if self.input_schema is not None:
+            try:
+                import json
+                json.loads(self.input_schema)
+            except json.JSONDecodeError:
+                raise ValueError("Invalid JSON schema")
 
 class UserAssistantThread(BaseModel, table=True):
     """Хранение thread_id для каждого пользователя и ассистента"""
