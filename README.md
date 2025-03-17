@@ -1,37 +1,47 @@
 # Smart Assistant
 
-An intelligent assistant powered by LangChain and OpenAI Assistants API, designed to help manage various aspects of daily life through natural language interaction.
+Интеллектуальный ассистент, построенный на OpenAI Assistants API, предназначенный для управления различными аспектами повседневной жизни через естественный язык.
 
-## Features
+## Архитектура
 
-- 🗓️ Calendar Management
-- 🌤️ Weather Information
-- ✅ Task Management
-- ❤️ Health Device Integration
-- 📍 Geofencing Features
+### Сервисы
+- **assistant** - Основной сервис ассистента
+  - Использует OpenAI Assistants API
+  - Управляет контекстом и историей диалогов
+  - Координирует работу инструментов
+- **rest_service** - REST API сервис
+  - Управляет данными пользователей
+  - Хранит конфигурации ассистентов
+  - Обрабатывает запросы от других сервисов
+- **google_calendar_service** - Сервис для работы с Google Calendar
+  - Управление событиями
+  - Интеграция с Google API
+- **cron_service** - Сервис для выполнения периодических задач
+  - Планировщик задач
+  - Обработка напоминаний
+- **tg_bot** - Telegram бот
+  - Пользовательский интерфейс
+  - Обработка сообщений
 
-## Technologies
-
-- Python
-- LangChain with OpenAI Assistants API
-- OpenAI Models:
-  - GPT-4 (main assistant)
-  - GPT-3.5-turbo (simple queries)
-  - GPT-3.5-turbo-16k (large context)
+### Технологии
+- Python 3.11+
 - FastAPI
-- Redis
 - PostgreSQL
+- Redis
 - Docker
+- OpenAI Assistants API
+- Telegram Bot API
+- Google Calendar API
 
-## Installation
+## Установка
 
-1. Clone the repository:
+1. Клонируйте репозиторий:
 ```bash
 git clone <repository-url>
 cd Assistants
 ```
 
-2. Create `.env` file with required environment variables:
+2. Создайте `.env` файл с необходимыми переменными окружения:
 ```bash
 OPENAI_API_KEY=your_openai_api_key
 TELEGRAM_TOKEN=your_telegram_bot_token
@@ -39,82 +49,102 @@ POSTGRES_USER=your_db_user
 POSTGRES_PASSWORD=your_db_password
 POSTGRES_DB=your_db_name
 DATABASE_URL=postgresql://user:password@db:5432/dbname
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=your_google_redirect_uri
 ```
 
-3. Start services with Docker Compose:
+3. Запустите сервисы с помощью Docker Compose:
 ```bash
 docker compose up -d
 ```
 
-## Project Structure
+## Разработка
 
-```
-.
-├── assistant/          # Assistant service
-│   ├── src/           # Source code
-│   │   ├── models/    # Data models
-│   │   ├── tools/     # LangChain tools
-│   │   └── utils/     # Helper functions
-│   ├── Dockerfile     
-│   └── requirements.txt
-├── rest_service/      # REST API service
-├── tg_bot/           # Telegram bot
-├── notification_service/ # Notification service
-├── cron_service/     # Scheduled tasks service
-└── docker-compose.yml
-```
-
-## Development
-
-For local development:
-
-1. Create virtual environment:
+### Локальная разработка
+1. Создайте виртуальное окружение:
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-venv\Scripts\activate  # Windows
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# или
+.venv\Scripts\activate  # Windows
 ```
 
-2. Install dependencies:
+2. Установите зависимости:
 ```bash
-pip install -r assistant/requirements.txt
+pip install -r requirements.txt
 ```
 
-3. Start services in development mode:
+3. Запустите сервисы в режиме разработки:
 ```bash
 docker compose up -d db redis
 python assistant/src/main.py
 ```
 
-## Testing
-
-Run all tests:
+### Тестирование
+Запуск всех тестов:
 ```bash
 ./run_tests.sh
 ```
 
-Individual service tests:
+Запуск тестов для конкретного сервиса:
 ```bash
-# REST Service tests
-cd rest_service && pytest tests/
-
-# Notification Service tests
-cd notification_service && pytest tests/
-
-# Cron Service tests
-cd cron_service && pytest tests/
+./run_tests.sh rest_service
+./run_tests.sh google_calendar_service
+./run_tests.sh cron_service
 ```
 
-Test status:
-| Service | Tests | Status |
-|---------|-------|--------|
-| REST Service | 21 | ✅ |
-| Notification Service | 12 | ✅ |
-| Cron Service | 6 | ✅ |
-| Assistant Service | - | 🚧 |
-| Telegram Bot | - | 🚧 |
+### Структура проекта
+```
+.
+├── assistant/          # Сервис ассистента
+│   ├── src/           # Исходный код
+│   │   ├── assistants/ # Реализации ассистентов
+│   │   ├── tools/     # Инструменты
+│   │   ├── core/      # Основные компоненты
+│   │   ├── messages/  # Обработка сообщений
+│   │   └── storage/   # Хранение данных
+│   └── tests/         # Тесты
+├── rest_service/      # REST API сервис
+├── google_calendar_service/ # Сервис календаря
+├── cron_service/     # Сервис планировщика
+├── tg_bot/          # Telegram бот
+└── shared_models/   # Общие модели данных
+```
 
-## Documentation
+## Взаимодействие между сервисами
 
-For detailed documentation, see [project_overview.md](project_overview.md). 
+### Поток запросов
+1. Пользователь отправляет сообщение через Telegram бот
+2. Сообщение обрабатывается сервисом ассистента
+3. Ассистент определяет необходимые инструменты
+4. Инструменты взаимодействуют с соответствующими сервисами через REST API
+5. Результаты возвращаются пользователю через Telegram
+
+### Очереди сообщений
+- Redis используется для:
+  - Хранения истории диалогов
+  - Кэширования результатов инструментов
+  - Очередей сообщений между сервисами
+
+### База данных
+- PostgreSQL используется для:
+  - Хранения данных пользователей
+  - Конфигураций ассистентов
+  - Истории взаимодействий
+
+## Мониторинг
+
+### Логирование
+- Каждый сервис использует структурированное логирование
+- Логи доступны через Docker logs
+- Поддерживается централизованный сбор логов
+
+### Мониторинг очередей
+```bash
+python monitor_queue.py
+```
+
+## Документация
+
+Подробное описание реализации и архитектуры доступно в [project_overview.md](project_overview.md). 
