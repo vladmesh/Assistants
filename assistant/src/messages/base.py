@@ -4,8 +4,6 @@ from datetime import datetime, timezone
 from langchain_core.messages import BaseMessage as LangBaseMessage
 from langchain_core.messages import HumanMessage as LangHumanMessage
 from langchain_core.messages import SystemMessage as LangSystemMessage
-from langchain_core.messages import AIMessage as LangAIMessage
-from langchain_core.messages import FunctionMessage as LangFunctionMessage
 from langchain_core.messages import ToolMessage as LangToolMessage
 
 class MessageSource(str, Enum):
@@ -18,11 +16,11 @@ class MessageSource(str, Enum):
 class BaseMessage(LangBaseMessage):
     """Base class for all messages with timestamp and metadata."""
     
-    def __init__(self, content: str, metadata: dict = None):
+    def __init__(self, content: str, metadata: dict = None, source: MessageSource = MessageSource.SYSTEM):
         """Initialize message with content and metadata."""
         super().__init__(content=content)
         self._timestamp = datetime.now(timezone.utc)
-        self._source = MessageSource.SYSTEM  # Default source
+        self._source = source
         self.metadata = metadata or {}
         
         # Move all metadata into additional_kwargs of base class
@@ -107,20 +105,42 @@ class SecretaryMessage(BaseMessage):
     def type(self) -> str:
         return "secretary"
 
-class ToolMessage(BaseMessage, LangToolMessage):
+class ToolMessage(LangToolMessage):
     """Tool message with timestamp and metadata."""
     
-    def __init__(self, content: str, tool_call_id: str, metadata: dict = None):
+    def __init__(self, content: str, tool_call_id: str, tool_name: str, metadata: dict = None):
         """Initialize tool message."""
-        super().__init__(content=content, metadata=metadata)
+        # Initialize LangToolMessage with required parameters
+        super().__init__(content=content, tool_call_id=tool_call_id)
+        
+        # Add our own functionality from BaseMessage
+        self._timestamp = datetime.now(timezone.utc)
         self._source = MessageSource.TOOL
-        self.additional_kwargs["source"] = self._source
-        self.tool_call_id = tool_call_id
-        self.additional_kwargs["tool_call_id"] = tool_call_id
+        self._tool_name = tool_name
+        self.metadata = metadata or {}
 
     @property
     def type(self) -> str:
         return "tool"
+
+    @property
+    def timestamp(self) -> datetime:
+        """Get message timestamp"""
+        return self._timestamp
+
+    @property
+    def source(self) -> MessageSource:
+        """Get message source"""
+        return self._source
+
+    @property
+    def tool_name(self) -> str:
+        """Get tool name"""
+        return self._tool_name
+
+    def __str__(self) -> str:
+        """Return string representation of the message."""
+        return f"[{self.source}:{self.tool_name}] ({self._timestamp.isoformat()}) {self.content}"
 
 class SystemMessage(BaseMessage, LangSystemMessage):
     """System message with timestamp and metadata."""

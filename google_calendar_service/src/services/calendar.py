@@ -48,6 +48,7 @@ class GoogleCalendarService:
         auth_url, _ = self._flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
+            prompt='consent',
             state=state
         )
         

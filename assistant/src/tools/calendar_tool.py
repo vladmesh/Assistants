@@ -184,7 +184,7 @@ class CalendarListTool(BaseTool):
                 auth_url = await self._check_auth(client)
                 if auth_url:
                     logger.info("User needs authorization", user_id=self.user_id)
-                    return f"Для просмотра событий необходимо авторизоваться. Перейдите по ссылке: {auth_url}"
+                    return f"Для просмотра событий необходимо авторизоваться. Перейдай ссылку пользователю: {auth_url}"
                 
                 params = {}
                 if time_min:

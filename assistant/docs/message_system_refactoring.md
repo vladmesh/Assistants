@@ -70,6 +70,28 @@ Initial metadata requirements:
 - UTC timestamp - internal field
 - Extensible metadata structure for future additions
 
+### 5. Message Processing in Orchestrator
+- Messages from Redis queue should include source information:
+  ```python
+  {
+      "text": "Message content",
+      "source": "tool",  # or "human", "system"
+      "tool_name": "google_calendar",  # optional, for tool messages
+      "user_id": "user123"
+  }
+  ```
+- Orchestrator should create appropriate message type based on source:
+  ```python
+  if source == "tool":
+      message = ToolMessage(content=text, tool_name=tool_name)
+  elif source == "human":
+      message = HumanMessage(content=text)
+  elif source == "system":
+      message = SystemMessage(content=text)
+  ```
+- All messages sent to LLM should be marked as "user" role in OpenAI format
+- Message string representation should include source and timestamp for context
+
 ## Tasks Breakdown
 1. Message Type System Redesign
    - Create new base message class with metadata support
