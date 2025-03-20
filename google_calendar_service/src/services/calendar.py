@@ -15,6 +15,7 @@ class GoogleCalendarService:
     """Service for working with Google Calendar API"""
     
     SCOPES = [
+        'https://www.googleapis.com/auth/calendar',
         'https://www.googleapis.com/auth/calendar.readonly',
         'https://www.googleapis.com/auth/calendar.events'
     ]
