@@ -5,6 +5,8 @@ from openai import OpenAI
 import json
 import asyncio
 import time
+from langchain_core.messages import BaseMessage
+from messages.base import BaseMessage as CustomBaseMessage, HumanMessage, SecretaryMessage, SystemMessage
 
 from assistants.base import BaseAssistant
 from tools.base import BaseTool
@@ -112,7 +114,25 @@ class OpenAIAssistant(BaseAssistant):
                         exc_info=True)
             raise
 
-    async def process_message(self, message: Any, user_id: Optional[str] = None) -> str:
+    def _convert_to_openai_message(self, message: BaseMessage) -> dict:
+        """Convert LangChain message to OpenAI message format"""
+        logger.info(f"Converting message to OpenAI format: {message}")
+        logger.info(f"Message type: {type(message)}")
+        logger.info(f"Message content: {message.content}")
+        logger.info(f"Message additional_kwargs: {message.additional_kwargs}")
+        
+        if isinstance(message, CustomBaseMessage):
+            logger.info(f"Message source: {message.source}")
+            logger.info(f"Message timestamp: {message.timestamp}")
+            logger.info(f"Message metadata: {message.metadata}")
+            logger.info(f"Message string representation: {str(message)}")
+            
+        return {
+            "role": "user" if isinstance(message, HumanMessage) else "assistant",
+            "content": str(message) if isinstance(message, CustomBaseMessage) else message.content
+        }
+
+    async def process_message(self, message: BaseMessage, user_id: Optional[str] = None) -> str:
         """Process a message using the OpenAI Assistant
         
         Args:
@@ -150,12 +170,15 @@ class OpenAIAssistant(BaseAssistant):
                         )
                     logger.info("active_run_completed", run_id=run.id, final_status=run.status)
             
+            # Convert message to OpenAI format
+            openai_message = self._convert_to_openai_message(message)
+            logger.info(f"Converted to OpenAI message: {openai_message}")
+            
             # Add message to thread
             logger.info("adding_message", thread_id=self.thread_id)
             self.client.beta.threads.messages.create(
                 thread_id=self.thread_id,
-                role="user",
-                content=str(message)
+                **openai_message
             )
             
             # Run assistant

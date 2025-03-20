@@ -41,7 +41,7 @@ class TestSecretaryLLM:
         )
         
         # Act
-        message = HumanMessage("Привет! Как тебя зовут?")
+        message = HumanMessage(content="Привет! Как тебя зовут?")
         response = await secretary.process_message(message)
         
         # Debug output
@@ -86,7 +86,7 @@ class TestSecretaryLLM:
         )
 
         # Act
-        message = HumanMessage("Который сейчас час?")
+        message = HumanMessage(content="Который сейчас час?")
         response = await secretary.process_message(message)
 
         # Debug output
@@ -177,7 +177,7 @@ class TestSecretaryLLM:
         
         responses = []
         for question in questions:
-            response = await secretary.process_message(HumanMessage(question))
+            response = await secretary.process_message(HumanMessage(content=question))
             last_message = self.get_last_assistant_message(response)
             responses.append(last_message)
             print(f"\nQuestion: {question}")

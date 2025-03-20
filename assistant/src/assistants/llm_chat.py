@@ -2,13 +2,14 @@
 from typing import List, Optional, Any
 from abc import ABC
 
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseLanguageModel
 from langgraph.prebuilt import create_react_agent
 
 from assistants.base import BaseAssistant
 from tools.base import BaseTool
 from utils.error_handler import AssistantError, MessageProcessingError, handle_assistant_error
+from messages.base import SystemMessage
 
 class BaseLLMChat(BaseAssistant, ABC):
     """Base class for LLM chat assistants"""
@@ -39,7 +40,7 @@ class BaseLLMChat(BaseAssistant, ABC):
             return create_react_agent(
                 self.llm,
                 self.tools,
-                prompt = SystemMessage(content=self.system_message) if self.system_message else None
+                prompt = self.system_message if self.system_message else None
             )
         except Exception as e:
             raise AssistantError(f"Failed to create agent: {str(e)}", self.name)
