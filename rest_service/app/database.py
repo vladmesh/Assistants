@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+from sqlalchemy import text
 
 from app.config import settings
 from app.scripts.test_data import create_test_data
@@ -28,9 +29,11 @@ AsyncSessionLocal = sessionmaker(
 )
 
 async def drop_all_tables() -> None:
-    """Drop all tables in the database"""
+    """Drop and recreate public schema"""
     async with async_engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+
 
 async def init_db() -> None:
     """Initialize database with tables and test data"""

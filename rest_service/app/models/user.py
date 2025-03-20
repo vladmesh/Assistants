@@ -9,6 +9,5 @@ class TelegramUser(BaseModel, table=True):
     username: Optional[str]
     
     # Relationships
-    tasks: List["Task"] = Relationship(back_populates="user")
     cronjobs: List["CronJob"] = Relationship(back_populates="user")
     calendar_credentials: Optional["CalendarCredentials"] = Relationship(back_populates="user") 

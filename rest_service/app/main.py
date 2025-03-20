@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.routers import users, tasks, cron_jobs, calendar, assistants, tools, assistant_tools
+from app.routers import users, cron_jobs, calendar, assistants, tools, assistant_tools
 from app.database import init_db
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
@@ -34,7 +34,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # Подключение роутеров
 app.include_router(users.router, prefix="/api", tags=["Users"])
-app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
 app.include_router(cron_jobs.router, prefix="/api", tags=["Cron Jobs"])
 app.include_router(calendar.router, prefix="/api", tags=["Calendar"])
 app.include_router(assistants.router, prefix="/api", tags=["Assistants"])
