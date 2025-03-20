@@ -1,6 +1,5 @@
 from .base import BaseModel
 from .user import TelegramUser
-from .task import Task, TaskStatus
 from .calendar import CalendarCredentials
 from .assistant import (
     Assistant,
@@ -21,8 +20,6 @@ from .cron import (
 __all__ = [
     'BaseModel',
     'TelegramUser',
-    'Task',
-    'TaskStatus',
     'CalendarCredentials',
     'Assistant',
     'AssistantType',
