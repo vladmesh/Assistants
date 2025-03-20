@@ -1,1118 +1,136 @@
-# ПРОЕКТ: Smart Assistant - Контекст для LLM
-
-## ОБЩИЕ СВЕДЕНИЯ
-- **Название проекта**: Smart Assistant
-- **Основное назначение**: Интеллектуальный ассистент с модульной архитектурой для управления повседневной жизнью через естественный язык, способный работать с различными LLM API и моделями
-- **Технологический стек**: Python 3.11+, FastAPI, PostgreSQL, Redis, Docker, LLM API (OpenAI, и др.), Telegram Bot API, Google Calendar API
-
-## АРХИТЕКТУРА
-
-### Модульная микросервисная архитектура
-Проект построен как модульная система, способная интегрировать различные языковые модели и API. OpenAI Assistants API - это лишь один из реализованных инструментов, но архитектура позволяет легко подключать и другие.
-
-Проект состоит из следующих независимых сервисов:
-
-1. **assistant** - Ядро ассистента, абстрагированное от конкретных реализаций LLM
-2. **rest_service** - REST API для управления данными пользователей и конфигурациями ассистентов
-3. **google_calendar_service** - Интеграция с Google Calendar
-4. **cron_service** - Планировщик задач и обработка напоминаний
-5. **tg_bot** - Telegram бот как интерфейс для пользователя
-
-### Взаимодействие между сервисами
-- Redis используется для очередей сообщений и кэширования
-- PostgreSQL для хранения данных
-- REST API для межсервисного взаимодействия
-
-### Принципы модульности
-- Абстракция от конкретных LLM API через единые интерфейсы
-- Возможность комбинировать различные модели в любом порядке
-- Простая интеграция новых языковых моделей и API
-- Система тестирования эффективности различных конфигураций
-- Единый программный интерфейс для всех типов ассистентов
-
-## МОДЕЛИ ДАННЫХ
-
-### Основные сущности
-1. **Assistant**
-   - UUID, name, is_secretary, model, instructions
-   - assistant_type (llm/openai_api), openai_assistant_id
-   - is_active, created_at, updated_at
-
-2. **Tool**
-   - UUID, name, tool_type (calendar/reminder/time/weather/sub_assistant)
-   - description, input_schema (JSON схема)
-   - assistant_id (для sub_assistant типа)
-   - is_active, created_at, updated_at
-
-3. **AssistantToolLink**
-   - Связь many-to-many между ассистентами и инструментами
-   - sub_assistant_id (для sub_assistant типа)
-   - is_active, created_at, updated_at
-
-4. **UserAssistantThread**
-   - Хранение thread_id для каждого пользователя и ассистента
-   - Уникальная связь user_id + assistant_id
-
-## ФУНКЦИОНАЛЬНОСТЬ
-
-### Сервис ассистента (assistant)
-- Обработка сообщений пользователя
-- Управление контекстом диалога
-- Координация работы инструментов
-- Асинхронная обработка сообщений через Redis
-
-### REST API сервис (rest_service)
-
-#### Структура сервиса
-```
-rest_service/
-├── app/                  # Основной код приложения
-│   ├── models/          # Модели данных
-│   │   ├── assistant.py # Модели ассистентов и инструментов
-│   │   ├── base.py      # Базовые модели
-│   │   ├── calendar.py  # Модели календаря
-│   │   ├── cron.py      # Модели планировщика
-│   │   └── user.py      # Модели пользователей
-│   ├── routers/         # API роутеры
-│   │   ├── assistants.py    # Управление ассистентами
-│   │   ├── assistant_tools.py # Связи ассистент-инструмент
-│   │   ├── calendar.py      # Управление календарем
-│   │   ├── cron_jobs.py     # Управление задачами
-│   │   ├── tools.py         # Управление инструментами
-│   │   └── users.py         # Управление пользователями
-│   ├── database.py      # Работа с базой данных
-│   ├── main.py          # Точка входа приложения
-│   └── config.py        # Конфигурация
-├── tests/               # Тесты
-└── requirements.txt     # Зависимости
-```
-
-#### Основные компоненты
-
-##### FastAPI приложение (main.py)
-```python
-app = FastAPI(lifespan=lifespan, title="Assistant Service API")
-```
-
-Основные функции:
-- Инициализация базы данных при запуске
-- Подключение роутеров API
-- Обработка ошибок валидации
-- Управление жизненным циклом приложения
-
-##### Модели данных
-
-###### Assistant (models/assistant.py)
-```python
-class Assistant(BaseModel, table=True):
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(index=True)
-    is_secretary: bool = Field(default=False, index=True)
-    model: str
-    instructions: str
-    assistant_type: Annotated[str, AssistantType]
-    openai_assistant_id: Optional[str]
-    is_active: bool
-```
-
-Особенности:
-- Поддержка различных типов ассистентов (LLM, OpenAI API)
-- Связи с инструментами через AssistantToolLink
-- Валидация типа ассистента
-- Индексация для оптимизации запросов
-
-###### Tool (models/assistant.py)
-```python
-class Tool(BaseModel, table=True):
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(index=True)
-    tool_type: Annotated[str, ToolType]
-    description: str
-    input_schema: Optional[str]
-    assistant_id: Optional[UUID]
-    is_active: bool
-```
-
-Особенности:
-- Поддержка различных типов инструментов
-- JSON схема для валидации входных данных
-- Связи с ассистентами
-- Валидация типа и схемы
-
-###### CronJob (models/cron.py)
-```python
-class CronJob(BaseModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    type: CronJobType
-    cron_expression: str
-    user_id: Optional[int]
-```
-
-Особенности:
-- Поддержка различных типов задач
-- CRON-выражения для планирования
-- Связь с пользователем
-- Отслеживание статуса выполнения
-
-##### База данных (database.py)
-```python
-async_engine = create_async_engine(
-    settings.ASYNC_DATABASE_URL,
-    echo=settings.DB_ECHO,
-    pool_pre_ping=True,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW
-)
-```
-
-Особенности:
-- Асинхронная работа с PostgreSQL
-- Пул соединений
-- Автоматическое переподключение
-- Управление сессиями
-
-#### API Endpoints
-
-##### Управление ассистентами (/api/assistants)
-- GET / - получение списка ассистентов
-- POST / - создание нового ассистента
-- GET /{id} - получение ассистента
-- PUT /{id} - обновление ассистента
-- DELETE /{id} - удаление ассистента
-
-##### Управление инструментами (/api/tools)
-- GET / - получение списка инструментов
-- POST / - создание нового инструмента
-- GET /{id} - получение инструмента
-- PUT /{id} - обновление инструмента
-- DELETE /{id} - удаление инструмента
-
-##### Связи ассистент-инструмент (/api/assistant-tools)
-- GET / - получение списка связей
-- POST / - создание новой связи
-- DELETE /{id} - удаление связи
-
-##### Управление задачами (/api/cron-jobs)
-- GET / - получение списка задач
-- POST / - создание новой задачи
-- GET /{id} - получение задачи
-- PUT /{id} - обновление задачи
-- DELETE /{id} - удаление задачи
-
-#### Особенности реализации
-
-##### Валидация данных
-- Использование Pydantic моделей
-- JSON схемы для инструментов
-- Валидация CRON-выражений
-- Проверка уникальности
-
-##### Безопасность
-- Валидация входных данных
-- Проверка прав доступа
-- Безопасное хранение конфигураций
-- Защита от SQL-инъекций
-
-##### Производительность
-- Индексация полей
-- Оптимизация запросов
-- Пул соединений
-- Кэширование (в разработке)
-
-##### Обработка ошибок
-- Централизованная обработка исключений
-- Логирование ошибок
-- Понятные сообщения об ошибках
-- Graceful degradation
-
-### Google Calendar сервис (google_calendar_service)
-
-#### Структура сервиса
-```
-google_calendar_service/
-├── src/                  # Основной код приложения
-│   ├── api/             # API роутеры
-│   │   └── routes.py    # Определение эндпоинтов
-│   ├── services/        # Сервисы
-│   │   ├── calendar.py  # Сервис для работы с Google Calendar
-│   │   ├── redis_service.py # Сервис для работы с Redis
-│   │   └── rest_service.py  # Сервис для работы с REST API
-│   ├── config/          # Конфигурация
-│   ├── schemas/         # Pydantic модели
-│   └── main.py          # Точка входа приложения
-├── tests/               # Тесты
-└── requirements.txt     # Зависимости
-```
-
-#### Основные компоненты
-
-##### FastAPI приложение (main.py)
-```python
-app = FastAPI(
-    title="Google Calendar Service",
-    description="Service for working with Google Calendar",
-    version="1.0.0"
-)
-```
-
-Основные функции:
-- Инициализация сервисов (REST, Calendar, Redis)
-- Подключение CORS middleware
-- Управление жизненным циклом приложения
-- Обработка ошибок
-
-##### Google Calendar Service (services/calendar.py)
-```python
-class GoogleCalendarService:
-    SCOPES = [
-        'https://www.googleapis.com/auth/calendar',
-        'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/calendar.events'
-    ]
-```
-
-Основные методы:
-- `get_auth_url(state)` - получение URL для авторизации
-- `handle_callback(code)` - обработка OAuth callback
-- `get_events(credentials_data, time_min, time_max)` - получение событий
-- `create_event(credentials_data, event_data)` - создание события
-
-Особенности:
-- OAuth 2.0 авторизация
-- Автоматическое обновление токенов
-- Поддержка различных временных зон
-- Валидация данных событий
-
-##### API Routes (api/routes.py)
-Основные эндпоинты:
-- `GET /auth/url/{user_id}` - получение URL для авторизации
-- `GET /auth/callback` - обработка OAuth callback
-- `GET /events/{user_id}` - получение списка событий
-- `POST /events/{user_id}` - создание нового события
-
-Модели данных:
-```python
-class EventBase(BaseModel):
-    summary: str
-    description: Optional[str]
-    location: Optional[str]
-
-class EventCreate(EventBase):
-    start: Dict[str, str]
-    end: Dict[str, str]
-
-class EventResponse(EventBase):
-    id: str
-    start: Dict[str, str]
-    end: Dict[str, str]
-    htmlLink: Optional[str]
-    status: str
-```
-
-#### Особенности реализации
-
-##### Безопасность
-- OAuth 2.0 авторизация
-- Безопасное хранение токенов
-- Валидация входных данных
-- Защита от CSRF
-
-##### Обработка ошибок
-- Централизованное логирование
-- Понятные сообщения об ошибках
-- Graceful degradation
-- Повторные попытки при сбоях
-
-##### Интеграция с другими сервисами
-- REST сервис для хранения токенов
-- Redis для очередей сообщений
-- Telegram для уведомлений
-
-##### Производительность
-- Асинхронная обработка запросов
-- Кэширование токенов
-- Оптимизация запросов к Google API
-- Пул соединений
-
-#### Поток работы
-
-##### Авторизация
-1. Пользователь запрашивает URL для авторизации
-2. Сервис генерирует OAuth URL с state
-3. Пользователь авторизуется в Google
-4. Google перенаправляет на callback URL
-5. Сервис сохраняет токены в REST сервисе
-6. Пользователь получает уведомление в Telegram
-
-##### Создание события
-1. Получение токенов из REST сервиса
-2. Валидация данных события
-3. Преобразование в формат Google Calendar
-4. Создание события через API
-5. Возврат результата
-
-##### Получение событий
-1. Получение токенов из REST сервиса
-2. Проверка временного диапазона
-3. Запрос событий через API
-4. Форматирование и возврат данных
-
-### Сервис планировщика (cron_service)
-
-#### Структура сервиса
-```
-cron_service/
-├── app/                  # Основной код приложения
-│   ├── scheduler.py      # Основная логика планировщика
-│   ├── redis_client.py   # Клиент для работы с Redis
-│   ├── rest_client.py    # Клиент для работы с REST API
-│   └── main.py          # Точка входа приложения
-├── tests/               # Тесты
-├── requirements.txt     # Зависимости
-└── Dockerfile          # Конфигурация Docker
-```
-
-#### Основные компоненты
-
-##### Scheduler (scheduler.py)
-Центральный компонент, управляющий выполнением запланированных задач:
-```python
-scheduler = BackgroundScheduler(timezone=utc)
-```
-
-Основные функции:
-- `start_scheduler()` - запуск планировщика
-- `update_jobs_from_rest()` - обновление списка задач из REST-сервиса
-- `parse_cron_expression()` - парсинг CRON-выражений
-- `execute_job()` - выполнение задачи
-
-Особенности:
-- Использование APScheduler для управления задачами
-- Автоматическое обновление списка задач каждую минуту
-- Поддержка CRON-выражений
-- Обработка ошибок с повторными попытками
-- Логирование всех операций
-
-##### RedisClient (redis_client.py)
-Клиент для отправки уведомлений через Redis:
-```python
-redis_client = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    db=REDIS_DB,
-    decode_responses=True
-)
-```
-
-Основные функции:
-- `send_notification(chat_id, message, priority)` - отправка уведомлений
-- Поддержка приоритетов уведомлений
-- Асинхронная отправка через Redis очереди
-
-##### RestClient (rest_client.py)
-Клиент для получения списка задач из REST-сервиса:
-```python
-def fetch_scheduled_jobs():
-    """Получает список запланированных задач от REST-сервиса."""
-    url = f"{REST_SERVICE_URL}/api/cronjobs/"
-```
-
-#### Поток работы
-1. Запуск планировщика с UTC временной зоной
-2. Периодическое обновление списка задач из REST-сервиса
-3. Парсинг CRON-выражений и добавление задач в планировщик
-4. Выполнение задач в указанное время
-5. Отправка уведомлений через Redis
-
-#### Обработка ошибок
-- Максимальное количество попыток обновления задач (MAX_RETRIES)
-- Задержка между попытками (RETRY_DELAY)
-- Логирование всех ошибок
-- Graceful shutdown при критических ошибках
-
-#### Взаимодействие с другими сервисами
-- REST-сервис: получение списка задач
-- Redis: отправка уведомлений
-- Telegram: доставка уведомлений пользователям
-
-#### Конфигурация
-- Настройки через переменные окружения
-- Поддержка различных окружений (dev, prod)
-- Конфигурация логирования
-- Настройки подключения к Redis и REST-сервису
-
-### Telegram бот (tg_bot)
-- Интерфейс пользователя
-- Обработка сообщений и команд
-
-## ИНСТРУМЕНТЫ АССИСТЕНТА
-
-1. **Calendar Tool** - работа с календарем
-2. **Reminder Tool** - управление напоминаниями
-3. **Time Tool** - работа со временем
-4. **Sub Assistant Tool** - управление под-ассистентами
-5. **Weather Tool** - информация о погоде
-
-## ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО СЕРВИСАМ
-
-### Сервис ассистента (assistant)
-
-#### Структура сервиса
-```
-assistant/src/
-├── assistants/           # Реализации ассистентов
-│   ├── base.py           # Базовый класс ассистента
-│   ├── factory.py        # Фабрика создания ассистентов
-│   ├── llm_chat.py       # Базовый LLM ассистент
-│   ├── openai_assistant.py # Ассистент на OpenAI API
-│   ├── secretary.py      # Главный ассистент (секретарь)
-│   └── sub_assistant.py  # Под-ассистент
-├── tools/                # Инструменты ассистента
-│   ├── base.py           # Базовый класс инструмента
-│   ├── calendar_tool.py  # Работа с календарем
-│   ├── reminder_tool.py  # Управление напоминаниями
-│   ├── rest_service_tool.py # Инструмент для работы с REST сервисом
-│   ├── sub_assistant_tool.py # Инструмент под-ассистентов
-│   └── time_tool.py      # Работа со временем
-├── messages/             # Обработка сообщений
-├── services/             # Клиенты для других сервисов
-├── storage/              # Хранение данных
-├── config/               # Конфигурация сервиса
-├── core/                 # Ядро сервиса
-├── utils/                # Утилиты
-└── orchestrator.py       # Оркестратор ассистента
-```
-
-#### Основные компоненты
-
-##### AssistantOrchestrator
-Центральный компонент, который координирует работу ассистента. Основные функции:
-- Инициализация ассистентов и инструментов из REST сервиса
-- Обработка входящих сообщений
-- Прослушивание очереди сообщений Redis
-- Отправка ответов в очередь
-
-##### AssistantFactory
-Фабрика для создания различных типов ассистентов:
-- `create_main_assistant` - создает главного ассистента (секретаря)
-- `create_sub_assistant` - создает под-ассистентов для специализированных задач
-- Поддерживает различные типы ассистентов: `openai_api`, `llm` и другие (расширяемо)
-
-##### Типы ассистентов
-1. **BaseAssistant** - абстрактный базовый класс для всех ассистентов
-2. **OpenAIAssistant** - ассистент на базе OpenAI Assistants API
-   - Работа с threads, messages, runs
-   - Управление инструментами
-3. **SecretaryLLMChat** - главный ассистент на LLM
-4. **SubAssistantLLMChat** - под-ассистент на LLM
-5. Возможность добавления новых типов ассистентов на базе других API
-
-##### Инструменты (Tools)
-1. **BaseTool** - базовый класс для всех инструментов
-   - Асинхронное выполнение
-   - Обработка ошибок
-   - Схема для API
-
-2. **ToolAssistant** - инструмент, оборачивающий ассистента
-   - Позволяет использовать ассистента как инструмент
-
-3. **Специализированные инструменты**:
-   - **CalendarTool** - управление календарем
-   - **ReminderTool** - управление напоминаниями
-   - **TimeTool** - работа со временем
-   - **SubAssistantTool** - работа с под-ассистентами
-   - **RestServiceTool** - преобразование данных REST API в инструменты
-
-#### Поток обработки сообщений
-1. Сообщение получается из очереди Redis (`REDIS_QUEUE_TO_SECRETARY`)
-2. Оркестратор передает сообщение в `process_message`
-3. Ассистент определяет необходимые инструменты для выполнения задачи
-4. Инструменты выполняют операции асинхронно
-5. Ответ формируется и отправляется обратно в Redis (`REDIS_QUEUE_TO_TELEGRAM`)
-
-#### Управление контекстом
-- Для OpenAI Assistant используются threads
-- Для LLM ассистентов используется хранилище сообщений в Redis
-- Архитектура позволяет расширять способы хранения контекста для разных типов LLM
-
-#### Детальная архитектура компонентов
-
-##### OpenAIAssistant (assistants/openai_assistant.py)
-```python
-class OpenAIAssistant(BaseAssistant):
-    def __init__(self, assistant_id=None, instructions=None, name=None, 
-                 model="gpt-4-turbo-preview", tools=None, tool_instances=None):
-        # Инициализация с существующим ID или создание нового ассистента
-```
-
-Основные методы:
-- `update_assistant(tools, instructions, model, name)` - обновление настроек ассистента в OpenAI API
-- `process_message(message, user_id)` - обработка сообщения и получение ответа
-- `_execute_tool_call(function_name, arguments)` - выполнение вызова инструмента
-
-Особенности реализации:
-- Асинхронная работа с OpenAI API
-- Повторные попытки при ошибках
-- Обработка timeout при долгих запросах
-- Работа с threads для хранения контекста пользователя
-- Поддержка инструментов с семантикой 'function calling'
-
-##### SubAssistantTool (tools/sub_assistant_tool.py)
-```python
-class SubAssistantTool(BaseTool):
-    def __init__(self, sub_assistant, assistant_id=None, name=None, 
-                 description=None, user_id=None):
-        # Инициализация с под-ассистентом
-```
-
-Концепция под-ассистентов:
-- Специализированные ассистенты для конкретных задач
-- Делегирование сложных задач от главного ассистента
-- Независимый контекст для специальных областей знаний
-
-##### CalendarTool (tools/calendar_tool.py)
-Реализованы два основных класса:
-- `CalendarCreateTool` - создание событий в календаре
-- `CalendarListTool` - получение списка событий
-
-Особенности:
-- Интеграция с Google Calendar API через отдельный сервис
-- Проверка авторизации пользователя перед выполнением операций
-- Форматирование дат и времени
-- Возможность управления множеством календарей
-
-##### RestServiceClient (services/rest_service.py)
-Клиент для взаимодействия с REST API сервисом:
-- `get_assistants()` - получение списка всех ассистентов
-- `get_assistant(assistant_id)` - получение конкретного ассистента
-- `get_assistant_tools(assistant_id)` - получение инструментов ассистента
-- `get_tools()` - получение всех доступных инструментов
-
-Компонент необходим для:
-- Загрузки конфигураций из базы данных при запуске
-- Динамического обновления конфигураций
-- Обеспечения единого источника данных для всех сервисов
-
-##### RestServiceTool (tools/rest_service_tool.py)
-Преобразует данные из REST API в фактические инструменты:
-```python
-def to_tool(self):
-    # Преобразование данных REST API в конкретный инструмент
-    # в зависимости от типа (time, sub_assistant, reminder, calendar)
-```
-
-#### Обработка ошибок
-- Централизованная обработка через классы исключений
-- Разделение ошибок на категории (ToolError, InvalidInputError, ToolExecutionError)
-- Логирование с контекстом
-- Возвращение понятных сообщений пользователю
-
-#### Многоуровневая архитектура ассистентов
-1. **Главный ассистент (Secretary)** - точка входа для пользователя
-2. **Под-ассистенты** - специализированные помощники для конкретных задач
-3. **Инструменты** - выполняют конкретные функции
-
-Такая архитектура позволяет:
-- Распределять сложность между компонентами
-- Поддерживать специфический контекст для разных областей
-- Гибко настраивать систему под различные задачи
-- Тестировать различные комбинации моделей и API
-
-### Telegram бот (tg_bot)
-
-#### Структура сервиса
-```
-tg_bot/src/
-├── client/              # Клиенты для внешних сервисов
-│   ├── telegram.py      # Клиент для Telegram Bot API
-│   └── rest.py          # Клиент для REST сервиса
-├── handlers/            # Обработчики сообщений
-│   └── start.py         # Обработчик команды /start
-├── services/            # Сервисы для обработки
-│   └── response_handler.py # Обработчик ответов от ассистента
-├── config/              # Конфигурация
-│   └── settings.py      # Настройки приложения
-├── utils/               # Вспомогательные функции
-└── main.py              # Основной модуль запуска
-```
-
-#### Основные компоненты
-
-##### TelegramClient (client/telegram.py)
-Асинхронный клиент для работы с Telegram Bot API:
-```python
-class TelegramClient:
-    def __init__(self):
-        self.base_url = f"https://api.telegram.org/bot{settings.telegram_token}"
-        self.session: Optional[aiohttp.ClientSession] = None
-```
-
-Основные методы:
-- `send_message(chat_id, text)` - отправка сообщения пользователю
-- `get_updates(offset, timeout)` - получение обновлений через Long Polling
-- `_make_request(method, **kwargs)` - низкоуровневая функция для запросов к API
-
-##### RestClient (client/rest.py)
-Клиент для взаимодействия с REST сервисом:
-```python
-class RestClient:
-    def __init__(self):
-        self.base_url = settings.rest_service_url
-        self.api_prefix = "/api"
-        self.session: Optional[aiohttp.ClientSession] = None
-```
-
-Основные методы:
-- `get_user(telegram_id)` - получение пользователя по идентификатору Telegram
-- `create_user(telegram_id, username)` - создание нового пользователя
-- `get_or_create_user(telegram_id, username)` - получение или создание пользователя
-- `get_user_by_id(user_id)` - получение пользователя по внутреннему ID
-
-##### Функции обработки сообщений (main.py)
-- `process_message(telegram, rest, message_data)` - обработка сообщения
-- `handle_telegram_update(telegram, rest, update)` - обработка обновления из Telegram
-- `main()` - основная функция запуска бота
-
-##### Обработчик команды /start (handlers/start.py)
-```python
-async def handle_start(telegram, rest, chat_id, user):
-    # Обработка команды /start с приветственным сообщением
-    # Различная логика для новых и существующих пользователей
-```
-
-##### Обработчик ответов (services/response_handler.py)
-```python
-async def handle_assistant_responses(telegram):
-    # Прослушивание ответов от ассистента в Redis
-    # Отправка ответов пользователям через Telegram API
-```
-
-#### Настройки (config/settings.py)
-```python
-class Settings(BaseSettings):
-    # Telegram настройки
-    telegram_token: str
-    telegram_rate_limit: int = 30
-    
-    # Redis настройки
-    redis_host: str = "redis"
-    redis_port: int = 6379
-    redis_db: int = 0
-    input_queue: str = "queue:to_secretary"
-    assistant_output_queue: str = "queue:to_telegram"
-    
-    # REST сервис
-    rest_service_url: str = "http://rest_service:8000"
-```
-
-#### Поток обработки сообщений
-1. Получение обновлений от Telegram через Long Polling
-2. Извлечение сообщения и данных о пользователе
-3. Обработка команды /start или отправка сообщения в очередь Redis
-4. Ожидание ответа от сервиса ассистента
-5. Получение ответа из очереди Redis
-6. Отправка ответа пользователю через Telegram API
-
-#### Асинхронная архитектура
-- Все операции выполняются асинхронно с использованием asyncio
-- Два основных потока:
-  - Получение и обработка сообщений от Telegram
-  - Прослушивание и обработка ответов от ассистента
-- Использование контекстных менеджеров для управления сессиями
-- Обработка исключений на всех уровнях
-
-#### Обработка ошибок
-- Централизованное логирование с использованием structlog
-- Обработка ошибок на разных уровнях:
-  - Ошибки HTTP запросов
-  - Ошибки обработки JSON
-  - Ошибки Redis
-  - Пользовательские ошибки
-- Отправка понятных сообщений об ошибках пользователю
-
-#### Взаимодействие с Redis
-- Использование асинхронного клиента Redis
-- Отправка сообщений в очередь `queue:to_secretary`
-- Получение ответов из очереди `queue:to_telegram`
-- Поддержка блокирующих операций с таймаутами
-
-#### Механизм восстановления
-- Обработка разрывов соединения
-- Повторные попытки при временных ошибках
-- Сохранение последнего update_id для предотвращения дублирования сообщений
-
-## СТАТУС РАЗРАБОТКИ
-
-### Реализовано
-- ✅ Модульная микросервисная архитектура
-- ✅ База данных PostgreSQL
-- ✅ REST API для управления ассистентами и инструментами
-- ✅ Валидация JSON схем
-- ✅ Поддержка под-ассистентов
-- ✅ Миграция данных из JSON в PostgreSQL
-- ✅ Интеграция с Telegram Bot API
-- ✅ Интеграция с OpenAI Assistants API (первая из реализованных API)
-
-### В разработке
-- ❌ Кэширование в Redis
-- ❌ Механизм обновления конфигурации
-- ❌ Интеграция с другими LLM API
-
-## ТЕСТИРОВАНИЕ
-
-### Важные правила тестирования
-- ⚠️ Все тесты ДОЛЖНЫ запускаться ТОЛЬКО в Docker контейнере
-- ⚠️ Запрещено запускать тесты локально
-- ⚠️ Каждый сервис имеет свой собственный Docker-окружение для тестов
-- ⚠️ Тесты изолированы от локальной среды разработки
-
-### Инфраструктура тестирования
-
-#### Docker-окружение для тестов
-```yaml
-# docker-compose.test.yml
-services:
-  test-db:
-    image: postgres:16
-    environment:
-      - POSTGRES_USER=test_user
-      - POSTGRES_PASSWORD=test_password
-      - POSTGRES_DB=test_db
-    ports:
-      - "5433:5432"
-    volumes:
-      - test_db_data:/var/lib/postgresql/data
-
-  tests:
-    build:
-      context: ..
-      dockerfile: Dockerfile.test
-    depends_on:
-      - test-db
-    environment:
-      - ASYNC_DATABASE_URL=postgresql+asyncpg://test_user:test_password@test-db:5432/test_db
-```
-
-Особенности:
-- Изолированная тестовая база данных
-- Отдельные порты для тестового окружения
-- Сохранение данных тестовой БД между запусками
-- Автоматическая очистка после тестов
-- Полная изоляция от локальной среды
-
-#### Скрипты запуска тестов
-```bash
-# run_tests.sh
-docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
-```
-
-Функции:
-- Автоматический запуск тестов в Docker
-- Цветной вывод результатов
-- Очистка контейнеров после завершения
-- Возврат статуса выполнения
-- Проверка успешности выполнения тестов
-
-### Виды тестов
-
-#### Unit тесты
-- Тестирование отдельных компонентов
-- Моки внешних зависимостей
-- Проверка бизнес-логики
-- Валидация моделей данных
-- Запуск в изолированном контейнере
-
-#### Интеграционные тесты
-- Тестирование взаимодействия компонентов
-- Работа с тестовой базой данных
-- Проверка API эндпоинтов
-- Тестирование асинхронных операций
-- Проверка взаимодействия сервисов в контейнере
-
-#### End-to-end тесты
-- Тестирование полных сценариев
-- Проверка взаимодействия сервисов
-- Тестирование пользовательских сценариев
-- Валидация интеграций
-- Запуск в полном Docker-окружении
-
-### Фикстуры и моки
-
-#### Фикстуры pytest
-```python
-@pytest.fixture
-def mock_rest_service():
-    """Create mock for REST service."""
-    mock = AsyncMock(spec=RestService)
-    mock.get_user.side_effect = lambda user_id: (
-        {"id": 123, "name": "Test User"} if user_id == 123 else None
-    )
-    return mock
-```
-
-Особенности:
-- Переиспользуемые моки
-- Настройка поведения для разных тестов
-- Автоматическая очистка после тестов
-- Поддержка асинхронных операций
-- Изоляция от реальных сервисов
-
-#### Примеры тестов
-```python
-@pytest.mark.asyncio
-async def test_get_auth_url(mock_services):
-    """Test getting auth URL."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.get("/auth/url/123")
-        assert response.status_code == 200
-        assert "auth_url" in response.json()
-```
-
-Особенности:
-- Асинхронное тестирование
-- Проверка HTTP ответов
-- Валидация JSON данных
-- Проверка вызовов сервисов
-- Запуск в контейнере
-
-### CI/CD интеграция
-
-#### Автоматизация тестов
-- Запуск тестов при каждом коммите
-- Проверка покрытия кода
-- Линтинг и форматирование
-- Сборка Docker образов
-- Запуск всех тестов в CI/CD пайплайне
-
-#### Отчеты и метрики
-- Отчеты о покрытии кода
-- Статистика выполнения тестов
-- Логи ошибок
-- Метрики производительности
-- Результаты тестов в CI/CD
-
-### Текущий статус тестирования
-
-#### Реализовано
-- ✅ Базовая инфраструктура тестирования
-- ✅ Unit тесты для моделей
-- ✅ Интеграционные тесты API
-- ✅ Моки внешних сервисов
-- ✅ Запуск тестов в Docker
-
-#### В разработке
-- ❌ End-to-end тесты
-- ❌ Тесты производительности
-- ❌ Нагрузочное тестирование
-- ❌ Автоматизация в CI/CD
-- ❌ Расширение покрытия тестами
-
-
-## ТИПОВЫЕ СЦЕНАРИИ РАБОТЫ
-### Сценарий 1: Запрос событий календаря
-
-#### Описание процесса
-1. Пользователь отправляет запрос в Telegram бота
-2. Бот идентифицирует пользователя через REST-сервис
-3. Ассистент обрабатывает запрос и вызывает инструмент календаря
-4. Сервис календаря проверяет авторизацию и получает события
-5. Ассистент форматирует и отправляет ответ пользователю
-
-#### Логи процесса
-```
-13:17:27 - telegram_bot - INFO - Processing message: "Хай, что у меня запланировано в календаре"
-13:17:27 - telegram_bot - INFO - Found existing user
-13:17:27 - assistant_service - INFO - Processing message
-13:17:35 - assistant_service - INFO - User needs authorization
-13:17:56 - google_calendar_service - INFO - Авторизация в Google Calendar успешно завершена
-13:18:02 - assistant_service - INFO - Fetching calendar events
-13:18:03 - assistant_service - INFO - Received calendar events (5 событий)
-13:18:18 - telegram_bot - INFO - Sent response to user
-```
-
-#### Особенности реализации
-- Асинхронная обработка запросов
-- Проверка авторизации пользователя
-- Форматирование событий с учетом часовых поясов
-- Поддержка различных типов событий (встречи, дни рождения, целые дни)
-- Интеграция с Google Calendar API
-
-#### Компоненты системы
-1. Telegram бот
-   - Прием сообщений
-   - Идентификация пользователей
-   - Отправка форматированных ответов
-
-2. Ассистент
-   - Обработка запросов
-   - Вызов инструментов
-   - Форматирование ответов
-
-3. Google Calendar сервис
-   - Авторизация
-   - Получение событий
-   - Работа с API
-
-4. REST сервис
-   - Хранение токенов
-   - Управление пользователями
-   - API для других сервисов
-
-### Инструменты разработки
-1. **manage.py**
-   - Скрипт для автоматизации рутинных задач
-   - Поддерживает команды:
-     - `migrate`: создание миграций
-     - `upgrade`: применение миграций
-     - `test`: запуск тестов
-     - `rebuild`: пересборка контейнеров
-     - `restart`: перезапуск сервисов
-     - `start/stop`: управление сервисами
-
-2. **Alembic**
-   - Система миграций для базы данных
-   - Конфигурация в `rest_service/alembic/`
-   - Использует синхронный драйвер `psycopg2`
-   - Поддерживает автоматическое определение схемы
-
-## СОВЕТЫ ДЛЯ БУДУЩИХ ВЕРСИЙ АССИСТЕНТА
-
-### Общие принципы
-1. **Минимальные изменения**
-   - Не менять код, который не имеет отношения к текущей задаче
-   - Делать только необходимые изменения
-   - Не оптимизировать и не рефакторить без запроса
-   - Проверять, что изменения соответствуют запросу
-
-2. **Работа с Docker**
-   - Использовать `docker compose`, а не `docker-compose`
-   - Всегда проверять статус контейнеров после команд
-   - Делать по одной команде и проверять результат
-   - Не использовать `git add .`, всегда проверять `git status`
-
-3. **Работа с базой данных**
-   - При работе с миграциями использовать синхронный драйвер `psycopg2`
-   - Проверять URL базы данных перед выполнением миграций
-   - Убеждаться, что база данных готова к работе
-   - Логировать URL базы данных для отладки
-
-4. **Работа с кодом**
-   - Комментарии в коде только на английском
-   - Сообщения коммитов только на английском
-   - Не предлагать идей, которые уже пробовали и они не сработали
-   - Оценивать каждую идею и ревизию перед реализацией
-
-5. **Тестирование**
-   - Проверять каждое изменение
-   - Делать по одной команде и проверять результат
-   - Не предполагать, что что-то работает, пока не проверишь
-   - Логировать важные операции для отладки
-
-### Типичные ошибки и их решения
-1. **Проблемы с миграциями**
-   - Ошибка: `sqlalchemy.exc.MissingGreenlet`
-   - Решение: Использовать синхронный драйвер `psycopg2` вместо `asyncpg`
-   - Проверка: Логировать URL базы данных
-
-2. **Проблемы с Docker**
-   - Ошибка: Неправильные имена сервисов
-   - Решение: Проверять `docker-compose.yml` перед выполнением команд
-   - Проверка: Использовать `docker compose ps`
-
-3. **Проблемы с базой данных**
-   - Ошибка: База данных не готова
-   - Решение: Добавить проверку готовности базы данных
-   - Проверка: Логировать статус подключения
-
-4. **Проблемы с кодом**
-   - Ошибка: Изменения не соответствуют запросу
-   - Решение: Делать минимальные изменения
-   - Проверка: Сравнивать изменения с запросом
-
-### Рекомендации по улучшению
-1. **Документация**
-   - Добавлять комментарии к сложным участкам кода
-   - Обновлять документацию при изменении функционала
-   - Документировать все важные решения
-
-2. **Тестирование**
-   - Добавлять тесты для нового функционала
-   - Проверять покрытие тестами
-   - Тестировать граничные случаи
-
-3. **Безопасность**
-   - Проверять безопасность новых функций
-   - Не хранить чувствительные данные в коде
-   - Использовать переменные окружения
-
-4. **Производительность**
-   - Проверять производительность новых функций
-   - Оптимизировать только при необходимости
-   - Измерять время выполнения операций
-
-### Примеры правильного подхода
-1. **Создание миграции**
-```bash
-# Правильно
-./manage.py migrate "Initial migration"
-
-# Неправильно
-docker compose exec rest_service python manage.py migrate "Initial migration"
-```
-
-2. **Пересборка контейнера**
-```bash
-# Правильно
-./manage.py rebuild --service rest_service
-
-# Неправильно
-docker compose build rest_service && docker compose up -d
-```
-
-3. **Запуск тестов**
-```bash
-# Правильно
-./manage.py test --service rest_service
-
-# Неправильно
-docker compose exec rest_service python -m pytest
-```
-
-### Контрольный список
-1. Перед каждым изменением:
-   - [ ] Понять задачу
-   - [ ] Проверить существующий код
-   - [ ] Планировать минимальные изменения
-   - [ ] Подготовить тесты
-
-2. После каждого изменения:
-   - [ ] Проверить соответствие запросу
-   - [ ] Протестировать изменения
-   - [ ] Обновить документацию
-   - [ ] Проверить логи
-
-3. Перед коммитом:
-   - [ ] Проверить статус git
-   - [ ] Проверить изменения
-   - [ ] Написать понятное сообщение
-   - [ ] Убедиться, что все тесты проходят
-
-## ЛОГ РАБОТЫ
-
-Этот раздел содержит историю изменений и важных решений в проекте:
-
-- [2024-03-20: Добавлена детальная информация по сервису ассистента]
-- [2024-03-20: Добавлена расширенная информация о классах ассистента и инструментах]
-- [2024-03-20: Уточнена модульная природа архитектуры и независимость от конкретных API]
-- [2024-03-20: Добавлена детальная информация по сервису Telegram бота]
-- [2024-03-20: Добавлена детальная информация по сервису планировщика (cron_service)]
-- [2024-03-20: Добавлена детальная информация по REST сервису]
-- [2024-03-20: Добавлена детальная информация по Google Calendar сервису]
-- [2024-03-20: Добавлен раздел с планируемыми задачами]
-- [2024-03-20: Добавлена детальная информация по системе тестирования]
-- [2024-03-20: Добавлен раздел с типовыми сценариями работы]
-- [2024-03-20: Создан скрипт manage.py для автоматизации рутинных задач]
-- [2024-03-20: Настроена система миграций с использованием Alembic]
-- [2024-03-20: Добавлены рекомендации по работе с миграциями и базой данных]
-- [2024-03-20: Обновлена документация по работе с Docker и контейнерами]
+# High-Level Overview
+
+## Services
+
+The project is divided into several independent microservices:
+- **assistant**  
+  - Core engine for handling user messages and coordinating various LLM-based functionalities.
+  - Manages context, threads, and asynchronous message processing via Redis.
+  
+- **rest_service**  
+  - Provides a REST API for managing user data, assistant configurations, and related models.
+  - Handles CRUD operations for assistants, tools, and scheduled tasks.
+  - Uses PostgreSQL for data storage and Alembic for database migrations.
+  
+- **google_calendar_service**  
+  - Integrates with Google Calendar for event management.
+  - Implements OAuth 2.0 authorization, token management, and calendar event retrieval/creation.
+  
+- **cron_service**  
+  - A scheduler service using APScheduler to manage and execute scheduled tasks.
+  - Periodically pulls job configurations from the REST API and sends notifications via Redis.
+  
+- **tg_bot**  
+  - A Telegram Bot interface for end-user interaction.
+  - Receives user messages, identifies users via REST API, and sends formatted responses.
+
+## Deployment
+
+- **Docker & Docker Compose**  
+  - Each service runs in its own container.
+  - Deployment is managed using `docker compose` commands.
+  - Example for running tests and managing containers:
+    - **Build and start containers:**  
+      ```bash
+      docker compose up --build -d
+      ```
+    - **Check container status:**  
+      ```bash
+      docker compose ps
+      ```
+
+- **Environment Variables**  
+  - Configuration (e.g., database URLs, tokens) is managed via environment variables.
+  - For testing, a separate Docker Compose file (`docker-compose.test.yml`) is used to set up an isolated test environment.
+
+## Testing
+
+- **Types of Tests:**
+  - **Unit Tests:**  
+    - Validate individual components, business logic, and data models.
+    - Use mocks for external dependencies.
+  - **Integration Tests:**  
+    - Verify API endpoints and inter-service interactions.
+    - Ensure correct behavior of asynchronous operations.
+  - **End-to-End Tests:**  
+    - Test full user workflows in a complete Docker environment.
+    - Enforce isolation from the local development environment.
+
+- **Test Execution:**
+  - Tests are designed to run exclusively within Docker containers.
+  - A dedicated script (`run_tests.sh`) is provided to launch all tests:
+    ```bash
+    ./manage.py test --service rest_service
+    ```
+  - Direct execution inside a container (e.g., `docker compose exec rest_service python -m pytest`) is discouraged.
+
+## Scripts & Tools
+
+### Management Scripts (manage.py)
+- **migrate:**  
+  - Create and apply database migrations.
+  - Example:  
+    ```bash
+    ./manage.py migrate "Initial migration"
+    ```
+- **upgrade:**  
+  - Apply pending migrations.
+- **test:**  
+  - Run the full suite of tests in the appropriate Docker container.
+- **rebuild:**  
+  - Rebuild specific service containers.  
+    Example:  
+    ```bash
+    ./manage.py rebuild --service rest_service
+    ```
+- **restart:**  
+  - Restart the services.
+- **start/stop:**  
+  - Manage service lifecycle.
+
+### Tools for the Assistant
+
+- **Calendar Tool:**  
+  - Handles creation and retrieval of calendar events.
+  - Integrates with Google Calendar API.
+  
+- **Reminder Tool:**  
+  - Manages user reminders and notifications.
+  
+- **Time Tool:**  
+  - Provides time-related functionalities.
+  
+- **Sub Assistant Tool:**  
+  - Delegates specialized tasks to sub-assistants.
+  
+- **Weather Tool:**  
+  - Fetches and provides weather information (if integrated).
+
+---
+
+This high-level summary encapsulates the primary components, deployment strategy, testing approach, and management scripts/tools of the Smart Assistant project.
+
+# General Recommendations and Future Plans
+
+## Best Practices & Internal Guidelines
+- **Minimal Changes:** Modify only what’s necessary and avoid optimizations without validation.
+- **Strict Verification:** Run tests for every change; verify service status and logs after deployments.
+- **Clear Communication:** Use English for code comments, commit messages, and documentation.
+- **Docker-First Approach:** Always manage containers using `docker compose` and check service status (e.g., using `docker compose ps`).
+- **Database Integrity:** Use synchronous migrations (psycopg2) for Alembic and log connection URLs for debugging.
+
+## Planned Enhancements
+- **Caching:** Implement Redis-based caching to speed up data retrieval.
+- **Dynamic Configuration:** Develop a mechanism for real-time configuration updates across services.
+- **Expanded LLM Integrations:** Integrate additional LLM APIs beyond OpenAI.
+- **Enhanced Testing:** Introduce more comprehensive end-to-end and performance tests, ensuring all tests run only within Docker.
+- **CI/CD Automation:** Automate Docker image builds, test executions, and deployments in the CI/CD pipeline.
+- **Improved Documentation:** Continuously update internal guides and documentation as features evolve.
+
+## Future Roadmap
+- **Centralized Logging & Monitoring:** Integrate systems like ELK Stack, Prometheus, Grafana, and OpenTelemetry for better observability.
+- **Workflow Automation:** Explore integration with workflow tools (e.g., n8n) for advanced process automation.
+- **Code Refactoring:** Incrementally refactor code to improve modularity and performance without disrupting current functionality.
+
+
+detailed information on each service in the "llm_context_**" files
