@@ -73,6 +73,11 @@ class Tool(BaseModel, table=True):
     )
     description: str
     input_schema: Optional[str] = Field(default=None)  # JSON схема входных данных в виде строки
+    assistant_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key="assistant.id",
+        index=True
+    ) # Для sub_assistant, ссылка на ассистента, которого вызывает данный инструмент
     is_active: bool = Field(default=True, index=True)
     
     # Relationships

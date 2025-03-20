@@ -23,10 +23,12 @@ class SubAssistantTool(BaseTool):
     name: str = NAME
     description: str = DESCRIPTION
     sub_assistant: Optional[SubAssistant] = None
+    assistant_id: Optional[str] = None
     
     def __init__(
         self,
         sub_assistant: SubAssistant,
+        assistant_id: Optional[str] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
         user_id: Optional[str] = None
@@ -35,6 +37,7 @@ class SubAssistantTool(BaseTool):
         
         Args:
             sub_assistant: The specialized assistant to delegate tasks to
+            assistant_id: ID of the assistant in the database
             name: Optional custom name for the tool
             description: Optional custom description
             user_id: Optional user identifier
@@ -46,6 +49,7 @@ class SubAssistantTool(BaseTool):
             user_id=user_id
         )
         self.sub_assistant = sub_assistant
+        self.assistant_id = assistant_id
     
     def _run(self, message: str) -> str:
         """Synchronous execution is not supported."""

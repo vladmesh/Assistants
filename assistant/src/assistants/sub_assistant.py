@@ -22,7 +22,8 @@ class SubAssistantLLMChat(SubAssistant, BaseLLMChat):
             system_message: Optional[str] = None,
             tools: Optional[List[BaseTool]] = None,
             name: str = "sub_assistant",
-            instructions: str = "You are a helpful sub-assistant"
+            instructions: str = "You are a helpful sub-assistant",
+            assistant_id: Optional[str] = None
     ):
         BaseLLMChat.__init__(
             self,
@@ -31,4 +32,5 @@ class SubAssistantLLMChat(SubAssistant, BaseLLMChat):
             tools=tools,
             name=name,
             instructions=instructions
-        ) 
+        )
+        self.assistant_id = assistant_id 
