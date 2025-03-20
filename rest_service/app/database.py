@@ -38,13 +38,13 @@ async def drop_all_tables() -> None:
 async def init_db() -> None:
     """Initialize database with tables and test data"""
     # Drop all tables first
-    await drop_all_tables()
+    # await drop_all_tables()
     # Create all tables
     async with async_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
     # Create test data
-    async with AsyncSessionLocal() as session:
-        await create_test_data(session)
+    # async with AsyncSessionLocal() as session:
+    #     await create_test_data(session)
 
 async def get_session() -> AsyncSession:
     """Get database session"""
