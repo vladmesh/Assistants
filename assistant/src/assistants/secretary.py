@@ -2,13 +2,14 @@
 from typing import List, Optional, Any
 from abc import ABC, abstractmethod
 
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseLanguageModel
 from langgraph.prebuilt import create_react_agent
 
 from assistants.base import BaseAssistant
 from assistants.llm_chat import BaseLLMChat
 from tools.base import BaseTool
+from messages.base import SystemMessage
 
 class Secretary(BaseAssistant, ABC):
     """Assistant, who get messages only from user. Can use other assistants as tool"""
@@ -57,7 +58,7 @@ class SecretaryLLMChat(Secretary, BaseLLMChat):
         return create_react_agent(
             self.llm,
             self.tools,
-            prompt = SystemMessage(content=self.system_message) if self.system_message else None
+            prompt = self.system_message if self.system_message else None
         )
 
     async def process_message(self, message: BaseMessage, user_id: Optional[str] = None) -> str:

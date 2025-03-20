@@ -5,6 +5,7 @@ from config.settings import Settings
 from tools.rest_service_tool import RestServiceTool
 from assistants.factory import AssistantFactory
 from services.rest_service import RestServiceClient
+from messages.base import HumanMessage
 
 logger = get_logger(__name__)
 
@@ -59,7 +60,10 @@ class AssistantOrchestrator:
                        user_id=user_id,
                        message_length=len(text))
             
-            response = await self.assistant.process_message(text, user_id)
+            # Convert text to HumanMessage
+            human_message = HumanMessage(content=text)
+            
+            response = await self.assistant.process_message(human_message, user_id)
             
             return {
                 "user_id": user_id,

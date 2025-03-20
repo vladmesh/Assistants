@@ -25,6 +25,8 @@ assistant/src/
 │   ├── sub_assistant_tool.py # Wrapper to treat sub-assistants as tools
 │   └── time_tool.py      # Tool for time-related operations
 ├── messages/             # Message handling: parsing, formatting, and context enrichment
+│   ├── base.py          # Base message class with automatic timestamp and source
+│   └── types.py         # Specific message types (Human, Secretary, Tool, System)
 ├── services/             # Clients for external services and inter-service communication
 ├── storage/              # Context and message storage (e.g., Redis or database)
 ├── config/               # Service configuration and environment settings
@@ -32,8 +34,26 @@ assistant/src/
 ├── utils/                # Utility functions and helper modules
 └── orchestrator.py       # Main orchestrator coordinating message processing, tool execution, and assistant delegation
 
-
 ## 3. Key Components
+
+### Message System
+- **Base Message Class:**
+  - Automatic timestamp generation in UTC
+  - Internal source field with automatic setting
+  - Metadata support through additional_kwargs
+  - String representation for LLM compatibility
+  - Format: `[SOURCE] (TIMESTAMP) CONTENT`
+
+- **Message Types:**
+  - `HumanMessage`: User messages (source: HUMAN)
+  - `SecretaryMessage`: Secretary responses (source: SECRETARY)
+  - `ToolMessage`: Tool responses (source: TOOL)
+  - `SystemMessage`: System messages (source: SYSTEM)
+
+- **Message Thread:**
+  - Stores conversation history
+  - Tracks creation and update timestamps
+  - Provides message retrieval and management
 
 ### Assistant Orchestrator
 - **Role:**  
@@ -76,6 +96,7 @@ assistant/src/
 ## 4. Message & Context Handling
 - **Input Processing:**  
   - Messages are fetched asynchronously from a Redis queue.
+  - Each message automatically gets timestamp and source.
 - **Context Management:**  
   - OpenAIAssistant uses thread-based storage.
   - Other LLM assistants leverage Redis-based storage for conversation history.

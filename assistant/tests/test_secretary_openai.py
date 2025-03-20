@@ -38,7 +38,7 @@ class TestSecretaryOpenAI:
         )
         
         # Act
-        message = HumanMessage("Привет! Как тебя зовут?")
+        message = HumanMessage(content="Привет! Как тебя зовут?")
         response = await secretary.process_message(message)
         
         # Debug output
@@ -96,7 +96,7 @@ class TestSecretaryOpenAI:
         )
 
         # Act
-        message = HumanMessage("Который сейчас час?")
+        message = HumanMessage(content="Который сейчас час?")
         response = await secretary.process_message(message)
 
         # Debug output
@@ -186,7 +186,7 @@ class TestSecretaryOpenAI:
         
         responses = []
         for question in questions:
-            response = await secretary.process_message(HumanMessage(question))
+            response = await secretary.process_message(HumanMessage(content=question))
             responses.append(response)
             print(f"\nQuestion: {question}")
             print(f"Response: {response}\n")
