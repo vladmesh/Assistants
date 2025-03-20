@@ -107,10 +107,16 @@ class GoogleCalendarService:
             elif isinstance(time_max, str):
                 time_max = datetime.fromisoformat(time_max)
             
+            # Ensure timezone info is present
+            if time_min.tzinfo is None:
+                time_min = time_min.replace(tzinfo=datetime.now().astimezone().tzinfo)
+            if time_max.tzinfo is None:
+                time_max = time_max.replace(tzinfo=datetime.now().astimezone().tzinfo)
+            
             events_result = service.events().list(
                 calendarId='primary',
-                timeMin=time_min.isoformat() + 'Z',
-                timeMax=time_max.isoformat() + 'Z',
+                timeMin=time_min.isoformat(),  # RFC3339 with timezone
+                timeMax=time_max.isoformat(),  # RFC3339 with timezone
                 singleEvents=True,
                 orderBy='startTime'
             ).execute()
