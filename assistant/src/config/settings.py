@@ -18,31 +18,17 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     
+    # REST service settings
+    REST_SERVICE_HOST: str = "rest_service"  # Docker service name
+    REST_SERVICE_PORT: int = 8000
+    REST_SERVICE_BASE_URL: str = f"http://{REST_SERVICE_HOST}:{REST_SERVICE_PORT}"
+    
     # Queue names
     INPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_SECRETARY", "queue:to_secretary")
     OUTPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram")
     
-    # Assistant configuration
-    MAIN_ASSISTANT_TYPE: str = "openai"  # openai or llm
-    MAIN_ASSISTANT_MODEL: str = "gpt-4-turbo-preview"
-    SUB_ASSISTANT_TYPE: str = "llm"  # openai or llm
-    SUB_ASSISTANT_MODEL: str = "gpt-4-turbo-preview"
-    
-    # Assistant instructions
-    MAIN_ASSISTANT_INSTRUCTIONS: str = """Ты - умный секретарь-ассистент. Твоя задача - помогать пользователю в решении различных задач.
-    
-    Ты можешь:
-    1. Отвечать на вопросы
-    2. Помогать с планированием
-    3. Создавать напоминания
-    4. Узнавать текущее время
-    5. Делегировать творческие задачи писателю
-    
-    Всегда отвечай на русском языке, если не указано иное."""
-    
-    SUB_ASSISTANT_INSTRUCTIONS: str = """Ты - специализированный ассистент, пишущий художественные тексты. Пиши красиво и выразительно.
-    
-    Всегда отвечай на русском языке, если не указано иное."""
+    # Google Calendar settings
+    GOOGLE_CALENDAR_CREDENTIALS: Optional[str] = None
 
     class Config:
         env_file = ".env"  # Включаем загрузку из .env для API ключей

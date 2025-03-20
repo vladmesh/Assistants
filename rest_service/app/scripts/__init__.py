@@ -1,1 +1,1 @@
-"""Database initialization scripts""" 
+"""Scripts package""" 

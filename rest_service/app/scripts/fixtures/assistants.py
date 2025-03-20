@@ -1,5 +1,6 @@
 """Assistant fixtures for database initialization"""
 from app.models import Assistant, AssistantType
+import os
 
 def create_secretary_assistant() -> Assistant:
     """Create Secretary assistant fixture"""
@@ -16,6 +17,7 @@ def create_secretary_assistant() -> Assistant:
 4. Делегировать творческие задачи писателю
 
 Вы должны быть дружелюбным и профессиональным.""",
+        openai_assistant_id=os.getenv("OPEN_API_SECRETAR_ID"),
         is_active=True
     )
 

@@ -36,11 +36,8 @@ def configure_logger(environment: str = "development") -> None:
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
-            # Use better console output in development
-            structlog.dev.ConsoleRenderer(
-                colors=True,
-                sort_keys=True
-            ) if environment == "development" else structlog.processors.JSONRenderer(),
+            # Always use JSON format in Docker
+            structlog.processors.JSONRenderer(),
         ],
         logger_factory=structlog.PrintLoggerFactory(),
         wrapper_class=structlog.BoundLogger,

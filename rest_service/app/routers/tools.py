@@ -15,6 +15,7 @@ class ToolCreate(BaseModel):
     type: str  # Принимаем строку
     description: str
     input_schema: str
+    assistant_id: UUID = None # Для sub_assistant, ссылка на ассистента, которого вызывает данный инструмент
     is_active: bool = True
 
 class ToolUpdate(BaseModel):

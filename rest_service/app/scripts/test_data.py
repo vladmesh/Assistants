@@ -2,20 +2,35 @@
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.scripts.fixtures.tools import get_all_tools
 from app.scripts.fixtures.assistants import get_all_assistants
-from app.models import TelegramUser
+from app.scripts.fixtures.assistant_tools import get_all_assistant_tools
+from app.models import TelegramUser, AssistantToolLink, Assistant
+from sqlalchemy import select
 
 async def create_test_data(db: AsyncSession) -> None:
     """Create test data in the database"""
-    # Create tools
-    tools = get_all_tools()
+    # Create assistants first to get their IDs
+    assistants = get_all_assistants()
+    for assistant in assistants:
+        db.add(assistant)
+    await db.commit()
+    
+    # Get writer assistant ID
+    query = select(Assistant).where(Assistant.name == "writer")
+    result = await db.execute(query)
+    writer = result.scalar_one_or_none()
+    if not writer:
+        raise ValueError("Writer assistant not found in database")
+    
+    # Create tools with writer_id
+    tools = get_all_tools(str(writer.id))
     for tool in tools:
         db.add(tool)
     await db.commit()
     
-    # Create assistants
-    assistants = get_all_assistants()
-    for assistant in assistants:
-        db.add(assistant)
+    # Create assistant-tool relationships
+    assistant_tools = await get_all_assistant_tools(db)
+    for assistant_tool in assistant_tools:
+        db.add(assistant_tool)
     await db.commit()
     
     # Create test users
