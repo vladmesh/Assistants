@@ -6,7 +6,7 @@ import json
 import asyncio
 import time
 from langchain_core.messages import BaseMessage
-from messages.base import BaseMessage as CustomBaseMessage, HumanMessage, SecretaryMessage, SystemMessage
+from messages.base import BaseMessage as CustomBaseMessage, HumanMessage, SecretaryMessage, ToolMessage, SystemMessage
 
 from assistants.base import BaseAssistant
 from tools.base import BaseTool
@@ -127,8 +127,12 @@ class OpenAIAssistant(BaseAssistant):
             logger.info(f"Message metadata: {message.metadata}")
             logger.info(f"Message string representation: {str(message)}")
             
+            # Add tool_name to metadata if it's a tool message
+            if message.source == "tool" and hasattr(message, "tool_name"):
+                message.metadata["tool_name"] = message.tool_name
+            
         return {
-            "role": "user" if isinstance(message, HumanMessage) else "assistant",
+            "role": "user",  # All messages are sent as user messages
             "content": str(message) if isinstance(message, CustomBaseMessage) else message.content
         }
 
@@ -221,6 +225,7 @@ class OpenAIAssistant(BaseAssistant):
                             
                             # Execute tool call
                             result = await self._execute_tool_call(function_name, arguments)
+
                             
                             tool_outputs.append({
                                 "tool_call_id": tool_call.id,

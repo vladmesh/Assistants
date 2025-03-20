@@ -48,6 +48,9 @@ assistant/src/
   - `HumanMessage`: User messages (source: HUMAN)
   - `SecretaryMessage`: Secretary responses (source: SECRETARY)
   - `ToolMessage`: Tool responses (source: TOOL)
+    - Used for internal logging and debugging
+    - Not sent directly to OpenAI threads
+    - Contains tool execution results and metadata
   - `SystemMessage`: System messages (source: SYSTEM)
 
 - **Message Thread:**
@@ -92,6 +95,13 @@ assistant/src/
   - **TimeTool:** Provides time-related operations.
   - **SubAssistantTool:** Enables delegation to sub-assistants.
   - **RestServiceTool:** Interfaces with external REST APIs to fetch or update data.
+
+### OpenAI Integration
+- **Tool Execution Flow:**
+  1. OpenAI creates a run and requests tool execution
+  2. Assistant executes the tool and gets result
+  3. Results are submitted back to OpenAI using `client.beta.threads.runs.submit_tool_outputs`
+  4. OpenAI processes the tool output and continues the conversation
 
 ## 4. Message & Context Handling
 - **Input Processing:**  
