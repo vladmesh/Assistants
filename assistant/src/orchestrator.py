@@ -32,67 +32,10 @@ class AssistantOrchestrator:
     async def initialize(self):
         """Initialize tools and assistant from REST service"""
         try:
-            # Get secretary assistant
-            logger.info("Getting assistants")
-            assistants = await self.rest_client.get_assistants()
-            logger.info("Assistants fetched", 
-                       assistant_count=len(assistants))
-            secretary = next((a for a in assistants if a.is_secretary), None)
-            if not secretary:
-                raise ValueError("Secretary assistant not found")
+            # Initialize main assistant with tools
+            self.assistant = await self.factory.create_main_assistant()
             
-            # Get tools for secretary
-            logger.info("Getting tools for secretary")
-            secretary_tools = await self.rest_client.get_assistant_tools(str(secretary.id))
-            logger.info("Tools fetched", 
-                       tool_count=len(secretary_tools))
-            
-            # Initialize tools based on their types
-            for tool_data in secretary_tools:
-                logger.info("Initializing tool", 
-                           tool_name=tool_data.name,
-                           tool_type=tool_data.tool_type)
-                
-                # Convert REST service tool data to RestServiceTool
-                tool_dict = tool_data.dict()
-                tool_dict['settings'] = self.settings
-                logger.info("Tool data from REST service", tool_dict=tool_dict)
-                rest_tool = RestServiceTool(**tool_dict)
-                
-                # Convert to actual tool
-                tool = rest_tool.to_tool()
-                
-                # For sub_assistant type, get and set the sub-assistant
-                if rest_tool.tool_type == "sub_assistant":
-                    logger.info("Creating sub_assistant tool",
-                               assistant_id=rest_tool.assistant_id)
-                    sub_assistant = await self.rest_client.get_assistant(rest_tool.assistant_id)
-                    logger.info("Got sub_assistant from REST service",
-                               assistant_id=sub_assistant.id,
-                               name=sub_assistant.name)
-                    sub_assistant_instance = await self.factory.create_sub_assistant(sub_assistant)
-                    logger.info("Created sub_assistant instance",
-                               assistant_id=sub_assistant_instance.assistant_id,
-                               name=sub_assistant_instance.name)
-                    tool.sub_assistant = sub_assistant_instance
-                    tool.assistant_id = rest_tool.assistant_id
-                    logger.info("Set sub_assistant in tool",
-                               tool_assistant_id=tool.assistant_id,
-                               tool_name=tool.name)
-                
-                self.tools.append(tool)
-                logger.info("Added tool", name=tool.name)
-            
-            # Log all tools before creating assistant
-            logger.info("All tools initialized", 
-                       tool_count=len(self.tools),
-                       tool_names=[tool.name for tool in self.tools])
-            
-            # Initialize main assistant
-            self.assistant = await self.factory.create_main_assistant(self.tools)
-            
-            logger.info("Assistant service initialized with tools",
-                       tool_count=len(self.tools))
+            logger.info("Assistant service initialized")
             
         except Exception as e:
             logger.error("Failed to initialize assistant service",
