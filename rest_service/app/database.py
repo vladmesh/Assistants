@@ -44,7 +44,7 @@ async def init_db() -> None:
         await conn.run_sync(SQLModel.metadata.create_all)
     # Create test data
     # async with AsyncSessionLocal() as session:
-    #     await create_test_data(session)
+    #    await create_test_data(session)
 
 async def get_session() -> AsyncSession:
     """Get database session"""

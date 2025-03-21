@@ -16,6 +16,7 @@ from .cron import (
     CronJobNotification,
     CronJobRecord
 )
+from .user_secretary import UserSecretaryLink
 
 __all__ = [
     'BaseModel',
@@ -31,5 +32,6 @@ __all__ = [
     'CronJobType',
     'CronJobStatus',
     'CronJobNotification',
-    'CronJobRecord'
+    'CronJobRecord',
+    'UserSecretaryLink'
 ] 

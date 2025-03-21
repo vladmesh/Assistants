@@ -10,4 +10,8 @@ class TelegramUser(BaseModel, table=True):
     
     # Relationships
     cronjobs: List["CronJob"] = Relationship(back_populates="user")
-    calendar_credentials: Optional["CalendarCredentials"] = Relationship(back_populates="user") 
+    calendar_credentials: Optional["CalendarCredentials"] = Relationship(back_populates="user")
+    secretary_links: List["UserSecretaryLink"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    ) 

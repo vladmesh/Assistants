@@ -7,6 +7,7 @@ from sqlalchemy.orm import foreign
 from sqlmodel import Field, Relationship
 from .base import BaseModel
 
+
 class AssistantType(str, enum.Enum):
     LLM = "llm"  # Прямая работа с LLM
     OPENAI_API = "openai_api"  # Работа через OpenAI Assistants API
@@ -56,6 +57,10 @@ class Assistant(BaseModel, table=True):
             "primaryjoin": "Assistant.id == AssistantToolLink.assistant_id",
             "secondaryjoin": "and_(Tool.id == foreign(AssistantToolLink.tool_id), AssistantToolLink.is_active == True)"
         }
+    )
+    user_links: List["UserSecretaryLink"] = Relationship(
+        back_populates="secretary",
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     def validate_type(self) -> None:
