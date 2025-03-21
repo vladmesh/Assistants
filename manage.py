@@ -13,9 +13,58 @@ def run_command(command: str) -> int:
         print(f"Error executing command: {e}")
         return e.returncode
 
-def create_migration(message: str) -> int:
-    """Create a new migration."""
-    return run_command(f"docker compose exec rest_service python manage.py migrate '{message}'")
+def get_service_container(service_name: str) -> str:
+    """Get container ID for a service"""
+    result = subprocess.run(
+        'docker compose ps -q rest_service',
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        raise Exception(f"Failed to get container ID for {service_name}: {result.stderr}")
+    return result.stdout.strip()
+
+def create_migration(message: str):
+    """Create a new migration"""
+    # Get the container ID
+    container_id = get_service_container('rest_service')
+    
+    # Create migration in the container
+    result = subprocess.run(
+        f'docker exec {container_id} alembic revision --autogenerate -m "{message}"',
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print(f"Failed to create migration: {result.stderr}")
+        return result.returncode
+    
+    # Find the newly created migration file in the container
+    result = subprocess.run(
+        f'docker exec {container_id} bash -c "ls -t /app/alembic/versions/*.py | head -1"',
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print(f"Failed to find migration file: {result.stderr}")
+        return result.returncode
+    container_file = result.stdout.strip()
+    
+    # Copy the migration file from container to host
+    result = subprocess.run(
+        f'docker cp {container_id}:{container_file} rest_service/alembic/versions/',
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print(f"Failed to copy migration file: {result.stderr}")
+        return result.returncode
+    
+    return 0
 
 def apply_migrations() -> int:
     """Apply all pending migrations."""
