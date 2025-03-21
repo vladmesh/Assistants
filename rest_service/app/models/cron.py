@@ -20,6 +20,7 @@ class CronJob(BaseModel, table=True):
     type: CronJobType = Field(default=CronJobType.NOTIFICATION)
     cron_expression: str
     user_id: Optional[int] = Field(default=None, foreign_key="telegramuser.id")
+    is_active: bool = Field(default=True)
     
     # Relationships
     user: Optional["TelegramUser"] = Relationship(back_populates="cronjobs")
