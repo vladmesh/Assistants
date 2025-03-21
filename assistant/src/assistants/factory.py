@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from .base import BaseAssistant
 from .openai_assistant import OpenAIAssistant
 from .secretary import SecretaryLLMChat
@@ -17,10 +17,65 @@ class AssistantFactory:
         """Initialize the factory with settings and REST client"""
         self.settings = settings
         self.rest_client = RestServiceClient()
+        self._secretary_cache: Dict[int, BaseAssistant] = {}
     
     async def close(self):
         """Close REST client connection"""
         await self.rest_client.close()
+    
+    async def get_user_secretary(self, user_id: int) -> BaseAssistant:
+        """Get or create secretary assistant for user.
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            Secretary assistant instance
+            
+        Raises:
+            ValueError: If secretary not found for user
+        """
+        # Check cache first
+        if user_id in self._secretary_cache:
+            return self._secretary_cache[user_id]
+            
+        # Get user's secretary from REST service
+        try:
+            secretary = await self.rest_client.get_user_secretary(user_id)
+        except Exception as e:
+            logger.error("Failed to get user secretary",
+                        user_id=user_id,
+                        error=str(e))
+            # If no secretary found, get default secretary
+            secretary = await self.get_secretary_assistant()
+            
+        # Initialize tools
+        tools = await self.initialize_tools(str(secretary.id))
+        
+        # Create assistant instance
+        if secretary.assistant_type == "openai_api":
+            assistant = OpenAIAssistant(
+                assistant_id=secretary.openai_assistant_id,
+                name=secretary.name,
+                instructions=secretary.instructions,
+                model=secretary.model,
+                tools=[tool.openai_schema for tool in tools],
+                tool_instances=tools
+            )
+        elif secretary.assistant_type == "llm":
+            assistant = SecretaryLLMChat(
+                llm=ChatOpenAI(model=secretary.model),
+                name=secretary.name,
+                instructions=secretary.instructions,
+                tools=tools
+            )
+        else:
+            raise ValueError(f"Unknown assistant type: {secretary.assistant_type}")
+            
+        # Cache assistant
+        self._secretary_cache[user_id] = assistant
+        
+        return assistant
     
     async def get_secretary_assistant(self) -> dict:
         """Get secretary assistant from REST service.

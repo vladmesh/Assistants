@@ -109,4 +109,20 @@ class RestServiceClient:
         """
         response = await self._client.get(f"{self.base_url}/api/tools/{tool_id}")
         response.raise_for_status()
-        return Tool(**response.json()) 
+        return Tool(**response.json())
+        
+    async def get_user_secretary(self, user_id: int) -> Assistant:
+        """Get secretary assistant for user
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            Assistant object
+            
+        Raises:
+            httpx.HTTPError: If request fails
+        """
+        response = await self._client.get(f"{self.base_url}/api/users/{user_id}/secretary")
+        response.raise_for_status()
+        return Assistant(**response.json()) 
