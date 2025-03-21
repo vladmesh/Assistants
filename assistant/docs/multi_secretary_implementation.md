@@ -142,6 +142,7 @@ class UserSecretaryLink(BaseModel, table=True):
 ## Progress Tracking
 - [x] Database model design
 - [x] Database migrations
+- [x] REST API endpoints implementation
 - [ ] Orchestrator modifications
 - [ ] Secretary selection logic
 - [ ] Instance management implementation
@@ -165,24 +166,24 @@ class UserSecretaryLink(BaseModel, table=True):
 
 4. Fixed migration command in manage.py to use correct command name
 
-## Next Steps
-1. Implement REST API endpoints for:
-   - Getting available secretaries list
-   - Setting secretary for user
-   - Getting user's current secretary
+5. Implemented REST API endpoints:
+   - GET /api/secretaries/ - получение списка доступных секретарей
+   - GET /api/users/{user_id}/secretary - получение текущего секретаря пользователя
+   - POST /api/users/{user_id}/secretary/{secretary_id} - установка секретаря для пользователя
 
-2. Modify orchestrator to:
+## Next Steps
+1. Modify orchestrator to:
    - Handle multiple secretary instances
    - Select secretary based on user preferences
    - Manage secretary instances efficiently
 
-3. Implement context management:
+2. Implement context management:
    - Add user_id to context
    - Ensure context isolation
    - Add cleanup mechanism
 
-4. Add comprehensive testing:
-   - Unit tests for new models
+3. Add comprehensive testing:
+   - Unit tests for new models and API endpoints
    - Integration tests for secretary selection
    - Performance tests
 

@@ -24,20 +24,12 @@ class AssistantOrchestrator:
         self.rest_client = RestServiceClient()
         self.factory = AssistantFactory(settings)
         
-        # Initialize tools and assistant
-        self.tools = []
-        self.assistant = None
-        
         logger.info("Assistant service initialized")
     
     async def initialize(self):
-        """Initialize tools and assistant from REST service"""
+        """Initialize service"""
         try:
-            # Initialize main assistant with tools
-            self.assistant = await self.factory.create_main_assistant()
-            
             logger.info("Assistant service initialized")
-            
         except Exception as e:
             logger.error("Failed to initialize assistant service",
                         error=str(e),
@@ -48,22 +40,23 @@ class AssistantOrchestrator:
         """Process an incoming message."""
         try:
             # Get message data
-            user_id = str(message.get("user_id", ""))
+            if "user_id" not in message:
+                raise ValueError("Message must contain user_id")
+            user_id = int(message["user_id"])
             text = message.get("text", "")
-            
-            # Set user context for tools
-            for tool in self.tools:
-                if hasattr(tool, 'user_id'):
-                    tool.user_id = user_id
             
             logger.info("Processing message",
                        user_id=user_id,
                        message_length=len(text))
             
+            # Get user's secretary
+            secretary = await self.factory.get_user_secretary(user_id)
+            
             # Convert text to HumanMessage
             human_message = HumanMessage(content=text)
             
-            response = await self.assistant.process_message(human_message, user_id)
+            # Process message with user's secretary
+            response = await secretary.process_message(human_message, str(user_id))
             
             return {
                 "user_id": user_id,
