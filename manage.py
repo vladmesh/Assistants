@@ -32,7 +32,7 @@ def create_migration(message: str):
     
     # Create migration in the container
     result = subprocess.run(
-        f'docker exec {container_id} alembic revision --autogenerate -m "{message}"',
+        f'docker exec {container_id} python /app/manage.py migrate "{message}"',
         shell=True,
         capture_output=True,
         text=True
