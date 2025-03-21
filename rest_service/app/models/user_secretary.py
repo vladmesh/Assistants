@@ -1,6 +1,6 @@
 """User-Secretary relationship model"""
 from typing import Optional
-from datetime import datetime, UTC
+from datetime import datetime
 from uuid import UUID, uuid4
 from sqlmodel import Field, Relationship
 from .base import BaseModel
@@ -13,8 +13,8 @@ class UserSecretaryLink(BaseModel, table=True):
     user_id: int = Field(foreign_key="telegramuser.id")
     secretary_id: UUID = Field(foreign_key="assistant.id")
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
     
     # Relationships
     user: "TelegramUser" = Relationship(

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.routers import users, cron_jobs, calendar, assistants, tools, assistant_tools
+from app.routers import users, cron_jobs, calendar, assistants, tools, assistant_tools, secretaries
 from app.database import init_db
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
@@ -39,6 +39,7 @@ app.include_router(calendar.router, prefix="/api", tags=["Calendar"])
 app.include_router(assistants.router, prefix="/api", tags=["Assistants"])
 app.include_router(tools.router, prefix="/api", tags=["Tools"])
 app.include_router(assistant_tools.router, prefix="/api", tags=["Assistant Tools"])
+app.include_router(secretaries.router, prefix="/api", tags=["Secretaries"])
 
 @app.on_event("startup")
 async def startup_event():
