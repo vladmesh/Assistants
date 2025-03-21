@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 # Добавляем корневую директорию проекта в PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-# Импортируем все модели из пакета models
-from app.models import *
-
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -28,9 +25,17 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Импортируем все модели из пакета models
+from app.models import *
+
 # add your model's MetaData object here
 # for 'autogenerate' support
 target_metadata = SQLModel.metadata
+
+# Логируем все таблицы, которые видит SQLAlchemy
+logger.info("Available tables:")
+for table in target_metadata.tables:
+    logger.info(f"- {table}")
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
