@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     GOOGLE_CALENDAR_CREDENTIALS: Optional[str] = None
 
     class Config:
-        env_file = ".env"  # Включаем загрузку из .env для API ключей
+        env_file = ".env"
         case_sensitive = True
 
 @lru_cache()

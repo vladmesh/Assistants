@@ -112,7 +112,7 @@ class MessageQueue:
     async def close(self) -> None:
         """Close Redis connections."""
         try:
-            await self.redis.aclose()  # Use aclose() instead of close()
+            await self.redis.aclose()
             await self.pool.disconnect()
             
             logger.info("Message queue connections closed")
