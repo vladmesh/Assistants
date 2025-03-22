@@ -6,6 +6,11 @@ from tools.rest_service_tool import RestServiceTool
 from assistants.factory import AssistantFactory
 from services.rest_service import RestServiceClient
 from messages.base import HumanMessage
+from typing import Optional, List, Dict
+from uuid import UUID
+from langchain_core.messages import BaseMessage
+from assistants.base import BaseAssistant
+from tools.base import BaseTool
 
 logger = get_logger(__name__)
 
@@ -23,18 +28,10 @@ class AssistantOrchestrator:
         self.settings = settings
         self.rest_client = RestServiceClient()
         self.factory = AssistantFactory(settings)
+        self.secretaries: Dict[int, BaseAssistant] = {}
         
         logger.info("Assistant service initialized")
     
-    async def initialize(self):
-        """Initialize service"""
-        try:
-            logger.info("Assistant service initialized")
-        except Exception as e:
-            logger.error("Failed to initialize assistant service",
-                        error=str(e),
-                        exc_info=True)
-            raise
     
     async def process_message(self, message: dict) -> dict:
         """Process an incoming message."""
@@ -50,7 +47,11 @@ class AssistantOrchestrator:
                        message_length=len(text))
             
             # Get user's secretary
-            secretary = await self.factory.get_user_secretary(user_id)
+            if user_id in self.secretaries:
+                secretary = self.secretaries[user_id]
+            else:
+                secretary = await self.factory.get_user_secretary(user_id)
+                self.secretaries[user_id] = secretary
             
             # Convert text to HumanMessage
             human_message = HumanMessage(content=text)
@@ -79,8 +80,6 @@ class AssistantOrchestrator:
     async def listen_for_messages(self):
         """Listen for messages from Redis queue."""
         try:
-            await self.initialize()
-            
             logger.info("Starting message listener",
                        input_queue=self.settings.INPUT_QUEUE,
                        output_queue=self.settings.OUTPUT_QUEUE)

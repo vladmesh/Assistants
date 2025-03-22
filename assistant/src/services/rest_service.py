@@ -35,6 +35,14 @@ class Tool(BaseModel):
         """Get input schema as dictionary"""
         return json.loads(self.input_schema)
 
+class UserAssistantThread(BaseModel):
+    """User assistant thread model from REST service"""
+    id: UUID
+    user_id: str
+    assistant_id: UUID
+    thread_id: str
+    last_used: str
+
 class RestServiceClient:
     """Client for interacting with the REST service"""
     
@@ -125,4 +133,48 @@ class RestServiceClient:
         """
         response = await self._client.get(f"{self.base_url}/api/users/{user_id}/secretary")
         response.raise_for_status()
-        return Assistant(**response.json()) 
+        return Assistant(**response.json())
+
+    async def get_user_assistant_thread(self, user_id: str, assistant_id: UUID) -> Optional[UserAssistantThread]:
+        """Get thread for user-assistant pair
+        
+        Args:
+            user_id: User ID
+            assistant_id: Assistant ID
+            
+        Returns:
+            UserAssistantThread object if found, None otherwise
+        """
+        try:
+            response = await self._client.get(
+                f"{self.base_url}/api/users/{user_id}/assistants/{assistant_id}/thread"
+            )
+            response.raise_for_status()
+            return UserAssistantThread(**response.json())
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            raise
+
+    async def create_user_assistant_thread(
+        self,
+        user_id: str,
+        assistant_id: UUID,
+        thread_id: str
+    ) -> UserAssistantThread:
+        """Create or update thread for user-assistant pair
+        
+        Args:
+            user_id: User ID
+            assistant_id: Assistant ID
+            thread_id: OpenAI thread ID
+            
+        Returns:
+            Created/updated UserAssistantThread object
+        """
+        response = await self._client.post(
+            f"{self.base_url}/api/users/{user_id}/assistants/{assistant_id}/thread",
+            json={"thread_id": thread_id}
+        )
+        response.raise_for_status()
+        return UserAssistantThread(**response.json()) 

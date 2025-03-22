@@ -6,10 +6,14 @@ The project is divided into several independent microservices:
 - **assistant**  
   - Core engine for handling user messages and coordinating various LLM-based functionalities.
   - Manages context, threads, and asynchronous message processing via Redis.
+  - Supports multiple secretary instances with user-specific configurations.
+  - Implements secretary selection and caching through AssistantFactory.
+  - Handles user-secretary mapping and context isolation.
   
 - **rest_service**  
   - Provides a REST API for managing user data, assistant configurations, and related models.
   - Handles CRUD operations for assistants, tools, and scheduled tasks.
+  - Manages user-secretary mapping and secretary configurations.
   - Uses PostgreSQL for data storage and Alembic for database migrations.
   
 - **google_calendar_service**  
@@ -106,6 +110,11 @@ The project is divided into several independent microservices:
 - **Weather Tool:**  
   - Fetches and provides weather information (if integrated).
 
+- **Secretary Management Tool:**
+  - Handles user-secretary mapping
+  - Manages secretary configurations and preferences
+  - Provides secretary selection functionality
+
 ---
 
 This high-level summary encapsulates the primary components, deployment strategy, testing approach, and management scripts/tools of the Smart Assistant project.
@@ -113,11 +122,12 @@ This high-level summary encapsulates the primary components, deployment strategy
 # General Recommendations and Future Plans
 
 ## Best Practices & Internal Guidelines
-- **Minimal Changes:** Modify only what’s necessary and avoid optimizations without validation.
+- **Minimal Changes:** Modify only what's necessary and avoid optimizations without validation.
 - **Strict Verification:** Run tests for every change; verify service status and logs after deployments.
 - **Clear Communication:** Use English for code comments, commit messages, and documentation.
 - **Docker-First Approach:** Always manage containers using `docker compose` and check service status (e.g., using `docker compose ps`).
 - **Database Integrity:** Use synchronous migrations (psycopg2) for Alembic and log connection URLs for debugging.
+- **Secretary Management:** Ensure proper context isolation between different users' secretaries.
 
 ## Planned Enhancements
 - **Caching:** Implement Redis-based caching to speed up data retrieval.
@@ -126,11 +136,12 @@ This high-level summary encapsulates the primary components, deployment strategy
 - **Enhanced Testing:** Introduce more comprehensive end-to-end and performance tests, ensuring all tests run only within Docker.
 - **CI/CD Automation:** Automate Docker image builds, test executions, and deployments in the CI/CD pipeline.
 - **Improved Documentation:** Continuously update internal guides and documentation as features evolve.
+- **Secretary Features:** Add support for secretary switching, custom prompts, and performance monitoring.
 
 ## Future Roadmap
 - **Centralized Logging & Monitoring:** Integrate systems like ELK Stack, Prometheus, Grafana, and OpenTelemetry for better observability.
 - **Workflow Automation:** Explore integration with workflow tools (e.g., n8n) for advanced process automation.
 - **Code Refactoring:** Incrementally refactor code to improve modularity and performance without disrupting current functionality.
-
+- **Secretary Analytics:** Implement usage tracking and performance metrics for different secretary configurations.
 
 detailed information on each service in the "llm_context_**" files

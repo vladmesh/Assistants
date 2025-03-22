@@ -6,6 +6,8 @@ The assistant service is the core engine of the Smart Assistant project. It hand
 - Management of conversation context.
 - Coordination of tool invocations and delegation to sub-assistants.
 - Asynchronous message processing via Redis queues.
+- Supporting multiple secretary instances with user-specific configurations.
+- Maintaining context isolation between different users.
 
 ## 2. Directory Structure
 
@@ -63,6 +65,7 @@ assistant/src/
   - Coordinates incoming messages.
   - Determines which assistant or tool should handle a request.
   - Manages the lifecycle of messages from intake to response.
+  - Manages assistant instances
 - **Mechanism:**  
   - Listens to a Redis queue (e.g., `REDIS_QUEUE_TO_SECRETARY`).
   - Dispatches tasks based on message content and context.

@@ -77,7 +77,7 @@ Initial metadata requirements:
       "text": "Message content",
       "source": "tool",  # or "human", "system"
       "tool_name": "google_calendar",  # optional, for tool messages
-      "user_id": "user123"
+      "user_id": "user123"  # required for user identification
   }
   ```
 - Orchestrator should create appropriate message type based on source:
@@ -91,6 +91,16 @@ Initial metadata requirements:
   ```
 - All messages sent to LLM should be marked as "user" role in OpenAI format
 - Message string representation should include source and timestamp for context
+- Messages should be processed by the appropriate secretary based on user_id
+- Context should be isolated between different users' secretaries
+
+### 6. Multi-Secretary Support
+- Each message must include user_id for secretary selection
+- Secretary selection is handled by AssistantFactory
+- Secretary instances are cached per user
+- Context is isolated between different users
+- Secretary configurations are managed through REST API
+- Default secretary is used if no specific secretary is assigned
 
 ## Tasks Breakdown
 1. Message Type System Redesign
@@ -122,16 +132,25 @@ Initial metadata requirements:
    - Maintain compatibility with existing LangChain integration
    - Ensure smooth transition for existing code
    - Consider migration strategy for stored messages
+   - Support existing users with default secretary
 
 2. Performance
    - Minimize overhead from additional metadata
    - Consider message size impact
    - Optimize message processing
+   - Efficient secretary instance caching
 
 3. Error Handling
    - Define error message types
    - Implement proper error propagation
    - Add validation for required fields
+   - Handle missing or invalid user_id
+
+4. Secretary Management
+   - Efficient secretary instance lifecycle
+   - Context isolation between users
+   - Secretary configuration updates
+   - Performance monitoring
 
 ## Implementation Plan
 1. Base Message Class
@@ -165,12 +184,16 @@ Initial metadata requirements:
    - Test source setting
    - Test metadata handling
    - Test string representation
+   - Test secretary selection
+   - Test context isolation
 
 2. Integration Tests
    - Test message flow
    - Test thread management
    - Test storage and retrieval
    - Test LLM compatibility
+   - Test multi-secretary scenarios
+   - Test secretary switching
 
 ## Migration Plan
 1. Code Updates
