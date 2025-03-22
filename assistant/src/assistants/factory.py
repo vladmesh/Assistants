@@ -20,8 +20,15 @@ class AssistantFactory:
         self._secretary_cache: Dict[int, BaseAssistant] = {}
     
     async def close(self):
-        """Close REST client connection"""
+        """Close REST client connection and all assistant instances"""
         await self.rest_client.close()
+        
+        # Close all assistant instances
+        for assistant in self._secretary_cache.values():
+            if hasattr(assistant, 'close'):
+                await assistant.close()
+        
+        self._secretary_cache.clear()
     
     async def get_user_secretary(self, user_id: int) -> BaseAssistant:
         """Get or create secretary assistant for user.

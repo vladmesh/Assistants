@@ -7,10 +7,12 @@ import asyncio
 import time
 from langchain_core.messages import BaseMessage
 from messages.base import BaseMessage as CustomBaseMessage, HumanMessage, SecretaryMessage, ToolMessage, SystemMessage
+from uuid import UUID
 
 from assistants.base import BaseAssistant
 from tools.base import BaseTool
 from config.logger import get_logger
+from services.rest_service import RestServiceClient
 
 # Configure logging
 logger = get_logger(__name__)
@@ -52,6 +54,7 @@ class OpenAIAssistant(BaseAssistant):
         self.client = OpenAI()
         self.thread_id: Optional[str] = None
         self.tool_instances = {tool.name: tool for tool in (tool_instances or [])}
+        self.rest_client = RestServiceClient()
         
         # Create or retrieve assistant
         if assistant_id:
@@ -73,6 +76,10 @@ class OpenAIAssistant(BaseAssistant):
                 model=model,
                 tools=tools
             )
+
+    async def close(self):
+        """Close REST client connection"""
+        await self.rest_client.close()
 
     def update_assistant(
         self,
@@ -136,6 +143,55 @@ class OpenAIAssistant(BaseAssistant):
             "content": str(message) if isinstance(message, CustomBaseMessage) else message.content
         }
 
+    async def _get_or_create_thread(self, user_id: Optional[str] = None) -> str:
+        """Get or create thread for user
+        
+        Args:
+            user_id: Optional user identifier
+            
+        Returns:
+            Thread ID
+        """
+        if not user_id:
+            # Create temporary thread for non-user messages
+            if not self.thread_id:
+                logger.info("creating_temporary_thread")
+                thread = self.client.beta.threads.create()
+                self.thread_id = thread.id
+                logger.info("temporary_thread_created", thread_id=self.thread_id)
+            return self.thread_id
+            
+        # Check if we already have a thread
+        if self.thread_id:
+            logger.info("using_existing_thread", thread_id=self.thread_id)
+            return self.thread_id
+            
+        # Try to get existing thread from REST service
+        thread_data = await self.rest_client.get_user_assistant_thread(
+            user_id=user_id,
+            assistant_id=UUID(self.assistant.id)
+        )
+        
+        if thread_data:
+            logger.info("found_existing_thread", thread_id=thread_data.thread_id)
+            self.thread_id = thread_data.thread_id
+            return self.thread_id
+            
+        # Create new thread
+        logger.info("creating_new_thread")
+        thread = self.client.beta.threads.create()
+        self.thread_id = thread.id
+        
+        # Save thread to REST service
+        await self.rest_client.create_user_assistant_thread(
+            user_id=user_id,
+            assistant_id=UUID(self.assistant.id),
+            thread_id=self.thread_id
+        )
+        logger.info("thread_created_and_saved", thread_id=self.thread_id)
+        
+        return self.thread_id
+
     async def process_message(self, message: BaseMessage, user_id: Optional[str] = None) -> str:
         """Process a message using the OpenAI Assistant
         
@@ -150,12 +206,8 @@ class OpenAIAssistant(BaseAssistant):
             # Set tool context
             self._set_tool_context(user_id)
             
-            # Create thread if needed
-            if not self.thread_id:
-                logger.info("creating_thread")
-                thread = self.client.beta.threads.create()
-                self.thread_id = thread.id
-                logger.info("thread_created", thread_id=self.thread_id)
+            # Get or create thread
+            self.thread_id = await self._get_or_create_thread(user_id)
             
             # Check for active runs and wait for them to complete
             runs = self.client.beta.threads.runs.list(thread_id=self.thread_id)
@@ -225,7 +277,6 @@ class OpenAIAssistant(BaseAssistant):
                             
                             # Execute tool call
                             result = await self._execute_tool_call(function_name, arguments)
-
                             
                             tool_outputs.append({
                                 "tool_call_id": tool_call.id,
