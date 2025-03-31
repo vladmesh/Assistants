@@ -8,6 +8,10 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 ENV PYTHONPATH=/src
 
-COPY . .
+# Copy source code first
+COPY src/ .
+
+# Then copy tests
+COPY tests/ tests/
 
 CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "tests/"] 

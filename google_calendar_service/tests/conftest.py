@@ -1,10 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from src.main import app
-from src.services.calendar import GoogleCalendarService
-from src.services.rest_service import RestService
+from main import app
+from services.calendar import GoogleCalendarService
+from services.rest_service import RestService
 
 
 @pytest.fixture
