@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Добавляем путь к src в PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from assistants.secretary import SecretaryLLMChat
+from assistants.llm_chat import BaseLLMChat
 from assistants.factory import AssistantFactory
 from services.rest_service import RestServiceClient
 from messages.base import HumanMessage

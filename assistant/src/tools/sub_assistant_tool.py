@@ -1,12 +1,12 @@
 from typing import Optional, Type, ClassVar
 from tools.base import BaseTool, SubAssistantSchema
-from assistants.sub_assistant import SubAssistant
+from assistants.llm_chat import BaseLLMChat
 from config.logger import get_logger
 
 logger = get_logger(__name__)
 
 class SubAssistantTool(BaseTool):
-    """Tool wrapper for SubAssistant."""
+    """Tool wrapper for BaseLLMChat."""
     NAME: ClassVar[str] = "sub_assistant"
     DESCRIPTION: ClassVar[str] = """Инструмент для делегирования задач специализированному ассистенту.
     Используйте его, когда нужно выполнить специфическую задачу, требующую глубокого понимания контекста.
@@ -22,12 +22,12 @@ class SubAssistantTool(BaseTool):
     
     name: str = NAME
     description: str = DESCRIPTION
-    sub_assistant: Optional[SubAssistant] = None
+    sub_assistant: Optional[BaseLLMChat] = None
     assistant_id: Optional[str] = None
     
     def __init__(
         self,
-        sub_assistant: SubAssistant,
+        sub_assistant: BaseLLMChat,
         assistant_id: Optional[str] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,

@@ -39,9 +39,9 @@ class RestServiceTool(BaseModel):
             if not self.settings:
                 raise ValueError("settings is required for calendar tools")
             if self.name == "calendar_create":
-                return CalendarCreateTool(settings=self.settings)
+                return CalendarCreateTool(settings=self.settings, user_id=None)  # Will be set later
             elif self.name == "calendar_list":
-                return CalendarListTool(settings=self.settings)
+                return CalendarListTool(settings=self.settings, user_id=None)  # Will be set later
             else:
                 raise ValueError(f"Unknown calendar tool name: {self.name}")
         else:

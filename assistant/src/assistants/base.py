@@ -2,6 +2,9 @@
 from typing import List, Optional, Any
 from abc import ABC, abstractmethod
 
+from messages.base import BaseMessage
+
+
 class BaseAssistant(ABC):
     """Base class for all assistants"""
     def __init__(
@@ -26,7 +29,7 @@ class BaseAssistant(ABC):
                 tool.user_id = user_id
 
     @abstractmethod
-    async def process_message(self, message: str, user_id: Optional[str] = None) -> str:
+    async def process_message(self, message: BaseMessage, user_id: Optional[str] = None) -> str:
         """Process a message and return response
         
         Args:

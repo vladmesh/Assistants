@@ -6,8 +6,7 @@ from typing import Any, Optional
 # Добавляем путь к src в PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from assistants.secretary import SecretaryLLMChat
-from assistants.sub_assistant import SubAssistantLLMChat
+from assistants.llm_chat import BaseLLMChat
 from messages.base import HumanMessage
 from langchain.tools import BaseTool
 from langchain_openai import ChatOpenAI
@@ -34,10 +33,11 @@ class TestSecretaryLLM:
         3. Получение осмысленного ответа
         """
         # Arrange
-        secretary = SecretaryLLMChat(
+        secretary = BaseLLMChat(
             llm=ChatOpenAI(model="gpt-4-turbo-preview", temperature=0),
             name="test_secretary",
-            instructions="Ты - ассистент по имени test_secretary. Всегда представляйся этим именем, когда тебя спрашивают как тебя зовут."
+            instructions="Ты - ассистент по имени test_secretary. Всегда представляйся этим именем, когда тебя спрашивают как тебя зовут.",
+            is_secretary=True
         )
         
         # Act
@@ -78,11 +78,12 @@ class TestSecretaryLLM:
                 return "12:00 PM"
 
         # Arrange
-        secretary = SecretaryLLMChat(
+        secretary = BaseLLMChat(
             llm=ChatOpenAI(model="gpt-4-turbo-preview", temperature=0),
             name="test_secretary",
             instructions="Ты - ассистент по имени test_secretary. Используй инструмент get_current_time, когда тебя спрашивают о времени.",
-            tools=[TestTool()]
+            tools=[TestTool()],
+            is_secretary=True
         )
 
         # Act
@@ -111,13 +112,14 @@ class TestSecretaryLLM:
         3. Корректную передачу ответа от суб-ассистента пользователю
         """
         # Создаем моковый суб-ассистент для отслеживания вызовов
-        class MockSubAssistant(SubAssistantLLMChat):
+        class MockSubAssistant(BaseLLMChat):
             def __init__(self):
                 self.calls = []
                 super().__init__(
                     llm=ChatOpenAI(model="gpt-4-turbo-preview", temperature=0),
                     name="expert",
-                    instructions="Mock instructions"
+                    instructions="Mock instructions",
+                    is_secretary=False
                 )
             
             async def process_message(self, message: str, user_id: Optional[str] = None) -> str:
@@ -133,7 +135,7 @@ class TestSecretaryLLM:
 
         # Создаем инструмент для работы с суб-ассистентом
         class SubAssistantTool(ToolAssistant):
-            def __init__(self, assistant: SubAssistantLLMChat):
+            def __init__(self, assistant: BaseLLMChat):
                 super().__init__(
                     name="ask_expert",
                     description="Ask expert assistant for help with technical questions",
@@ -150,7 +152,7 @@ class TestSecretaryLLM:
         # Arrange - создаем основного ассистента
         sub_assistant_tool = SubAssistantTool(mock_sub_assistant)
         
-        secretary = SecretaryLLMChat(
+        secretary = BaseLLMChat(
             llm=ChatOpenAI(model="gpt-4-turbo-preview", temperature=0),
             name="test_secretary",
             instructions="""Ты - ассистент по имени test_secretary. 
@@ -165,7 +167,8 @@ class TestSecretaryLLM:
             ВАЖНО: Когда получаешь ответ от ask_expert, ты ДОЛЖЕН вернуть его пользователю ТОЧНО в том виде, 
             в каком получил, БЕЗ КАКИХ-ЛИБО ИЗМЕНЕНИЙ. Не убирай префикс "Технический ответ:", 
             не изменяй формулировки, не добавляй свой текст до или после.""",
-            tools=[sub_assistant_tool]
+            tools=[sub_assistant_tool],
+            is_secretary=True
         )
 
         # Act - отправляем несколько разных вопросов
