@@ -1,6 +1,5 @@
 """Base LLM chat assistant implementation"""
 
-import asyncio
 from abc import ABC
 from datetime import datetime
 from typing import Annotated, Any, List, Literal, Optional
@@ -8,8 +7,8 @@ from typing import Annotated, Any, List, Literal, Optional
 from assistants.base import BaseAssistant
 from config.logger import get_logger
 from langchain_core.language_models import BaseLanguageModel
-from langchain_core.messages import AIMessage, SystemMessage
-from langgraph.graph import END, START, StateGraph
+from langchain_core.messages import AIMessage
+from langgraph.graph import START, StateGraph
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from messages.base import BaseMessage, HumanMessage, SystemMessage

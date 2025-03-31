@@ -1,6 +1,6 @@
 """Error handling utilities for assistants"""
 
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional
 
 from src.config.logger import get_logger
 
@@ -34,43 +34,29 @@ class ToolError(Exception):
 class MessageProcessingError(AssistantError):
     """Raised when an assistant fails to process a message"""
 
-    pass
-
 
 class ToolExecutionError(ToolError):
     """Raised when a tool fails to execute"""
-
-    pass
 
 
 class InvalidInputError(Exception):
     """Raised when input validation fails"""
 
-    pass
-
 
 class ConfigurationError(Exception):
     """Raised when there is a configuration error"""
-
-    pass
 
 
 class ModelError(AssistantError):
     """Error raised when the language model fails"""
 
-    pass
-
 
 class ValidationError(AssistantError):
     """Error raised when input validation fails"""
 
-    pass
-
 
 class RateLimitError(AssistantError):
     """Error raised when rate limits are exceeded"""
-
-    pass
 
 
 def handle_assistant_error(

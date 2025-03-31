@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from langchain_core.messages import BaseMessage as LangBaseMessage
 from langchain_core.messages import HumanMessage as LangHumanMessage
@@ -153,7 +153,10 @@ class ToolMessage(LangToolMessage):
 
     def __str__(self) -> str:
         """Return string representation of the message."""
-        return f"[{self.source}:{self.tool_name}] ({self._timestamp.isoformat()}) {self.content}"
+        return (
+            f"[{self.source}:{self.tool_name}] ({self._timestamp.isoformat()})"
+            f" {self.content}"
+        )
 
 
 class SystemMessage(BaseMessage, LangSystemMessage):

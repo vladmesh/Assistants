@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import ClassVar, Optional, Type, Union
+from typing import ClassVar, Optional, Type
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -17,7 +17,9 @@ class ReminderSchema(BaseModel):
     message: str = Field(..., description="Текст напоминания")
     delay_seconds: Optional[int] = Field(
         None,
-        description="Через сколько секунд отправить напоминание (альтернатива datetime)",
+        description=(
+            "Через сколько секунд отправить напоминание (альтернатива datetime)"
+        ),
     )
     datetime_str: Optional[str] = Field(
         None, description="Дата и время напоминания в формате ISO (YYYY-MM-DD HH:MM)"
@@ -63,11 +65,11 @@ class ReminderTool(BaseTool):
         str
     ] = """Инструмент для создания напоминаний.
     Используйте его, когда пользователь просит напомнить о чем-то.
-    
+
     Есть два способа указать время напоминания:
     1. delay_seconds - через сколько секунд отправить напоминание
     2. datetime_str + timezone - конкретные дата/время и часовой пояс
-    
+
     Примеры использования:
     - "Напомни мне позвонить маме через 3600 секунд" (через час)
     - "Создай напоминание о встрече на 2024-03-15 15:00 Europe/Moscow"
@@ -214,7 +216,10 @@ class ReminderTool(BaseTool):
                     )
                 else:
                     local_time = reminder_datetime.astimezone(ZoneInfo(timezone))
-                    return f"Напоминание создано: {message} на {local_time.strftime('%Y-%m-%d %H:%M %Z')}"
+                    return (
+                        f"Напоминание создано: {message} на"
+                        f" {local_time.strftime('%Y-%m-%d %H:%M %Z')}"
+                    )
 
             except ToolError:
                 raise
