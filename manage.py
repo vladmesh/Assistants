@@ -100,6 +100,12 @@ def stop_service(service: Optional[str] = None) -> int:
         return run_command(f"docker compose stop {service}")
     return run_command("docker compose down")
 
+def run_black(service: Optional[str] = None) -> int:
+    """Run black formatter for all services or a specific service."""
+    if service:
+        return run_command(f"black {service}/src")
+    return run_command("black */src")
+
 def main():
     parser = argparse.ArgumentParser(description="Manage the project")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -131,6 +137,10 @@ def main():
     stop_parser = subparsers.add_parser("stop", help="Stop a service")
     stop_parser.add_argument("--service", help="Service to stop")
 
+    # Run black command
+    black_parser = subparsers.add_parser("black", help="Run black formatter")
+    black_parser.add_argument("--service", help="Service to format")
+
     args = parser.parse_args()
 
     if args.command == "migrate":
@@ -147,6 +157,8 @@ def main():
         return start_service(args.service)
     elif args.command == "stop":
         return stop_service(args.service)
+    elif args.command == "black":
+        return run_black(args.service)
     else:
         parser.print_help()
         return 1

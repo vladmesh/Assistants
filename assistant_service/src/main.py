@@ -7,6 +7,7 @@ from orchestrator import AssistantOrchestrator
 logger = get_logger(__name__)
 load_dotenv()  # Load .env for API keys
 
+
 async def main():
     """Main entry point."""
     try:
@@ -14,10 +15,9 @@ async def main():
         service = AssistantOrchestrator(settings)
         await service.listen_for_messages()
     except Exception as e:
-        logger.error("Service failed",
-                    error=str(e),
-                    exc_info=True)
+        logger.error("Service failed", error=str(e), exc_info=True)
         raise
 
+
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

@@ -1,4 +1,5 @@
 """Database initialization and session management"""
+
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
@@ -16,7 +17,7 @@ async_engine = create_async_engine(
     echo=settings.DB_ECHO,
     pool_pre_ping=True,
     pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW
+    max_overflow=settings.DB_MAX_OVERFLOW,
 )
 
 # Create session factory
@@ -25,8 +26,9 @@ AsyncSessionLocal = sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
     autocommit=False,
-    autoflush=False
+    autoflush=False,
 )
+
 
 async def drop_all_tables() -> None:
     """Drop and recreate public schema"""
@@ -45,6 +47,7 @@ async def init_db() -> None:
     # Create test data
     # async with AsyncSessionLocal() as session:
     #    await create_test_data(session)
+
 
 async def get_session() -> AsyncSession:
     """Get database session"""

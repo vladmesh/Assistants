@@ -9,8 +9,8 @@ from pytz import utc
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -31,11 +31,11 @@ def start_scheduler():
             "interval",
             minutes=1,
             id="update_jobs_from_rest",
-            name="update_jobs_from_rest"
+            name="update_jobs_from_rest",
         )
         scheduler.start()
         logger.info("Планировщик успешно запущен")
-        
+
         # Держим процесс активным
         try:
             while True:
@@ -43,7 +43,7 @@ def start_scheduler():
         except KeyboardInterrupt:
             scheduler.shutdown()
             logger.info("Планировщик остановлен")
-            
+
     except Exception as e:
         logger.error(f"Ошибка при запуске планировщика: {e}")
         scheduler.shutdown()
@@ -56,24 +56,30 @@ def update_jobs_from_rest():
     while retries < MAX_RETRIES:
         try:
             logger.info("Начинаем обновление списка задач из REST-сервиса...")
-            logger.info(f"REST_SERVICE_URL: {os.getenv('REST_SERVICE_URL', 'http://rest_service:8000')}")
+            logger.info(
+                f"REST_SERVICE_URL: {os.getenv('REST_SERVICE_URL', 'http://rest_service:8000')}"
+            )
             jobs = fetch_scheduled_jobs()
             logger.info(f"Получено {len(jobs)} задач из REST-сервиса")
-            
+
             # Получаем текущие задачи в планировщике
             current_scheduler_jobs = scheduler.get_jobs()
-            logger.info(f"Текущее количество задач в планировщике: {len(current_scheduler_jobs)}")
-            
+            logger.info(
+                f"Текущее количество задач в планировщике: {len(current_scheduler_jobs)}"
+            )
+
             # Удаляем задачи, которых больше нет в REST-сервисе
             current_jobs = {f"job_{job['id']}" for job in jobs}
             logger.info(f"ID задач из REST-сервиса: {current_jobs}")
-            
+
             for job in current_scheduler_jobs:
                 logger.info(f"Проверяем задачу планировщика: {job.id} ({job.name})")
-                if job.id not in current_jobs and job.id != "update_jobs_from_rest":  # Проверяем точное совпадение ID
+                if (
+                    job.id not in current_jobs and job.id != "update_jobs_from_rest"
+                ):  # Проверяем точное совпадение ID
                     scheduler.remove_job(job.id)
                     logger.info(f"Задача {job.name} удалена из планировщика")
-            
+
             # Добавляем или обновляем задачи
             for job in jobs:
                 job_id = f"job_{job['id']}"
@@ -90,22 +96,30 @@ def update_jobs_from_rest():
                             args=[job],
                             **cron_args,
                         )
-                        logger.info(f"Задача {job['name']} успешно добавлена в планировщик")
+                        logger.info(
+                            f"Задача {job['name']} успешно добавлена в планировщик"
+                        )
                     except Exception as e:
-                        logger.error(f"Ошибка при добавлении задачи {job['name']}: {str(e)}")
+                        logger.error(
+                            f"Ошибка при добавлении задачи {job['name']}: {str(e)}"
+                        )
                 else:
                     logger.info(f"Задача {job['name']} уже существует в планировщике")
-            
+
             logger.info("Обновление списка задач успешно завершено")
             break  # Выходим из цикла после успешного обновления
-            
+
         except Exception as e:
             retries += 1
-            logger.error(f"Ошибка при обновлении задач (попытка {retries}/{MAX_RETRIES}): {str(e)}")
+            logger.error(
+                f"Ошибка при обновлении задач (попытка {retries}/{MAX_RETRIES}): {str(e)}"
+            )
             if retries < MAX_RETRIES:
                 time.sleep(RETRY_DELAY)
             else:
-                logger.error("Превышено максимальное количество попыток обновления задач")
+                logger.error(
+                    "Превышено максимальное количество попыток обновления задач"
+                )
                 raise  # Пробрасываем исключение дальше
 
 
@@ -124,7 +138,7 @@ def parse_cron_expression(cron_expression: str) -> dict:
         "day": parts[2],
         "month": parts[3],
         "day_of_week": parts[4],
-        "timezone": utc  # Явно указываем UTC для каждой задачи
+        "timezone": utc,  # Явно указываем UTC для каждой задачи
     }
 
 

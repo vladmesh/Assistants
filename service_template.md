@@ -183,7 +183,7 @@ class ExternalService:
 ```dockerfile
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /src
 
 # Install Poetry
 RUN pip install poetry
@@ -213,9 +213,7 @@ services:
       dockerfile: Dockerfile.test
     environment:
       - TESTING=1
-    volumes:
-      - .:/app
-    command: pytest
+      - PYTHONPATH=/src
 ```
 
 ### 10. pyproject.toml

@@ -17,7 +17,7 @@ settings = Settings()
 app = FastAPI(
     title="Google Calendar Service",
     description="Service for working with Google Calendar",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add CORS middleware
@@ -42,10 +42,12 @@ app.state.redis_service = redis_service
 # Include API routes
 app.include_router(router)
 
+
 @app.on_event("startup")
 async def startup_event():
     """Startup event handler"""
     logger.info("Starting Google Calendar service")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -54,6 +56,8 @@ async def shutdown_event():
     await redis_service.close()
     logger.info("Shutting down Google Calendar service")
 
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

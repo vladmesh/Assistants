@@ -1,10 +1,13 @@
 """Tool data validation and transformation from REST service"""
+
 from typing import Optional
 from pydantic import BaseModel
 from config.settings import Settings
 
+
 class RestServiceTool(BaseModel):
     """Tool data from REST service"""
+
     id: str
     name: str
     tool_type: str
@@ -31,7 +34,7 @@ class RestServiceTool(BaseModel):
                 assistant_id=self.assistant_id,
                 name=self.name,
                 description=self.description,
-                user_id=None  # Will be set later
+                user_id=None,  # Will be set later
             )
         elif self.tool_type == "reminder":
             return ReminderTool()
@@ -39,10 +42,14 @@ class RestServiceTool(BaseModel):
             if not self.settings:
                 raise ValueError("settings is required for calendar tools")
             if self.name == "calendar_create":
-                return CalendarCreateTool(settings=self.settings, user_id=None)  # Will be set later
+                return CalendarCreateTool(
+                    settings=self.settings, user_id=None
+                )  # Will be set later
             elif self.name == "calendar_list":
-                return CalendarListTool(settings=self.settings, user_id=None)  # Will be set later
+                return CalendarListTool(
+                    settings=self.settings, user_id=None
+                )  # Will be set later
             else:
                 raise ValueError(f"Unknown calendar tool name: {self.name}")
         else:
-            raise ValueError(f"Unknown tool type: {self.tool_type}") 
+            raise ValueError(f"Unknown tool type: {self.tool_type}")

@@ -7,31 +7,31 @@ from .assistant import (
     Tool,
     ToolType,
     AssistantToolLink,
-    UserAssistantThread
+    UserAssistantThread,
 )
 from .cron import (
     CronJob,
     CronJobType,
     CronJobStatus,
     CronJobNotification,
-    CronJobRecord
+    CronJobRecord,
 )
 from .user_secretary import UserSecretaryLink
 
 __all__ = [
-    'BaseModel',
-    'TelegramUser',
-    'CalendarCredentials',
-    'Assistant',
-    'AssistantType',
-    'Tool',
-    'ToolType',
-    'AssistantToolLink',
-    'UserAssistantThread',
-    'CronJob',
-    'CronJobType',
-    'CronJobStatus',
-    'CronJobNotification',
-    'CronJobRecord',
-    'UserSecretaryLink'
-] 
+    "BaseModel",
+    "TelegramUser",
+    "CalendarCredentials",
+    "Assistant",
+    "AssistantType",
+    "Tool",
+    "ToolType",
+    "AssistantToolLink",
+    "UserAssistantThread",
+    "CronJob",
+    "CronJobType",
+    "CronJobStatus",
+    "CronJobNotification",
+    "CronJobRecord",
+    "UserSecretaryLink",
+]
