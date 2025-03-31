@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from sqlmodel import Field, Relationship
@@ -28,7 +28,9 @@ class CronJob(BaseModel, table=True):
     is_active: bool = Field(default=True)
 
     # Relationships
-    user: Optional["TelegramUser"] = Relationship(back_populates="cronjobs")
+    user: Optional["TelegramUser"] = Relationship(  # noqa: F821
+        back_populates="cronjobs"
+    )
 
 
 class CronJobNotification(BaseModel, table=True):

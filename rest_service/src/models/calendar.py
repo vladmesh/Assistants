@@ -14,4 +14,6 @@ class CalendarCredentials(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationships
-    user: Optional["TelegramUser"] = Relationship(back_populates="calendar_credentials")
+    user: Optional["TelegramUser"] = Relationship(  # noqa: F821
+        back_populates="calendar_credentials"
+    )

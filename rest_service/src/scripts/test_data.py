@@ -1,6 +1,6 @@
 """Test data initialization script"""
 
-from models import Assistant, AssistantToolLink, TelegramUser
+from models import Assistant, TelegramUser
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 

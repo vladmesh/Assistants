@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 async def create_secretary_tools(db: AsyncSession) -> list[AssistantToolLink]:
     """Create Secretary-Tool relationship fixtures"""
     # Get secretary assistant from DB
-    query = select(Assistant).where(Assistant.is_secretary == True)
+    query = select(Assistant).where(Assistant.is_secretary.is_(True))
     result = await db.execute(query)
     secretary = result.scalar_one_or_none()
     if not secretary:

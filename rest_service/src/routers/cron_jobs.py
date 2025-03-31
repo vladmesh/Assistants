@@ -2,7 +2,7 @@ from typing import Optional
 
 from database import get_session
 from fastapi import APIRouter, Depends, HTTPException
-from models import CronJob, CronJobStatus, CronJobType, TelegramUser
+from models import CronJob, CronJobType, TelegramUser
 from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession

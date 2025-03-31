@@ -8,8 +8,6 @@ def run_alembic_command(args: List[str]) -> None:
     """Run alembic command with given arguments."""
     os.environ.setdefault("PYTHONPATH", "/app")
     from alembic.config import Config
-    from alembic.runtime.migration import MigrationContext
-    from alembic.script import ScriptDirectory
 
     alembic_cfg = Config("alembic.ini")
     command = args[0]

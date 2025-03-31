@@ -4,6 +4,8 @@ from sqlalchemy import BigInteger, Column
 from sqlmodel import Field, Relationship
 
 from .base import BaseModel
+from .calendar import CalendarCredentials
+from .cron import CronJob
 
 
 class TelegramUser(BaseModel, table=True):
@@ -12,10 +14,10 @@ class TelegramUser(BaseModel, table=True):
     username: Optional[str]
 
     # Relationships
-    cronjobs: List["CronJob"] = Relationship(back_populates="user")
-    calendar_credentials: Optional["CalendarCredentials"] = Relationship(
+    cronjobs: List[CronJob] = Relationship(back_populates="user")
+    calendar_credentials: Optional[CalendarCredentials] = Relationship(
         back_populates="user"
     )
-    secretary_links: List["UserSecretaryLink"] = Relationship(
+    secretary_links: List["UserSecretaryLink"] = Relationship(  # noqa: F821
         back_populates="user", sa_relationship_kwargs={"lazy": "selectin"}
     )
