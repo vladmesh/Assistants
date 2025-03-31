@@ -1,8 +1,7 @@
 from typing import List, Optional, Dict
 from .base import BaseAssistant
 from .openai_assistant import OpenAIAssistant
-from .secretary import SecretaryLLMChat
-from .sub_assistant import SubAssistantLLMChat
+from .llm_chat import BaseLLMChat
 from tools.base import BaseTool
 from config.settings import Settings
 from langchain_openai import ChatOpenAI
@@ -70,11 +69,13 @@ class AssistantFactory:
                 tool_instances=tools
             )
         elif secretary.assistant_type == "llm":
-            assistant = SecretaryLLMChat(
+            assistant = BaseLLMChat(
                 llm=ChatOpenAI(model=secretary.model),
                 name=secretary.name,
                 instructions=secretary.instructions,
-                tools=tools
+                tools=tools,
+                is_secretary=True,
+                assistant_id=str(secretary.id)
             )
         else:
             raise ValueError(f"Unknown assistant type: {secretary.assistant_type}")
@@ -177,11 +178,12 @@ class AssistantFactory:
                 tool_instances=tools
             )
         elif secretary.assistant_type == "llm":
-            return SecretaryLLMChat(
+            return BaseLLMChat(
                 llm=ChatOpenAI(model=secretary.model),
                 name=secretary.name,
                 instructions=secretary.instructions,
-                tools=tools
+                tools=tools,
+                is_secretary=True
             )
         else:
             raise ValueError(f"Unknown assistant type: {secretary.assistant_type}")
@@ -207,11 +209,12 @@ class AssistantFactory:
                 tool_instances=tools or []
             )
         elif assistant_data.assistant_type == "llm":
-            return SubAssistantLLMChat(
+            return BaseLLMChat(
                 llm=ChatOpenAI(model=assistant_data.model),
                 name=assistant_data.name,
                 instructions=assistant_data.instructions,
-                tools=tools or []
+                tools=tools or [],
+                is_secretary=False
             )
         else:
             raise ValueError(f"Unknown assistant type: {assistant_data.assistant_type}") 

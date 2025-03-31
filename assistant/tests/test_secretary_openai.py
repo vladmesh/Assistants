@@ -7,8 +7,7 @@ from typing import Any, Optional
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from assistants.openai_assistant import OpenAIAssistant
-from assistants.secretary import SecretaryLLMChat
-from assistants.sub_assistant import SubAssistantLLMChat
+from assistants.llm_chat import BaseLLMChat
 from messages.base import HumanMessage
 from langchain.tools import BaseTool
 from langchain_openai import ChatOpenAI
@@ -120,13 +119,14 @@ class TestSecretaryOpenAI:
             pytest.skip("OPENAI_ASSISTANT_ID not set")
 
         # Создаем моковый суб-ассистент для отслеживания вызовов
-        class MockSubAssistant(SubAssistantLLMChat):
+        class MockSubAssistant(BaseLLMChat):
             def __init__(self):
                 self.calls = []
                 super().__init__(
                     llm=ChatOpenAI(model="gpt-4-turbo-preview", temperature=0),
                     name="expert",
-                    instructions="Mock instructions"
+                    instructions="Mock instructions",
+                    is_secretary=False
                 )
             
             async def process_message(self, message: str, user_id: Optional[str] = None) -> str:
@@ -142,7 +142,7 @@ class TestSecretaryOpenAI:
 
         # Создаем инструмент для работы с суб-ассистентом
         class SubAssistantTool(ToolAssistant):
-            def __init__(self, assistant: SubAssistantLLMChat):
+            def __init__(self, assistant: BaseLLMChat):
                 super().__init__(
                     name="ask_expert",
                     description="Ask expert assistant for help with technical questions",

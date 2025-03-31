@@ -13,12 +13,9 @@ The assistant service is the core engine of the Smart Assistant project. It hand
 
 assistant/src/
 ├── assistants/           # Implementations of various assistant types
-│   ├── base.py           # Abstract base class for all assistants
+│   ├── base.py           # Base implementation for all assistants
 │   ├── factory.py        # Factory for creating main and sub-assistants
-│   ├── llm_chat.py       # Base implementation for LLM-based chat assistants
 │   ├── openai_assistant.py  # Assistant integrating with the OpenAI API
-│   ├── secretary.py      # Primary (Secretary) assistant managing overall interactions
-│   └── sub_assistant.py  # Specialized sub-assistants for delegated tasks
 ├── tools/                # Tools used by assistants to extend functionality
 │   ├── base.py           # Base tool class with common functionality
 │   ├── calendar_tool.py  # Tool for calendar operations
@@ -74,20 +71,17 @@ assistant/src/
 - **Purpose:**  
   - Instantiates various types of assistants based on configuration and request context.
 - **Types Created:**  
-  - Main assistant (SecretaryLLMChat).
-  - Sub-assistants (SubAssistantLLMChat) for domain-specific tasks.
+  - Main assistant (BaseLLMChat with is_secretary=True).
+  - Sub-assistants (BaseLLMChat with is_secretary=False) for domain-specific tasks.
 
 ### Assistant Implementations
-- **BaseAssistant:**  
-  - Provides an abstract foundation for common assistant functionality.
+- **BaseLLMChat:**  
+  - Provides the foundation for all assistant functionality.
+  - Supports both secretary and sub-assistant roles through is_secretary flag.
+  - Routes requests to appropriate tools or sub-assistants.
 - **OpenAIAssistant:**  
   - Integrates with the OpenAI API.
   - Uses thread-based context to maintain conversation state.
-- **SecretaryLLMChat:**  
-  - Acts as the primary interface for user interactions.
-  - Routes requests to appropriate tools or sub-assistants.
-- **SubAssistantLLMChat:**  
-  - Specialized assistants designed to handle delegated, specific tasks.
 
 ### Tools
 - **Purpose:**  

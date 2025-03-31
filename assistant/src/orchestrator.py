@@ -2,15 +2,12 @@ import json
 import redis.asyncio as redis
 from config.logger import get_logger
 from config.settings import Settings
-from tools.rest_service_tool import RestServiceTool
 from assistants.factory import AssistantFactory
 from services.rest_service import RestServiceClient
 from messages.base import HumanMessage
 from typing import Optional, List, Dict
-from uuid import UUID
-from langchain_core.messages import BaseMessage
+
 from assistants.base import BaseAssistant
-from tools.base import BaseTool
 
 logger = get_logger(__name__)
 
