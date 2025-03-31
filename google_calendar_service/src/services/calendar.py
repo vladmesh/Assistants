@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-import google_auth_oauthlib.flow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -30,10 +29,10 @@ class GoogleCalendarService:
         client_config = {
             "web": {
                 "client_id": settings.GOOGLE_CLIENT_ID,
-                "project_id": "calendar-service",
+                "project_id": "smart-assistant",
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "token_uri": settings.GOOGLE_TOKEN_URI,
+                "auth_provider_x509_cert_url": settings.GOOGLE_AUTH_PROVIDER_CERT_URL,
                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
                 "redirect_uris": [settings.GOOGLE_REDIRECT_URI],
             }
