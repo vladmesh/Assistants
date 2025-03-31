@@ -10,14 +10,16 @@ from redis import asyncio as aioredis
 logger = structlog.get_logger()
 
 
-async def handle_assistant_responses(telegram: TelegramClient) -> None:
+async def handle_assistant_responses(
+    telegram: TelegramClient, redis: aioredis.Redis
+) -> None:
     """
     Handle responses from assistant.
 
     Args:
         telegram: Telegram client instance
+        redis: Redis client instance
     """
-    redis = aioredis.from_url(settings.redis_url, **settings.redis_settings)
     logger.info("Started assistant response handler")
 
     async with RestClient() as rest:
