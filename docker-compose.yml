@@ -1,8 +1,8 @@
 services:
-  assistant:
+  assistant_service:
     build:
-      context: ./assistant
-    container_name: assistant_service
+      context: ./assistant_service
+    container_name: assistant-service
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPEN_API_SECRETAR_ID=${OPEN_API_SECRETAR_ID}
@@ -18,25 +18,39 @@ services:
     networks:
       - app_network
 
-  bot:
+  telegram_bot_service:
     build:
-      context: ./tg_bot
-    container_name: telegram_bot
-    environment:
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      - REST_SERVICE_URL=http://rest_service:8000
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_DB=${REDIS_DB}
-      - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
-      - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
-    env_file:
-      - .env
+      context: ./telegram_bot_service
+      dockerfile: Dockerfile
+    container_name: telegram-bot-service
     depends_on:
-      - redis
-      - rest_service
+      redis:
+        condition: service_started
+        required: true
+      rest_service:
+        condition: service_started
+        required: true
+    environment:
+      ASYNC_DATABASE_URL: postgresql+asyncpg://user:password@db/rest_db
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      OPEN_API_SECRETAR_ID: ${OPEN_API_SECRETAR_ID}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      REDIS_DB: ${REDIS_DB}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_QUEUE_TO_SECRETARY: ${REDIS_QUEUE_TO_SECRETARY}
+      REDIS_QUEUE_TO_TELEGRAM: ${REDIS_QUEUE_TO_TELEGRAM}
+      REST_SERVICE_URL: http://rest_service:8000
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_ID: ${TELEGRAM_ID}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
     networks:
-      - app_network
+      app_network: null
 
   db:
       image: postgres:15
@@ -60,7 +74,7 @@ services:
   rest_service:
       build:
         context: ./rest_service
-      container_name: rest_service
+      container_name: rest-service
       environment:
         ASYNC_DATABASE_URL: ${ASYNC_DATABASE_URL}
       ports:
@@ -73,6 +87,7 @@ services:
   cron_service:
     build:
       context: ./cron_service
+    container_name: cron-service
     environment:
       - TELEGRAM_ID=${TELEGRAM_ID}
       - REDIS_HOST=${REDIS_HOST}
@@ -93,6 +108,7 @@ services:
     build:
       context: ./google_calendar_service
       dockerfile: Dockerfile
+    container_name: google-calendar-service
     ports:
       - "8001:8000"
     environment:
