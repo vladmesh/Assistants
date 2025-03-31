@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import ClassVar, Optional, Type
+from typing import ClassVar, Optional
 
 import httpx
 import structlog
@@ -43,7 +43,7 @@ class CalendarCreateTool(BaseTool):
     DESCRIPTION: ClassVar[
         str
     ] = """Создает новое событие в Google Calendar.
-    
+
     Параметры:
     - title: Название события (обязательно)
     - start_time: Время начала события с указанием таймзоны (обязательно)
@@ -100,7 +100,10 @@ class CalendarCreateTool(BaseTool):
                 # Check authorization first
                 auth_url = await self._check_auth(client)
                 if auth_url:
-                    return f"Для создания события необходимо авторизоваться. Перейдите по ссылке: {auth_url}"
+                    return (
+                        "Для создания события необходимо авторизоваться. Перейдите по"
+                        f" ссылке: {auth_url}"
+                    )
 
                 event_data = {
                     "title": title,
@@ -143,11 +146,11 @@ class CalendarListTool(BaseTool):
     DESCRIPTION: ClassVar[
         str
     ] = """Получает список событий из Google Calendar.
-    
+
     Параметры:
     - time_min: Начальное время для поиска событий (опционально)
     - time_max: Конечное время для поиска событий (опционально)
-    
+
     Если время не указано, возвращает события на ближайшую неделю.
     """
 
@@ -202,7 +205,10 @@ class CalendarListTool(BaseTool):
                 auth_url = await self._check_auth(client)
                 if auth_url:
                     logger.info("User needs authorization", user_id=self.user_id)
-                    return f"Для просмотра событий необходимо авторизоваться. Перейдай ссылку пользователю: {auth_url}"
+                    return (
+                        "Для просмотра событий необходимо авторизоваться. Перейдай"
+                        f" ссылку пользователю: {auth_url}"
+                    )
 
                 params = {}
                 if time_min:
@@ -264,7 +270,10 @@ class CalendarListTool(BaseTool):
                         end = datetime.fromisoformat(
                             end_data["dateTime"].replace("Z", "+00:00")
                         )
-                        time_str = f"{start.strftime('%d.%m.%Y %H:%M')} - {end.strftime('%H:%M')}"
+                        time_str = (
+                            f"{start.strftime('%d.%m.%Y %H:%M')} -"
+                            f" {end.strftime('%H:%M')}"
+                        )
                     else:
                         # All-day event
                         start = datetime.fromisoformat(start_data["date"])

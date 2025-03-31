@@ -59,7 +59,8 @@ class RestServiceClient:
         """Initialize the client
 
         Args:
-            base_url: Optional base URL of the REST service. If not provided, uses settings.
+            base_url: Optional base URL of the REST service.
+                If not provided, uses settings.
         """
         self.base_url = (base_url or settings.REST_SERVICE_BASE_URL).rstrip("/")
         self._client = httpx.AsyncClient()

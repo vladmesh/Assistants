@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Any, Optional
+from typing import Optional
 
 import pytest
 
@@ -12,7 +12,7 @@ from assistants.openai_assistant import OpenAIAssistant
 from langchain.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from messages.base import HumanMessage
-from tools.base import MessageInput, ToolAssistant
+from tools.base import ToolAssistant
 
 
 @pytest.mark.external_api
@@ -35,7 +35,10 @@ class TestSecretaryOpenAI:
         secretary = OpenAIAssistant(
             assistant_id=openai_assistant_id,
             name="test_secretary",
-            instructions="Ты - ассистент по имени test_secretary. Всегда представляйся этим именем, когда тебя спрашивают как тебя зовут.",
+            instructions=(
+                "Ты - ассистент по имени test_secretary. Всегда представляйся этим"
+                " именем, когда тебя спрашивают как тебя зовут."
+            ),
         )
 
         # Act
@@ -90,7 +93,10 @@ class TestSecretaryOpenAI:
         secretary = OpenAIAssistant(
             assistant_id=openai_assistant_id,
             name="test_secretary",
-            instructions="Ты - ассистент по имени test_secretary. Используй инструмент get_current_time, когда тебя спрашивают о времени.",
+            instructions=(
+                "Ты - ассистент по имени test_secretary. Используй инструмент"
+                " get_current_time, когда тебя спрашивают о времени."
+            ),
             tools=[tool_schema],
             tool_instances=[TestTool()],
         )
@@ -145,7 +151,9 @@ class TestSecretaryOpenAI:
             def __init__(self, assistant: BaseLLMChat):
                 super().__init__(
                     name="ask_expert",
-                    description="Ask expert assistant for help with technical questions",
+                    description=(
+                        "Ask expert assistant for help with technical questions"
+                    ),
                     assistant=assistant,
                 )
 

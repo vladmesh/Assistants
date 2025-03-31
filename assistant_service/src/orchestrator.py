@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List, Optional
+from typing import Dict
 
 import redis.asyncio as redis
 from assistants.base import BaseAssistant

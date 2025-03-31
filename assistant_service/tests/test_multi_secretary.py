@@ -1,6 +1,5 @@
 import os
 import sys
-from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,10 +8,7 @@ import pytest
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from assistants.factory import AssistantFactory
-from assistants.llm_chat import BaseLLMChat
-from langchain_openai import ChatOpenAI
 from messages.base import HumanMessage
-from services.rest_service import RestServiceClient
 
 
 @pytest.mark.external_api

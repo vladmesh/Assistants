@@ -1,7 +1,7 @@
 """Base assistant interface"""
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from messages.base import BaseMessage
 
@@ -43,4 +43,3 @@ class BaseAssistant(ABC):
         Returns:
             Assistant's response
         """
-        pass

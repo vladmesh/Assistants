@@ -1,6 +1,6 @@
 """Tests for MessageQueue class."""
+
 import json
-import os
 
 import pytest
 import pytest_asyncio
