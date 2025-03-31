@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -14,9 +13,6 @@ if test_env_path.exists():
 else:
     # Fallback to main .env if test env not found
     load_dotenv()
-
-# Add src to PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 
 @pytest.fixture

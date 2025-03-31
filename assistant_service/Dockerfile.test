@@ -7,7 +7,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install pytest pytest-asyncio pytest-cov
 
-ENV PYTHONPATH=/app
+# Set PYTHONPATH to include src directory
+ENV PYTHONPATH=/app/src:$PYTHONPATH
 
 # Copy source code and tests
 COPY . .
