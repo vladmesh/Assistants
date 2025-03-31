@@ -4,6 +4,7 @@ import subprocess
 import sys
 from typing import List, Optional
 
+
 def run_command(command: str) -> int:
     """Run a command and return its result."""
     try:
@@ -13,62 +14,65 @@ def run_command(command: str) -> int:
         print(f"Error executing command: {e}")
         return e.returncode
 
+
 def get_service_container(service_name: str) -> str:
     """Get container ID for a service"""
     result = subprocess.run(
-        'docker compose ps -q rest_service',
-        shell=True,
-        capture_output=True,
-        text=True
+        "docker compose ps -q rest_service", shell=True, capture_output=True, text=True
     )
     if result.returncode != 0:
-        raise Exception(f"Failed to get container ID for {service_name}: {result.stderr}")
+        raise Exception(
+            f"Failed to get container ID for {service_name}: {result.stderr}"
+        )
     return result.stdout.strip()
+
 
 def create_migration(message: str):
     """Create a new migration"""
     # Get the container ID
-    container_id = get_service_container('rest_service')
-    
+    container_id = get_service_container("rest_service")
+
     # Create migration in the container
     result = subprocess.run(
         f'docker exec {container_id} python /app/manage.py migrate "{message}"',
         shell=True,
         capture_output=True,
-        text=True
+        text=True,
     )
     if result.returncode != 0:
         print(f"Failed to create migration: {result.stderr}")
         return result.returncode
-    
+
     # Find the newly created migration file in the container
     result = subprocess.run(
         f'docker exec {container_id} bash -c "ls -t /app/alembic/versions/*.py | head -1"',
         shell=True,
         capture_output=True,
-        text=True
+        text=True,
     )
     if result.returncode != 0:
         print(f"Failed to find migration file: {result.stderr}")
         return result.returncode
     container_file = result.stdout.strip()
-    
+
     # Copy the migration file from container to host
     result = subprocess.run(
-        f'docker cp {container_id}:{container_file} rest_service/alembic/versions/',
+        f"docker cp {container_id}:{container_file} rest_service/alembic/versions/",
         shell=True,
         capture_output=True,
-        text=True
+        text=True,
     )
     if result.returncode != 0:
         print(f"Failed to copy migration file: {result.stderr}")
         return result.returncode
-    
+
     return 0
+
 
 def apply_migrations() -> int:
     """Apply all pending migrations."""
     return run_command("docker compose exec rest_service python manage.py upgrade")
+
 
 def run_tests(service: Optional[str] = None) -> int:
     """Run tests for all services or a specific service."""
@@ -76,17 +80,24 @@ def run_tests(service: Optional[str] = None) -> int:
         return run_command(f"docker compose exec {service} python -m pytest")
     return run_command("docker compose exec rest_service python -m pytest")
 
+
 def rebuild_containers(service: Optional[str] = None) -> int:
     """Rebuild all containers or a specific service."""
     if service:
         return run_command(f"docker compose build {service} && docker compose up -d")
     return run_command("docker compose build && docker compose up -d")
 
+
 def restart_service(service: Optional[str] = None) -> int:
     """Stop a service, rebuild all containers, and start the service in detached mode."""
     if service:
-        return run_command(f"docker compose stop {service} && docker compose build && docker compose up -d")
-    return run_command("docker compose down && docker compose build && docker compose up -d")
+        return run_command(
+            f"docker compose stop {service} && docker compose build && docker compose up -d"
+        )
+    return run_command(
+        "docker compose down && docker compose build && docker compose up -d"
+    )
+
 
 def start_service(service: Optional[str] = None) -> int:
     """Start a service in detached mode."""
@@ -94,11 +105,13 @@ def start_service(service: Optional[str] = None) -> int:
         return run_command(f"docker compose up -d {service}")
     return run_command("docker compose up -d")
 
+
 def stop_service(service: Optional[str] = None) -> int:
     """Stop a service."""
     if service:
         return run_command(f"docker compose stop {service}")
     return run_command("docker compose down")
+
 
 def run_black(service: Optional[str] = None) -> int:
     """Run black formatter for all services or a specific service."""
@@ -106,11 +119,13 @@ def run_black(service: Optional[str] = None) -> int:
         return run_command(f"black {service}/src")
     return run_command("black */src")
 
+
 def run_isort(service: Optional[str] = None) -> int:
     """Run isort formatter for all services or a specific service."""
     if service:
         return run_command(f"isort {service}/src")
     return run_command("isort */src")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Manage the project")
@@ -175,5 +190,6 @@ def main():
         parser.print_help()
         return 1
 
+
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

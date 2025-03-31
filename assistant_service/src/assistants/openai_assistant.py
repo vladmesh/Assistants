@@ -11,12 +11,7 @@ from assistants.base import BaseAssistant
 from config.logger import get_logger
 from langchain_core.messages import BaseMessage
 from messages.base import BaseMessage as CustomBaseMessage
-from messages.base import (
-    HumanMessage,
-    SecretaryMessage,
-    SystemMessage,
-    ToolMessage,
-)
+from messages.base import HumanMessage, SecretaryMessage, SystemMessage, ToolMessage
 from openai import OpenAI
 from services.rest_service import RestServiceClient
 from tools.base import BaseTool
