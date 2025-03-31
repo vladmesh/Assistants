@@ -25,12 +25,65 @@ name = "smart-assistant"
 version = "0.1.0"
 description = "Smart Assistant Project"
 authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [
+    { include = "assistant_service" },
+    { include = "rest_service" },
+    { include = "google_calendar_service" },
+    { include = "cron_service" },
+    { include = "telegram_bot_service" },
+]
+
+[tool.poetry.scripts]
+format = "scripts.format:main"
+lint = "scripts.lint:main"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-black = "^24.2.0"
-isort = "^5.13.2"
+fastapi = "^0.104.0"
+uvicorn = "^0.24.0"
+pydantic = "^2.4.2"
+pydantic-settings = "^2.0.3"
+httpx = "^0.25.0"
+python-dotenv = "^1.0.0"
+redis = "^5.0.1"
+sqlalchemy = "^2.0.23"
+alembic = "^1.12.1"
+psycopg2-binary = "^2.9.9"
+apscheduler = "^3.10.4"
+python-telegram-bot = "^20.7"
+google-auth = "^2.23.4"
+google-auth-oauthlib = "^1.1.0"
+google-auth-httplib2 = "^0.1.1"
+google-api-python-client = "^2.108.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.10.1"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+mypy = "^1.6.1"
+pylint = "^3.0.2"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.3"
+pytest-asyncio = "^0.21.1"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.12.0"
+factory-boy = "^3.3.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api" 
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=src --cov-report=term-missing"
+asyncio_mode = "auto" 

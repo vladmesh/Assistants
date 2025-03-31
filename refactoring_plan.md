@@ -20,7 +20,7 @@
    - Скриптах управления
    - Документации
 
-## 2. Стандартизация структуры сервисов
+## 2. Стандартизация структуры сервисов ✅
 
 ### 2.1. Текущие проблемы
 - Разные корневые папки в сервисах (где-то `src/`, где-то `app/`)
@@ -32,8 +32,8 @@
 1. ✅ Создать шаблон структуры сервиса
 2. ✅ Стандартизировать тестовое окружение
 3. ✅ Обновить Dockerfile'ы и docker-compose файлы всех сервисов
-4. Обновить каждый сервис:
-   - ✅ Переименовать директории
+4. ✅ Обновить каждый сервис:
+   - Переименовать директории
    - Реорганизовать структуру:
      - Переместить код из `app/` в `src/` (для сервисов, использующих `app/`)
      - Обновить все импорты (убрать префикс `src.` из импортов)
@@ -42,7 +42,7 @@
    - Обновить импорты
    - Настроить тестовое окружение
 
-## 3. Внедрение линтеров
+## 3. Внедрение линтеров ✅
 
 ### 3.1. Текущие проблемы
 - Отсутствие линтеров
@@ -125,24 +125,108 @@
 
 ### 7.2. План действий
 1. Создать центральный файл с версиями зависимостей:
-   - Создать `requirements.base.txt` с общими зависимостями
-   - Создать `requirements.dev.txt` для разработки
-   - Создать `requirements.test.txt` для тестов
+   ```toml
+   # pyproject.toml в корне проекта
+   [tool.poetry]
+   name = "smart-assistant"
+   version = "0.1.0"
+   description = "Smart Assistant Project"
+   authors = ["Your Name <your.email@example.com>"]
+
+   [tool.poetry.dependencies]
+   python = "^3.11"
+   fastapi = "^0.104.0"
+   uvicorn = "^0.24.0"
+   pydantic = "^2.4.2"
+   pydantic-settings = "^2.0.3"
+   httpx = "^0.25.0"
+
+   [tool.poetry.group.dev.dependencies]
+   black = "^23.10.1"
+   isort = "^5.12.0"
+   flake8 = "^6.1.0"
+   mypy = "^1.6.1"
+
+   [tool.poetry.group.test.dependencies]
+   pytest = "^7.4.3"
+   pytest-asyncio = "^0.21.1"
+   pytest-cov = "^4.1.0"
+
+   [tool.poetry.scripts]
+   format = "scripts.format:main"
+   lint = "scripts.lint:main"
+   ```
 
 2. Внедрить Poetry для управления зависимостями:
    - Создать `pyproject.toml` в корне проекта
    - Перенести все зависимости в Poetry
    - Настроить виртуальные окружения через Poetry
+   - Создать скрипты для управления:
+     ```python
+     # scripts/format.py
+     def main():
+         """Run formatters on all Python files."""
+         subprocess.run(["black", "."])
+         subprocess.run(["isort", "."])
+
+     # scripts/lint.py
+     def main():
+         """Run linters on all Python files."""
+         subprocess.run(["flake8", "."])
+         subprocess.run(["mypy", "."])
+     ```
+   - Оставить `run_tests.sh` в корне проекта для запуска тестов через Docker
 
 3. Обновить Dockerfile'ы:
-   - Использовать Poetry для установки зависимостей
-   - Оптимизировать слои Docker образов
-   - Добавить multi-stage builds
+   ```dockerfile
+   # Базовый образ для разработки
+   FROM python:3.11-slim as dev
+   RUN pip install poetry
+   WORKDIR /app
+   COPY pyproject.toml poetry.lock ./
+   RUN poetry install --no-root
+
+   # Базовый образ для тестов
+   FROM dev as test
+   RUN poetry install --no-root --with test
+
+   # Базовый образ для продакшена
+   FROM python:3.11-slim as prod
+   RUN pip install poetry
+   WORKDIR /app
+   COPY pyproject.toml poetry.lock ./
+   RUN poetry install --no-root --no-dev
+   ```
 
 4. Обновить зависимости:
    - Проверить и обновить все зависимости
    - Устранить уязвимости
    - Проверить совместимость версий
+
+### 7.3. Порядок миграции на Poetry
+1. Подготовительный этап:
+   - Создать `pyproject.toml` в корне проекта
+   - Перенести общие зависимости
+   - Создать скрипты управления (format.py, lint.py)
+   - Оставить run_tests.sh в корне проекта
+   - Обновить документацию
+
+2. Миграция сервисов:
+   - assistant_service
+   - rest_service
+   - google_calendar_service
+   - cron_service
+   - tg_bot
+
+3. Обновление Docker:
+   - Создать новые Dockerfile'ы
+   - Обновить docker-compose файлы
+   - Протестировать сборку и запуск
+
+4. Обновление CI/CD:
+   - Добавить Poetry в пайплайны
+   - Обновить команды сборки и тестирования
+   - Проверить все этапы
 
 ## 8. Улучшение конфигурации
 

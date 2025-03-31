@@ -1,12 +1,10 @@
+import logging
 import os
 import sys
-import logging
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 # Настраиваем логирование
@@ -42,6 +40,7 @@ for table in target_metadata.tables:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+
 def get_url():
     """Get database URL from environment variable."""
     url = os.getenv("ASYNC_DATABASE_URL")
@@ -51,6 +50,7 @@ def get_url():
     sync_url = url.replace("+asyncpg", "")
     logger.info(f"Using database URL: {sync_url}")
     return sync_url
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -85,7 +85,7 @@ def run_migrations_online() -> None:
     """
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = get_url()
-    
+
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
@@ -93,9 +93,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
@@ -104,4 +102,4 @@ def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online() 
+    run_migrations_online()
