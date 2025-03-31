@@ -3,10 +3,6 @@ import sys
 from typing import Optional
 
 import pytest
-
-# Добавляем путь к src в PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-
 from assistants.llm_chat import BaseLLMChat
 from langchain.tools import BaseTool
 from langchain_openai import ChatOpenAI
@@ -64,7 +60,8 @@ class TestSecretaryLLM:
         assert isinstance(response, dict)
         assert "messages" in response
         assert last_message
-        # Ассистент может представиться по-разному, проверяем что он вообще как-то отвечает на вопрос об имени
+        # Ассистент может представиться по-разному, проверяем что он
+        # вообще как-то отвечает на вопрос об имени
         assert any(
             word in last_message.lower()
             for word in ["зовут", "имя", "называть", "assistant", "ассистент"]
@@ -173,18 +170,20 @@ class TestSecretaryLLM:
         secretary = BaseLLMChat(
             llm=ChatOpenAI(model="gpt-4-turbo-preview", temperature=0),
             name="test_secretary",
-            instructions="""Ты - ассистент по имени test_secretary. 
-            
+            instructions="""Ты - ассистент по имени test_secretary.
+
             Используй инструмент ask_expert ТОЛЬКО для технических вопросов, таких как:
             - Вопросы о компьютерах и технологиях
             - Вопросы о научных концепциях
             - Вопросы о технических устройствах и их работе
-            
-            НЕ используй ask_expert для обычных вопросов о погоде, времени, и других не технических тем.
-            
-            ВАЖНО: Когда получаешь ответ от ask_expert, ты ДОЛЖЕН вернуть его пользователю ТОЧНО в том виде, 
-            в каком получил, БЕЗ КАКИХ-ЛИБО ИЗМЕНЕНИЙ. Не убирай префикс "Технический ответ:", 
-            не изменяй формулировки, не добавляй свой текст до или после.""",
+
+            НЕ используй ask_expert для обычных вопросов о погоде, времени, и других не
+            технических тем.
+
+            ВАЖНО: Когда получаешь ответ от ask_expert, ты ДОЛЖЕН вернуть его пользователю
+            ТОЧНО в том виде, в каком получил, БЕЗ КАКИХ-ЛИБО ИЗМЕНЕНИЙ. Не убирай префикс
+            "Технический ответ:", не изменяй формулировки, не добавляй свой текст до или
+            после.""",
             tools=[sub_assistant_tool],
             is_secretary=True,
         )
@@ -206,9 +205,8 @@ class TestSecretaryLLM:
 
         # Assert
         # 1. Проверяем, что суб-ассистент был вызван для технических вопросов
-        assert (
-            len(mock_sub_assistant.calls) == 2
-        )  # Должен быть вызван для двух технических вопросов
+        assert len(mock_sub_assistant.calls) == 2  # Должен быть вызван для двух
+        # технических вопросов
         assert "квантовый компьютер" in mock_sub_assistant.calls[0]["message"]
         assert "нейронная сеть" in mock_sub_assistant.calls[1]["message"]
 
