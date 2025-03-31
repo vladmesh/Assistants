@@ -4,14 +4,19 @@ from config.logger import get_logger
 
 logger = get_logger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class RetryError(Exception):
     """Exception raised when all retry attempts are exhausted"""
+
     def __init__(self, last_error: Exception, attempts: int):
         self.last_error = last_error
         self.attempts = attempts
-        super().__init__(f"Failed after {attempts} attempts. Last error: {str(last_error)}")
+        super().__init__(
+            f"Failed after {attempts} attempts. Last error: {str(last_error)}"
+        )
+
 
 async def with_retry(
     func: Callable[..., Any],
@@ -21,11 +26,11 @@ async def with_retry(
     backoff: float = 2.0,
     exceptions: tuple = (Exception,),
     context: Optional[dict] = None,
-    **kwargs
+    **kwargs,
 ) -> T:
     """
     Execute a function with retry mechanism
-    
+
     Args:
         func: Function to execute
         *args: Positional arguments for the function
@@ -35,16 +40,16 @@ async def with_retry(
         exceptions: Tuple of exceptions to catch and retry
         context: Additional context for logging
         **kwargs: Keyword arguments for the function
-        
+
     Returns:
         Result of the function execution
-        
+
     Raises:
         RetryError: If all retry attempts are exhausted
     """
     last_error = None
     current_delay = delay
-    
+
     for attempt in range(max_attempts):
         try:
             return await func(*args, **kwargs)
@@ -55,17 +60,19 @@ async def with_retry(
                     "attempt": attempt + 1,
                     "max_attempts": max_attempts,
                     "delay": current_delay,
-                    "error": str(e)
+                    "error": str(e),
                 }
                 if context:
                     log_context.update(context)
-                    
+
                 logger.warning("Retry attempt failed", **log_context)
                 await asyncio.sleep(current_delay)
                 current_delay *= backoff
             else:
-                logger.error("All retry attempts failed",
-                           attempts=max_attempts,
-                           last_error=str(e),
-                           **(context or {}))
-                raise RetryError(last_error, max_attempts) 
+                logger.error(
+                    "All retry attempts failed",
+                    attempts=max_attempts,
+                    last_error=str(e),
+                    **(context or {}),
+                )
+                raise RetryError(last_error, max_attempts)

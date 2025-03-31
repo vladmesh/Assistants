@@ -1,4 +1,5 @@
 """Base classes for tools"""
+
 from typing import Any, Optional, Dict, Type
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool as LangBaseTool
@@ -6,19 +7,25 @@ from pydantic import BaseModel, Field, ValidationError
 from assistants.base import BaseAssistant
 from utils.error_handler import ToolError, ToolExecutionError, InvalidInputError
 
+
 class MessageInput(BaseModel):
     """Schema for message input to assistants"""
-    message: str = Field(description="A request to LLM containing the message to be processed")
+
+    message: str = Field(
+        description="A request to LLM containing the message to be processed"
+    )
+
 
 class BaseTool(LangBaseTool):
     """Base class for assistant tools"""
+
     def __init__(
-            self,
-            name: str,
-            description: str,
-            args_schema: Optional[BaseModel] = None,
-            user_id: Optional[str] = None,
-            **kwargs
+        self,
+        name: str,
+        description: str,
+        args_schema: Optional[BaseModel] = None,
+        user_id: Optional[str] = None,
+        **kwargs,
     ):
         """Initialize the tool
 
@@ -33,10 +40,7 @@ class BaseTool(LangBaseTool):
         """
         try:
             super().__init__(
-                name=name,
-                description=description,
-                args_schema=args_schema,
-                **kwargs
+                name=name, description=description, args_schema=args_schema, **kwargs
             )
             self._user_id = user_id
         except Exception as e:
@@ -56,19 +60,19 @@ class BaseTool(LangBaseTool):
     def openai_schema(self) -> Dict[str, Any]:
         """Get OpenAI function schema for the tool"""
         schema = self.args_schema.model_json_schema() if self.args_schema else {}
-        
+
         return {
             "type": "function",
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": schema
-            }
+                "parameters": schema,
+            },
         }
 
     async def _arun(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the tool asynchronously
-        
+
         Raises:
             ToolExecutionError: If execution fails
         """
@@ -82,9 +86,7 @@ class BaseTool(LangBaseTool):
 
     async def _execute(self, *args: Any, **kwargs: Any) -> Any:
         """Actual tool execution logic to be implemented by subclasses"""
-        raise NotImplementedError(
-            "You need to implement _execute method"
-        )
+        raise NotImplementedError("You need to implement _execute method")
 
     def _run(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the tool synchronously - not supported"""
@@ -92,21 +94,22 @@ class BaseTool(LangBaseTool):
             "Synchronous execution is not supported, use _arun instead"
         )
 
+
 class ToolAssistant(BaseTool):
     """Tool that wraps an assistant to be used by other assistants"""
-    assistant: BaseAssistant = Field(description="Assistant instance to process messages")
-    
+
+    assistant: BaseAssistant = Field(
+        description="Assistant instance to process messages"
+    )
+
     def __init__(self, name: str, description: str, assistant: BaseAssistant, **kwargs):
         # If args_schema is not provided, use MessageInput as default
-        if 'args_schema' not in kwargs:
-            kwargs['args_schema'] = MessageInput
-            
+        if "args_schema" not in kwargs:
+            kwargs["args_schema"] = MessageInput
+
         try:
             super().__init__(
-                name=name,
-                description=description,
-                assistant=assistant,
-                **kwargs
+                name=name, description=description, assistant=assistant, **kwargs
             )
         except Exception as e:
             raise ToolError(f"Failed to initialize tool assistant: {str(e)}", name)
@@ -118,6 +121,8 @@ class ToolAssistant(BaseTool):
         except Exception as e:
             raise ToolExecutionError(f"Assistant execution failed: {str(e)}", self.name)
 
+
 class SubAssistantSchema(BaseModel):
     """Base schema for all sub-assistant based tools."""
+
     message: str = Field(..., description="Запрос для LLM в виде текста")

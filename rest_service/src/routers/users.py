@@ -7,9 +7,11 @@ from database import get_session
 
 router = APIRouter()
 
+
 class UserCreate(BaseModel):
     telegram_id: int
     username: str = None
+
 
 @router.post("/users/")
 async def create_user(user: UserCreate, session: AsyncSession = Depends(get_session)):
@@ -18,6 +20,7 @@ async def create_user(user: UserCreate, session: AsyncSession = Depends(get_sess
     await session.commit()
     await session.refresh(db_user)
     return db_user
+
 
 @router.get("/users/")
 async def get_user(telegram_id: int, session: AsyncSession = Depends(get_session)):
@@ -29,6 +32,7 @@ async def get_user(telegram_id: int, session: AsyncSession = Depends(get_session
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+
 @router.get("/users/{user_id}")
 async def get_user_by_id(user_id: int, session: AsyncSession = Depends(get_session)):
     """Получить пользователя по ID."""
@@ -36,6 +40,7 @@ async def get_user_by_id(user_id: int, session: AsyncSession = Depends(get_sessi
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
 
 @router.get("/users/all/")
 async def list_users(session: AsyncSession = Depends(get_session)):

@@ -1,1 +1,1 @@
-"""Database fixtures""" 
+"""Database fixtures"""

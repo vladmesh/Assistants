@@ -1,6 +1,8 @@
 """Assistant fixtures for database initialization"""
+
 from models import Assistant, AssistantType
 import os
+
 
 def create_secretary_assistant() -> Assistant:
     """Create Secretary assistant fixture"""
@@ -18,8 +20,9 @@ def create_secretary_assistant() -> Assistant:
 
 Вы должны быть дружелюбным и профессиональным.""",
         openai_assistant_id=os.getenv("OPEN_API_SECRETAR_ID"),
-        is_active=True
+        is_active=True,
     )
+
 
 def create_writer_assistant() -> Assistant:
     """Create Writer assistant fixture"""
@@ -35,12 +38,10 @@ def create_writer_assistant() -> Assistant:
 2. Следовать стилю и тону, указанному пользователем
 3. Поддерживать согласованность в тексте
 4. Оказывать высококачественную помощь в написании""",
-        is_active=True
+        is_active=True,
     )
+
 
 def get_all_assistants() -> list[Assistant]:
     """Get all assistant fixtures"""
-    return [
-        create_secretary_assistant(),
-        create_writer_assistant()
-    ]
+    return [create_secretary_assistant(), create_writer_assistant()]

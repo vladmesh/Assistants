@@ -6,29 +6,39 @@ from langchain_core.messages import HumanMessage as LangHumanMessage
 from langchain_core.messages import SystemMessage as LangSystemMessage
 from langchain_core.messages import ToolMessage as LangToolMessage
 
+
 class MessageSource(str, Enum):
     """Enum for message sources"""
+
     HUMAN = "human"
     SECRETARY = "secretary"
     TOOL = "tool"
     SYSTEM = "system"
 
+
 class BaseMessage(LangBaseMessage):
     """Base class for all messages with timestamp and metadata."""
-    
-    def __init__(self, content: str, metadata: dict = None, source: MessageSource = MessageSource.SYSTEM):
+
+    def __init__(
+        self,
+        content: str,
+        metadata: dict = None,
+        source: MessageSource = MessageSource.SYSTEM,
+    ):
         """Initialize message with content and metadata."""
         super().__init__(content=content)
         self._timestamp = datetime.now(timezone.utc)
         self._source = source
         self.metadata = metadata or {}
-        
+
         # Move all metadata into additional_kwargs of base class
-        self.additional_kwargs.update({
-            "timestamp": self._timestamp,
-            "source": self._source,
-            "metadata": self.metadata
-        })
+        self.additional_kwargs.update(
+            {
+                "timestamp": self._timestamp,
+                "source": self._source,
+                "metadata": self.metadata,
+            }
+        )
 
     @property
     def timestamp(self) -> datetime:
@@ -44,7 +54,7 @@ class BaseMessage(LangBaseMessage):
     def type(self) -> str:
         """Get message type for LangChain compatibility"""
         return "base"
-        
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert message to dictionary format"""
         return {
@@ -52,36 +62,34 @@ class BaseMessage(LangBaseMessage):
             "source": self._source,
             "timestamp": self._timestamp.isoformat(),
             "metadata": self.metadata,
-            "type": self.type
+            "type": self.type,
         }
-        
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BaseMessage":
         """Create message from dictionary format
-        
+
         Args:
             data: Dictionary with message data
-            
+
         Returns:
             New message instance
         """
-        return cls(
-            content=data["content"],
-            metadata=data.get("metadata", {})
-        )
+        return cls(content=data["content"], metadata=data.get("metadata", {}))
 
     def __str__(self) -> str:
         """Format message in a way that LLM can understand
-        
+
         Format: [SOURCE] (TIMESTAMP) CONTENT
         Example: [HUMAN] (2024-03-20T10:30:00Z) Hello, how are you?
         """
         timestamp = self._timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
         return f"[{self._source.name}] ({timestamp}) {self.content}"
 
+
 class HumanMessage(BaseMessage, LangHumanMessage):
     """Human message with timestamp and metadata."""
-    
+
     def __init__(self, content: str, metadata: dict = None):
         """Initialize human message."""
         super().__init__(content=content, metadata=metadata)
@@ -92,27 +100,31 @@ class HumanMessage(BaseMessage, LangHumanMessage):
     def type(self) -> str:
         return "human"
 
+
 class SecretaryMessage(BaseMessage):
     """Message from secretary assistant"""
-    
+
     def __init__(self, content: str, metadata: dict = None):
         """Initialize secretary message."""
         super().__init__(content=content, metadata=metadata)
         self._source = MessageSource.SECRETARY
         self.additional_kwargs["source"] = self._source
-        
+
     @property
     def type(self) -> str:
         return "secretary"
 
+
 class ToolMessage(LangToolMessage):
     """Tool message with timestamp and metadata."""
-    
-    def __init__(self, content: str, tool_call_id: str, tool_name: str, metadata: dict = None):
+
+    def __init__(
+        self, content: str, tool_call_id: str, tool_name: str, metadata: dict = None
+    ):
         """Initialize tool message."""
         # Initialize LangToolMessage with required parameters
         super().__init__(content=content, tool_call_id=tool_call_id)
-        
+
         # Add our own functionality from BaseMessage
         self._timestamp = datetime.now(timezone.utc)
         self._source = MessageSource.TOOL
@@ -142,9 +154,10 @@ class ToolMessage(LangToolMessage):
         """Return string representation of the message."""
         return f"[{self.source}:{self.tool_name}] ({self._timestamp.isoformat()}) {self.content}"
 
+
 class SystemMessage(BaseMessage, LangSystemMessage):
     """System message with timestamp and metadata."""
-    
+
     def __init__(self, content: str, metadata: dict = None):
         """Initialize system message."""
         super().__init__(content=content, metadata=metadata)
@@ -154,6 +167,7 @@ class SystemMessage(BaseMessage, LangSystemMessage):
     @property
     def type(self) -> str:
         return "system"
+
 
 class MessagesThread:
     """Thread for storing conversation"""

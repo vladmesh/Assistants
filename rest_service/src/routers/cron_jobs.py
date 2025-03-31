@@ -8,11 +8,13 @@ from database import get_session
 
 router = APIRouter()
 
+
 class CronJobCreate(BaseModel):
     name: str
     type: CronJobType
     cron_expression: str
     user_id: int
+
 
 class CronJobUpdateRequest(BaseModel):
     name: Optional[str]
@@ -21,7 +23,11 @@ class CronJobUpdateRequest(BaseModel):
 
     def dict_for_update(self):
         """Возвращает словарь только с установленными полями."""
-        return {key: value for key, value in self.model_dump(exclude_unset=True).items() if value is not None}
+        return {
+            key: value
+            for key, value in self.model_dump(exclude_unset=True).items()
+            if value is not None
+        }
 
 
 @router.get("/cronjobs/")
@@ -31,6 +37,7 @@ async def list_cronjobs(session: AsyncSession = Depends(get_session)):
     result = await session.execute(query)
     return result.scalars().all()
 
+
 @router.get("/cronjobs/{cronjob_id}")
 async def get_cronjob(cronjob_id: int, session: AsyncSession = Depends(get_session)):
     """Получить CronJob по ID."""
@@ -39,8 +46,11 @@ async def get_cronjob(cronjob_id: int, session: AsyncSession = Depends(get_sessi
         raise HTTPException(status_code=404, detail="CronJob not found")
     return cronjob
 
+
 @router.post("/cronjobs/")
-async def create_cronjob(cronjob_data: CronJobCreate, session: AsyncSession = Depends(get_session)):
+async def create_cronjob(
+    cronjob_data: CronJobCreate, session: AsyncSession = Depends(get_session)
+):
     """Создать новый CronJob."""
     user = await session.get(TelegramUser, cronjob_data.user_id)
     if not user:
@@ -58,8 +68,13 @@ async def create_cronjob(cronjob_data: CronJobCreate, session: AsyncSession = De
     await session.refresh(cronjob)
     return cronjob
 
+
 @router.patch("/cronjobs/{cronjob_id}")
-async def update_cronjob(cronjob_id: int, update_data: CronJobUpdateRequest, session: AsyncSession = Depends(get_session)):
+async def update_cronjob(
+    cronjob_id: int,
+    update_data: CronJobUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+):
     """Обновить CronJob по ID."""
     cronjob = await session.get(CronJob, cronjob_id)
     if not cronjob:
@@ -73,6 +88,7 @@ async def update_cronjob(cronjob_id: int, update_data: CronJobUpdateRequest, ses
     await session.commit()
     await session.refresh(cronjob)
     return cronjob
+
 
 @router.delete("/cronjobs/{cronjob_id}")
 async def delete_cronjob(cronjob_id: int, session: AsyncSession = Depends(get_session)):

@@ -6,19 +6,20 @@ from models.cron import (
     CronJobType,
     CronJobStatus,
     CronJobNotification,
-    CronJobRecord
+    CronJobRecord,
 )
 from .models.assistant import Assistant, AssistantType, AssistantInstructions
+
 __all__ = [
-    'BaseModel',
-    'TelegramUser',
-    'CalendarCredentials',
-    'CronJob',
-    'CronJobType',
-    'CronJobStatus',
-    'CronJobNotification',
-    'CronJobRecord',
-    'Assistant',
-    'AssistantType',
-    'AssistantInstructions',
+    "BaseModel",
+    "TelegramUser",
+    "CalendarCredentials",
+    "CronJob",
+    "CronJobType",
+    "CronJobStatus",
+    "CronJobNotification",
+    "CronJobRecord",
+    "Assistant",
+    "AssistantType",
+    "AssistantInstructions",
 ]

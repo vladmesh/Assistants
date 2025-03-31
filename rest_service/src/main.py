@@ -1,6 +1,14 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from routers import users, cron_jobs, calendar, assistants, tools, assistant_tools, secretaries
+from routers import (
+    users,
+    cron_jobs,
+    calendar,
+    assistants,
+    tools,
+    assistant_tools,
+    secretaries,
+)
 from database import init_db
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
@@ -15,6 +23,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     pass
+
 
 app = FastAPI(lifespan=lifespan, title="Assistant Service API")
 logging.basicConfig(level=logging.INFO)
@@ -41,8 +50,8 @@ app.include_router(tools.router, prefix="/api", tags=["Tools"])
 app.include_router(assistant_tools.router, prefix="/api", tags=["Assistant Tools"])
 app.include_router(secretaries.router, prefix="/api", tags=["Secretaries"])
 
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
     await init_db()
-

@@ -1,21 +1,12 @@
 version: '3.8'
 
 services:
-  redis:
-    image: redis:7.2-alpine
-    ports:
-      - "6380:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-
-  tests:
+  test:
     build:
       context: .
       dockerfile: Dockerfile.test
     environment:
+      - TESTING=1
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_ASSISTANT_ID=${OPENAI_ASSISTANT_ID}
       - OPEN_API_SECRETAR_ID=test_secretary_id
@@ -31,4 +22,14 @@ services:
       - ./tests/.env.test:/app/tests/.env.test
     depends_on:
       redis:
-        condition: service_healthy 
+        condition: service_healthy
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3 

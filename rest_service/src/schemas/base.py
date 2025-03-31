@@ -10,4 +10,4 @@ class BaseSchema(SQLModel):
 
 class TimestampSchema(BaseSchema):
     created_at: datetime
-    updated_at: datetime 
+    updated_at: datetime

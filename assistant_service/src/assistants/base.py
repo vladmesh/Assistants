@@ -1,4 +1,5 @@
 """Base assistant interface"""
+
 from typing import List, Optional, Any
 from abc import ABC, abstractmethod
 
@@ -7,12 +8,13 @@ from messages.base import BaseMessage
 
 class BaseAssistant(ABC):
     """Base class for all assistants"""
+
     def __init__(
         self,
         name: str,
         instructions: str,
         tools: Optional[List] = None,
-        metadata: Optional[dict] = None
+        metadata: Optional[dict] = None,
     ):
         self.name = name
         self.instructions = instructions
@@ -23,21 +25,22 @@ class BaseAssistant(ABC):
         """Set context for all tools before execution"""
         if not user_id:
             return
-            
+
         for tool in self.tools:
-            if hasattr(tool, 'user_id'):
+            if hasattr(tool, "user_id"):
                 tool.user_id = user_id
 
     @abstractmethod
-    async def process_message(self, message: BaseMessage, user_id: Optional[str] = None) -> str:
+    async def process_message(
+        self, message: BaseMessage, user_id: Optional[str] = None
+    ) -> str:
         """Process a message and return response
-        
+
         Args:
             message: Input message to process
             user_id: Optional user identifier for tool context
-            
+
         Returns:
             Assistant's response
         """
         pass
-
