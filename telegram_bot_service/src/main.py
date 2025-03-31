@@ -84,7 +84,9 @@ async def main():
         logger.info("Initialized clients")
 
         # Start response handler
-        response_handler = asyncio.create_task(handle_assistant_responses(telegram))
+        response_handler = asyncio.create_task(
+            handle_assistant_responses(telegram, redis)
+        )
         logger.info("Started response handler task")
 
         try:
