@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Set working directory
-WORKDIR /app
+WORKDIR /src
 
 # Install system dependencies
 RUN apt-get update && \
@@ -16,11 +16,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY src/ src/
+COPY src/ .
 
 # Set environment variables
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/src
 ENV PYTHONUNBUFFERED=1
 
 # Run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 

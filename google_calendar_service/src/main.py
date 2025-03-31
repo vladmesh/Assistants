@@ -1,12 +1,11 @@
+from api.routes import router
+from config.logger import get_logger
+from config.settings import Settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from src.api.routes import router
-from src.config.logger import get_logger
-from src.config.settings import Settings
-from src.services.calendar import GoogleCalendarService
-from src.services.redis_service import RedisService
-from src.services.rest_service import RestService
+from services.calendar import GoogleCalendarService
+from services.redis_service import RedisService
+from services.rest_service import RestService
 
 # Get configured logger
 logger = get_logger(__name__)

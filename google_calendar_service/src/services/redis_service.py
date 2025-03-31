@@ -1,9 +1,9 @@
 import json
+from typing import Awaitable, Union
 
 import redis.asyncio as redis
 import structlog
-
-from src.config.settings import Settings
+from config.settings import Settings
 
 logger = structlog.get_logger()
 
@@ -13,7 +13,7 @@ class RedisService:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.redis = redis.Redis(
+        self.redis: redis.Redis = redis.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
             db=settings.REDIS_DB,
@@ -30,15 +30,17 @@ class RedisService:
                 message=message,
                 queue=self.settings.REDIS_QUEUE_TO_SECRETARY,
             )
-            await self.redis.lpush(
+            result: Awaitable[int] = self.redis.lpush(  # type: ignore[assignment]
                 self.settings.REDIS_QUEUE_TO_SECRETARY, json.dumps(data)
             )
+            await result
             logger.info("Message sent successfully")
             return True
         except Exception as e:
             logger.error("Failed to send message to assistant", error=str(e))
             return False
 
-    async def close(self):
+    async def close(self) -> None:
         """Close Redis connection"""
-        await self.redis.close()
+        result: Awaitable[int] = self.redis.close()
+        await result
