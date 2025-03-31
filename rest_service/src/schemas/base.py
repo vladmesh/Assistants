@@ -1,7 +1,8 @@
-from sqlmodel import SQLModel
-from pydantic import ConfigDict
 from datetime import datetime
 from typing import Optional
+
+from pydantic import ConfigDict
+from sqlmodel import SQLModel
 
 
 class BaseSchema(SQLModel):

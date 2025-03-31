@@ -1,7 +1,9 @@
-import httpx
 from datetime import datetime
 from typing import Optional
+
+import httpx
 import structlog
+
 from src.config.settings import Settings
 
 logger = structlog.get_logger()

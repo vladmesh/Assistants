@@ -1,11 +1,12 @@
 import asyncio
 import json
+
 import structlog
-from redis import asyncio as aioredis
-from config.settings import settings
-from client.telegram import TelegramClient
 from client.rest import RestClient
+from client.telegram import TelegramClient
+from config.settings import settings
 from handlers.start import handle_start
+from redis import asyncio as aioredis
 from services.response_handler import handle_assistant_responses
 
 logger = structlog.get_logger()

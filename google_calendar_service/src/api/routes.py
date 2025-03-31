@@ -1,13 +1,15 @@
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Body, Request, Response
-from pydantic import BaseModel, Field
-from src.config.settings import Settings
-from src.services.calendar import GoogleCalendarService
-from src.services.rest_service import RestService
-from src.services.redis_service import RedisService
-from src.schemas.calendar import CreateEventRequest
+from typing import Any, Dict, List, Optional
+
 import structlog
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, Field
+
+from src.config.settings import Settings
+from src.schemas.calendar import CreateEventRequest
+from src.services.calendar import GoogleCalendarService
+from src.services.redis_service import RedisService
+from src.services.rest_service import RestService
 
 logger = structlog.get_logger()
 router = APIRouter()

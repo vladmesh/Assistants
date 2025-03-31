@@ -1,8 +1,9 @@
 """Tool data validation and transformation from REST service"""
 
 from typing import Optional
-from pydantic import BaseModel
+
 from config.settings import Settings
+from pydantic import BaseModel
 
 
 class RestServiceTool(BaseModel):
@@ -19,10 +20,10 @@ class RestServiceTool(BaseModel):
 
     def to_tool(self):
         """Convert REST service tool to actual tool instance"""
-        from .time_tool import TimeToolWrapper
-        from .sub_assistant_tool import SubAssistantTool
-        from .reminder_tool import ReminderTool
         from .calendar_tool import CalendarCreateTool, CalendarListTool
+        from .reminder_tool import ReminderTool
+        from .sub_assistant_tool import SubAssistantTool
+        from .time_tool import TimeToolWrapper
 
         if self.tool_type == "time":
             return TimeToolWrapper()

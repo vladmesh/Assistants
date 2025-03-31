@@ -1,5 +1,6 @@
-from scheduler import start_scheduler
 import logging
+
+from scheduler import start_scheduler
 
 logger = logging.getLogger(__name__)
 

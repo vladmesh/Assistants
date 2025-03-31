@@ -1,12 +1,12 @@
+from datetime import UTC, datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends
+from uuid import UUID
+
+from database import get_session
+from fastapi import APIRouter, Depends, HTTPException
+from models.assistant import UserAssistantThread
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from uuid import UUID
-from datetime import datetime, UTC
-
-from models.assistant import UserAssistantThread
-from database import get_session
 
 router = APIRouter()
 

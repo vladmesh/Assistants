@@ -1,18 +1,19 @@
+import logging
+from contextlib import asynccontextmanager
+
+from database import init_db
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from routers import (
-    users,
-    cron_jobs,
-    calendar,
-    assistants,
-    tools,
     assistant_tools,
+    assistants,
+    calendar,
+    cron_jobs,
     secretaries,
+    tools,
+    users,
 )
-from database import init_db
-from fastapi.exceptions import RequestValidationError
-from contextlib import asynccontextmanager
-import logging
 
 
 # Инициализация приложения

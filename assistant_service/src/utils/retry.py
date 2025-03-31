@@ -1,5 +1,6 @@
 import asyncio
-from typing import TypeVar, Callable, Any, Optional
+from typing import Any, Callable, Optional, TypeVar
+
 from config.logger import get_logger
 
 logger = get_logger(__name__)

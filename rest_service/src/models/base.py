@@ -1,6 +1,7 @@
-from datetime import datetime, UTC
-from sqlmodel import SQLModel, Field
-from sqlalchemy import event, TIMESTAMP
+from datetime import UTC, datetime
+
+from sqlalchemy import TIMESTAMP, event
+from sqlmodel import Field, SQLModel
 
 
 def get_utc_now() -> datetime:

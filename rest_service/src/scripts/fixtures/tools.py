@@ -1,7 +1,8 @@
 """Tool fixtures for database initialization"""
 
-from models import Tool, ToolType
 from uuid import UUID
+
+from models import Tool, ToolType
 
 
 def create_time_tool() -> Tool:

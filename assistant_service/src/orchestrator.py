@@ -1,13 +1,13 @@
 import json
+from typing import Dict, List, Optional
+
 import redis.asyncio as redis
+from assistants.base import BaseAssistant
+from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
-from assistants.factory import AssistantFactory
-from services.rest_service import RestServiceClient
 from messages.base import HumanMessage
-from typing import Optional, List, Dict
-
-from assistants.base import BaseAssistant
+from services.rest_service import RestServiceClient
 
 logger = get_logger(__name__)
 

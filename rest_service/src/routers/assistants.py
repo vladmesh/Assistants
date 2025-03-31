@@ -1,12 +1,12 @@
 from typing import List
-from fastapi import APIRouter, HTTPException, Depends
+from uuid import UUID
+
+from database import get_session
+from fastapi import APIRouter, Depends, HTTPException
+from models.assistant import Assistant, AssistantType
+from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from uuid import UUID
-from pydantic import BaseModel
-
-from models.assistant import Assistant, AssistantType
-from database import get_session
 
 router = APIRouter()
 

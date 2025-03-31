@@ -1,10 +1,11 @@
-from apscheduler.schedulers.background import BackgroundScheduler
-from redis_client import send_notification
-from rest_client import fetch_scheduled_jobs
+import logging
 import os
 import time
-import logging
+
+from apscheduler.schedulers.background import BackgroundScheduler
 from pytz import utc
+from redis_client import send_notification
+from rest_client import fetch_scheduled_jobs
 
 # Настройка логирования
 logging.basicConfig(

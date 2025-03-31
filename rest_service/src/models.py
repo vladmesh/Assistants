@@ -1,14 +1,15 @@
 from models.base import BaseModel
-from models.user import TelegramUser
 from models.calendar import CalendarCredentials
 from models.cron import (
     CronJob,
-    CronJobType,
-    CronJobStatus,
     CronJobNotification,
     CronJobRecord,
+    CronJobStatus,
+    CronJobType,
 )
-from .models.assistant import Assistant, AssistantType, AssistantInstructions
+from models.user import TelegramUser
+
+from .models.assistant import Assistant, AssistantInstructions, AssistantType
 
 __all__ = [
     "BaseModel",

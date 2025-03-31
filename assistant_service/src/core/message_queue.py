@@ -1,10 +1,11 @@
 """Message queue implementation for assistant service."""
 
 import json
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import redis.asyncio as redis
-from config.settings import Settings
 from config.logger import get_logger
+from config.settings import Settings
 
 logger = get_logger(__name__)
 

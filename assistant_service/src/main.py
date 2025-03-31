@@ -1,7 +1,8 @@
 import asyncio
-from dotenv import load_dotenv
+
 from config.logger import get_logger
 from config.settings import get_settings
+from dotenv import load_dotenv
 from orchestrator import AssistantOrchestrator
 
 logger = get_logger(__name__)

@@ -1,11 +1,12 @@
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+import structlog
+from database import get_session
 from fastapi import APIRouter, Depends, HTTPException
+from models import CalendarCredentials, TelegramUser
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from database import get_session
-from models import TelegramUser, CalendarCredentials
-import structlog
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/calendar", tags=["calendar"])
