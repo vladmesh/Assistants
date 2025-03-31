@@ -5,8 +5,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from uuid import UUID
 from pydantic import BaseModel
 
-from app.models.assistant import Tool, ToolType
-from app.database import get_session
+from models.assistant import Tool, ToolType
+from database import get_session
 
 router = APIRouter()
 

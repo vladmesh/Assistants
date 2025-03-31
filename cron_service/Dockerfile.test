@@ -1,18 +1,16 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /src
 
-# Копируем файл с зависимостями
+# Install dependencies
 COPY requirements.txt .
-
-# Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install pytest pytest-asyncio pytest-cov
 
-# Копируем код приложения и тесты
+ENV PYTHONPATH=src
+
+# Copy source code and tests
 COPY . .
 
-# Копируем модули в Python path
-RUN cp app/*.py .
-
-# Запускаем тесты
-CMD ["pytest", "-vv", "--tb=long", "--asyncio-mode=strict"] 
+# Run tests with coverage
+CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "tests/"] 

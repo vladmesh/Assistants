@@ -7,8 +7,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from sqlalchemy import text
 
-from app.config import settings
-from app.scripts.test_data import create_test_data
+from config import settings
+from scripts.test_data import create_test_data
 
 # Create async engine
 async_engine = create_async_engine(

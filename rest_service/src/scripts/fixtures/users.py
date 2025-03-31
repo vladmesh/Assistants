@@ -1,5 +1,5 @@
 """User fixtures"""
-from app.models import TelegramUser
+from models import TelegramUser
 
 def create_test_users() -> list[TelegramUser]:
     """Create test users fixtures"""

@@ -1,4 +1,19 @@
+version: '3.8'
+
 services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - TESTING=1
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://test_user:test_password@test-db:5432/test_db
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/src
+    depends_on:
+      - test-db
+
   test-db:
     image: postgres:16
     environment:
@@ -9,19 +24,6 @@ services:
       - "5433:5432"
     volumes:
       - test_db_data:/var/lib/postgresql/data
-
-  tests:
-    build:
-      context: ..
-      dockerfile: rest_service/Dockerfile.test
-    depends_on:
-      - test-db
-    environment:
-      - ASYNC_DATABASE_URL=postgresql+asyncpg://test_user:test_password@test-db:5432/test_db
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./tests:/app/tests
 
 volumes:
   test_db_data: 
