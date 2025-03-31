@@ -1,4 +1,3 @@
-from typing import List
 from uuid import UUID
 
 from database import get_session
@@ -29,7 +28,7 @@ async def add_tool_to_assistant(
     query = select(AssistantToolLink).where(
         AssistantToolLink.assistant_id == assistant_id,
         AssistantToolLink.tool_id == tool_id,
-        AssistantToolLink.is_active == True,
+        AssistantToolLink.is_active.is_(True),
     )
     result = await session.execute(query)
     existing_link = result.scalar_one_or_none()
@@ -57,7 +56,7 @@ async def remove_tool_from_assistant(
     query = select(AssistantToolLink).where(
         AssistantToolLink.assistant_id == assistant_id,
         AssistantToolLink.tool_id == tool_id,
-        AssistantToolLink.is_active == True,
+        AssistantToolLink.is_active.is_(True),
     )
     result = await session.execute(query)
     link = result.scalar_one_or_none()
@@ -87,7 +86,7 @@ async def get_assistant_tools(
     # Получаем все активные связи
     query = select(AssistantToolLink).where(
         AssistantToolLink.assistant_id == assistant_id,
-        AssistantToolLink.is_active == True,
+        AssistantToolLink.is_active.is_(True),
     )
     result = await session.execute(query)
     links = result.scalars().all()

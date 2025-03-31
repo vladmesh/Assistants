@@ -58,7 +58,8 @@ def update_jobs_from_rest():
         try:
             logger.info("Начинаем обновление списка задач из REST-сервиса...")
             logger.info(
-                f"REST_SERVICE_URL: {os.getenv('REST_SERVICE_URL', 'http://rest_service:8000')}"
+                "REST_SERVICE_URL: "
+                f"{os.getenv('REST_SERVICE_URL', 'http://rest_service:8000')}"
             )
             jobs = fetch_scheduled_jobs()
             logger.info(f"Получено {len(jobs)} задач из REST-сервиса")
@@ -66,7 +67,8 @@ def update_jobs_from_rest():
             # Получаем текущие задачи в планировщике
             current_scheduler_jobs = scheduler.get_jobs()
             logger.info(
-                f"Текущее количество задач в планировщике: {len(current_scheduler_jobs)}"
+                f"Текущее количество задач в планировщике: "
+                f"{len(current_scheduler_jobs)}"
             )
 
             # Удаляем задачи, которых больше нет в REST-сервисе
@@ -113,7 +115,8 @@ def update_jobs_from_rest():
         except Exception as e:
             retries += 1
             logger.error(
-                f"Ошибка при обновлении задач (попытка {retries}/{MAX_RETRIES}): {str(e)}"
+                f"Ошибка при обновлении задач (попытка {retries}/{MAX_RETRIES}): "
+                f"{str(e)}"
             )
             if retries < MAX_RETRIES:
                 time.sleep(RETRY_DELAY)

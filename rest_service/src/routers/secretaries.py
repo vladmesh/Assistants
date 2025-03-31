@@ -13,7 +13,7 @@ router = APIRouter()
 @router.get("/secretaries/")
 async def list_secretaries(session: AsyncSession = Depends(get_session)):
     """Получить список всех доступных секретарей"""
-    query = select(Assistant).where(Assistant.is_secretary == True)
+    query = select(Assistant).where(Assistant.is_secretary.is_(True))
     result = await session.execute(query)
     secretaries = result.scalars().all()
     return secretaries
@@ -25,7 +25,7 @@ async def get_user_secretary(
 ):
     """Получить текущего секретаря пользователя"""
     query = select(UserSecretaryLink).where(
-        UserSecretaryLink.user_id == user_id, UserSecretaryLink.is_active == True
+        UserSecretaryLink.user_id == user_id, UserSecretaryLink.is_active.is_(True)
     )
     result = await session.execute(query)
     link = result.scalar_one_or_none()
@@ -52,7 +52,7 @@ async def set_user_secretary(
 
     # Деактивируем предыдущие связи
     query = select(UserSecretaryLink).where(
-        UserSecretaryLink.user_id == user_id, UserSecretaryLink.is_active == True
+        UserSecretaryLink.user_id == user_id, UserSecretaryLink.is_active.is_(True)
     )
     result = await session.execute(query)
     old_links = result.scalars().all()

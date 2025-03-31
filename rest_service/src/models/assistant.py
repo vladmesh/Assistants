@@ -1,12 +1,9 @@
 import enum
 from datetime import UTC, datetime
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column
-from sqlalchemy import Enum as SQLAlchemyEnum
-from sqlalchemy import String
-from sqlalchemy.orm import foreign
+from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship
 
 from .base import BaseModel
@@ -61,10 +58,13 @@ class Assistant(BaseModel, table=True):
         sa_relationship_kwargs={
             "foreign_keys": [AssistantToolLink.assistant_id],
             "primaryjoin": "Assistant.id == AssistantToolLink.assistant_id",
-            "secondaryjoin": "and_(Tool.id == foreign(AssistantToolLink.tool_id), AssistantToolLink.is_active == True)",
+            "secondaryjoin": (
+                "and_(Tool.id == foreign(AssistantToolLink.tool_id), "
+                "AssistantToolLink.is_active == True)"
+            ),
         },
     )
-    user_links: List["UserSecretaryLink"] = Relationship(
+    user_links: List["UserSecretaryLink"] = Relationship(  # noqa: F821
         back_populates="secretary", sa_relationship_kwargs={"lazy": "selectin"}
     )
 
@@ -98,7 +98,10 @@ class Tool(BaseModel, table=True):
         sa_relationship_kwargs={
             "foreign_keys": [AssistantToolLink.tool_id],
             "primaryjoin": "Tool.id == AssistantToolLink.tool_id",
-            "secondaryjoin": "and_(Assistant.id == foreign(AssistantToolLink.assistant_id), AssistantToolLink.is_active == True)",
+            "secondaryjoin": (
+                "and_(Assistant.id == foreign(AssistantToolLink.assistant_id), "
+                "AssistantToolLink.is_active == True)"
+            ),
         },
     )
 

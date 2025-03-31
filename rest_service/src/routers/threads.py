@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from typing import Optional
 from uuid import UUID
 
 from database import get_session
