@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from app.models import TelegramUser
-from app.database import get_session
+from models import TelegramUser
+from database import get_session
 
 router = APIRouter()
 

@@ -3,8 +3,8 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from app.database import get_session
-from app.models import TelegramUser, CalendarCredentials
+from database import get_session
+from models import TelegramUser, CalendarCredentials
 import structlog
 
 logger = structlog.get_logger()

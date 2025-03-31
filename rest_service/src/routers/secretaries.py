@@ -1,12 +1,11 @@
-from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from uuid import UUID
 
-from app.models.assistant import Assistant
-from app.models.user_secretary import UserSecretaryLink
-from app.database import get_session
+from models.assistant import Assistant
+from models.user_secretary import UserSecretaryLink
+from database import get_session
 
 router = APIRouter()
 

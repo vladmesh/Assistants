@@ -1,3 +1,0 @@
-"""
-Cron service application package
-"""

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.routers import users, cron_jobs, calendar, assistants, tools, assistant_tools, secretaries
-from app.database import init_db
+from routers import users, cron_jobs, calendar, assistants, tools, assistant_tools, secretaries
+from database import init_db
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import logging

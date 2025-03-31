@@ -1,6 +1,6 @@
 import asyncio
-from app.database import AsyncSessionLocal
-from app.models import Tool
+from database import AsyncSessionLocal
+from models import Tool
 from sqlmodel import select
 
 async def main():

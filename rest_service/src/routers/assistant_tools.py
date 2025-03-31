@@ -4,8 +4,8 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from uuid import UUID
 
-from app.models.assistant import Assistant, Tool, AssistantToolLink
-from app.database import get_session
+from models.assistant import Assistant, Tool, AssistantToolLink
+from database import get_session
 
 router = APIRouter()
 
