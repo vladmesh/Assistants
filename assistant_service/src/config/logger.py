@@ -1,7 +1,8 @@
-import sys
-import structlog
 import logging
+import sys
 from typing import Any, Dict
+
+import structlog
 
 
 def configure_logger(environment: str = "development") -> None:

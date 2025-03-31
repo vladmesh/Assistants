@@ -1,7 +1,9 @@
-from typing import Optional
 import enum
 from datetime import datetime
+from typing import Optional
+
 from sqlmodel import Field, Relationship
+
 from .base import BaseModel
 
 

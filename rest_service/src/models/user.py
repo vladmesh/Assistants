@@ -1,6 +1,8 @@
-from typing import Optional, List
+from typing import List, Optional
+
+from sqlalchemy import BigInteger, Column
 from sqlmodel import Field, Relationship
-from sqlalchemy import Column, BigInteger
+
 from .base import BaseModel
 
 

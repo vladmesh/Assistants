@@ -1,11 +1,12 @@
 """Base classes for tools"""
 
-from typing import Any, Optional, Dict, Type
+from typing import Any, Dict, Optional, Type
+
+from assistants.base import BaseAssistant
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool as LangBaseTool
 from pydantic import BaseModel, Field, ValidationError
-from assistants.base import BaseAssistant
-from utils.error_handler import ToolError, ToolExecutionError, InvalidInputError
+from utils.error_handler import InvalidInputError, ToolError, ToolExecutionError
 
 
 class MessageInput(BaseModel):

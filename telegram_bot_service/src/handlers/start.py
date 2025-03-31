@@ -1,7 +1,8 @@
-from typing import Dict, Any
+from typing import Any, Dict
+
 import structlog
-from client.telegram import TelegramClient
 from client.rest import RestClient
+from client.telegram import TelegramClient
 
 logger = structlog.get_logger()
 

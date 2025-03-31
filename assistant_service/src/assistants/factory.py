@@ -1,13 +1,15 @@
-from typing import List, Optional, Dict
-from .base import BaseAssistant
-from .openai_assistant import OpenAIAssistant
-from .llm_chat import BaseLLMChat
-from tools.base import BaseTool
+from typing import Dict, List, Optional
+
+from config.logger import get_logger
 from config.settings import Settings
 from langchain_openai import ChatOpenAI
 from services.rest_service import RestServiceClient
-from config.logger import get_logger
+from tools.base import BaseTool
 from tools.rest_service_tool import RestServiceTool
+
+from .base import BaseAssistant
+from .llm_chat import BaseLLMChat
+from .openai_assistant import OpenAIAssistant
 
 logger = get_logger(__name__)
 

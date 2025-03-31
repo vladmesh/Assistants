@@ -1,7 +1,8 @@
-import os
 import json
-import redis
 import logging
+import os
+
+import redis
 
 logger = logging.getLogger(__name__)
 

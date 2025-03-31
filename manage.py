@@ -106,6 +106,12 @@ def run_black(service: Optional[str] = None) -> int:
         return run_command(f"black {service}/src")
     return run_command("black */src")
 
+def run_isort(service: Optional[str] = None) -> int:
+    """Run isort formatter for all services or a specific service."""
+    if service:
+        return run_command(f"isort {service}/src")
+    return run_command("isort */src")
+
 def main():
     parser = argparse.ArgumentParser(description="Manage the project")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -141,6 +147,10 @@ def main():
     black_parser = subparsers.add_parser("black", help="Run black formatter")
     black_parser.add_argument("--service", help="Service to format")
 
+    # Run isort command
+    isort_parser = subparsers.add_parser("isort", help="Run isort formatter")
+    isort_parser.add_argument("--service", help="Service to format")
+
     args = parser.parse_args()
 
     if args.command == "migrate":
@@ -159,6 +169,8 @@ def main():
         return stop_service(args.service)
     elif args.command == "black":
         return run_black(args.service)
+    elif args.command == "isort":
+        return run_isort(args.service)
     else:
         parser.print_help()
         return 1

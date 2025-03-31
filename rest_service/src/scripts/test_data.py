@@ -1,11 +1,11 @@
 """Test data initialization script"""
 
-from sqlmodel.ext.asyncio.session import AsyncSession
-from scripts.fixtures.tools import get_all_tools
-from scripts.fixtures.assistants import get_all_assistants
+from models import Assistant, AssistantToolLink, TelegramUser
 from scripts.fixtures.assistant_tools import get_all_assistant_tools
-from models import TelegramUser, AssistantToolLink, Assistant
+from scripts.fixtures.assistants import get_all_assistants
+from scripts.fixtures.tools import get_all_tools
 from sqlalchemy import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 async def create_test_data(db: AsyncSession) -> None:

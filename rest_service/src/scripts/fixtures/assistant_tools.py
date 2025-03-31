@@ -1,8 +1,8 @@
 """Assistant-Tool relationship fixtures for database initialization"""
 
-from sqlmodel.ext.asyncio.session import AsyncSession
+from models import Assistant, AssistantToolLink, Tool
 from sqlmodel import select
-from models import AssistantToolLink, Assistant, Tool
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 async def create_secretary_tools(db: AsyncSession) -> list[AssistantToolLink]:

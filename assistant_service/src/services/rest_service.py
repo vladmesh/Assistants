@@ -1,11 +1,12 @@
 """REST service client for interacting with the REST API"""
 
-from typing import List, Optional, Dict, Any
-from uuid import UUID
-import httpx
 import json
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
+import httpx
 from config.settings import settings
+from pydantic import BaseModel
 
 
 class Assistant(BaseModel):

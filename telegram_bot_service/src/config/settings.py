@@ -1,8 +1,9 @@
+import os
 from typing import Dict
+
+import structlog
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import structlog
-import os
 
 logger = structlog.get_logger()
 

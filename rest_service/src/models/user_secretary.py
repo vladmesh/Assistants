@@ -1,12 +1,14 @@
 """User-Secretary relationship model"""
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 from uuid import UUID, uuid4
+
 from sqlmodel import Field, Relationship
+
+from .assistant import Assistant
 from .base import BaseModel
 from .user import TelegramUser
-from .assistant import Assistant
 
 
 class UserSecretaryLink(BaseModel, table=True):

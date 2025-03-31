@@ -1,13 +1,15 @@
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+import google_auth_oauthlib.flow
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from src.config.settings import Settings
+
 from src.config.logger import get_logger
+from src.config.settings import Settings
 from src.schemas.calendar import CreateEventRequest
-import google_auth_oauthlib.flow
 
 logger = get_logger(__name__)
 

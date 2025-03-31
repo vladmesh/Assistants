@@ -1,7 +1,8 @@
-from typing import Optional, Type, ClassVar
-from tools.base import BaseTool, SubAssistantSchema
+from typing import ClassVar, Optional, Type
+
 from assistants.llm_chat import BaseLLMChat
 from config.logger import get_logger
+from tools.base import BaseTool, SubAssistantSchema
 
 logger = get_logger(__name__)
 

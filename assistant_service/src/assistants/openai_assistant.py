@@ -1,25 +1,25 @@
 """OpenAI Assistants API implementation"""
 
-import logging
-from typing import List, Optional, Any, Dict
-from openai import OpenAI
-import json
 import asyncio
+import json
+import logging
 import time
-from langchain_core.messages import BaseMessage
-from messages.base import (
-    BaseMessage as CustomBaseMessage,
-    HumanMessage,
-    SecretaryMessage,
-    ToolMessage,
-    SystemMessage,
-)
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from assistants.base import BaseAssistant
-from tools.base import BaseTool
 from config.logger import get_logger
+from langchain_core.messages import BaseMessage
+from messages.base import BaseMessage as CustomBaseMessage
+from messages.base import (
+    HumanMessage,
+    SecretaryMessage,
+    SystemMessage,
+    ToolMessage,
+)
+from openai import OpenAI
 from services.rest_service import RestServiceClient
+from tools.base import BaseTool
 
 # Configure logging
 logger = get_logger(__name__)

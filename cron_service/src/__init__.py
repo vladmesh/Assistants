@@ -2,6 +2,6 @@
 Cron service application package
 """
 
-from .scheduler import parse_cron_expression
-from .redis_client import send_notification, OUTPUT_QUEUE
+from .redis_client import OUTPUT_QUEUE, send_notification
 from .rest_client import fetch_scheduled_jobs
+from .scheduler import parse_cron_expression

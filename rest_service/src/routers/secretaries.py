@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 from uuid import UUID
 
+from database import get_session
+from fastapi import APIRouter, Depends, HTTPException
 from models.assistant import Assistant
 from models.user_secretary import UserSecretaryLink
-from database import get_session
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 router = APIRouter()
 

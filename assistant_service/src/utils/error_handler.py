@@ -1,6 +1,7 @@
 """Error handling utilities for assistants"""
 
-from typing import Dict, Any, Optional, Type
+from typing import Any, Dict, Optional, Type
+
 from src.config.logger import get_logger
 
 logger = get_logger(__name__)

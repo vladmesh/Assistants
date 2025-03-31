@@ -1,7 +1,8 @@
 """Redis storage implementation."""
 
-from typing import Any, List, Optional
 import json
+from typing import Any, List, Optional
+
 import redis.asyncio as redis
 from messages.base import BaseMessage
 
