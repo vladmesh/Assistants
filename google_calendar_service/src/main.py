@@ -57,6 +57,12 @@ async def shutdown_event():
     logger.info("Shutting down Google Calendar service")
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy"}
+
+
 if __name__ == "__main__":
     import uvicorn
 

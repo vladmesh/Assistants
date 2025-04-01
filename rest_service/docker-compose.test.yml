@@ -7,12 +7,15 @@ services:
       dockerfile: Dockerfile.test
     environment:
       - TESTING=1
-      - ASYNC_DATABASE_URL=postgresql+asyncpg://test_user:test_password@test-db:5432/test_db
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
       - PYTHONPATH=/src
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://test_user:test_password@test-db:5432/test_db
+    env_file:
+      - ./tests/.env.test
     depends_on:
-      - test-db
+      test-db:
+        condition: service_healthy
 
   test-db:
     image: postgres:16
@@ -24,6 +27,11 @@ services:
       - "5433:5432"
     volumes:
       - test_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   test_db_data: 

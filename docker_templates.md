@@ -136,16 +136,16 @@ volumes:
 - [x] docker-compose.test.yml соответствует шаблону
 
 ### rest_service
-- [ ] Dockerfile соответствует шаблону
-- [ ] Dockerfile.test соответствует шаблону
-- [ ] Блок в общем docker-compose.yml соответствует шаблону
-- [ ] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile соответствует шаблону
+- [x] Dockerfile.test соответствует шаблону
+- [x] Блок в общем docker-compose.yml соответствует шаблону
+- [x] docker-compose.test.yml соответствует шаблону
 
 ### google_calendar_service
-- [ ] Dockerfile соответствует шаблону
-- [ ] Dockerfile.test соответствует шаблону
-- [ ] Блок в общем docker-compose.yml соответствует шаблону
-- [ ] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile соответствует шаблону
+- [x] Dockerfile.test соответствует шаблону
+- [x] Блок в общем docker-compose.yml соответствует шаблону
+- [x] docker-compose.test.yml соответствует шаблону
 
 ### cron_service
 - [ ] Dockerfile соответствует шаблону
