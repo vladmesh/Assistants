@@ -2,6 +2,7 @@ services:
   assistant_service:
     build:
       context: ./assistant_service
+      dockerfile: Dockerfile
     container_name: assistant-service
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -13,8 +14,11 @@ services:
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
     env_file:
       - .env
+    volumes:
+      - ./assistant_service/src:/src
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - app_network
 
@@ -127,7 +131,7 @@ services:
     depends_on:
       - rest_service
       - redis
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
     networks:
       - app_network
 
@@ -140,6 +144,11 @@ services:
       - redis_data:/data
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
 
 networks:
   app_network:

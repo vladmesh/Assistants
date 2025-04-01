@@ -65,6 +65,7 @@ flake8-pyproject = "^1.2.3"
 mypy = "^1.6.1"
 pylint = "^3.0.2"
 autoflake = "^2.3.1"
+structlog = {extras = ["types"], version = "^25.2.0"}
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.3"
@@ -82,7 +83,14 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+disallow_incomplete_defs = true
 check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
 
 [tool.flake8]
 max-line-length = 88
