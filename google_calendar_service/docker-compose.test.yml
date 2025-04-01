@@ -1,21 +1,20 @@
-version: '3.8'
-
 services:
   test:
     build:
       context: .
       dockerfile: Dockerfile.test
-    environment:
-      - TESTING=1
-      - GOOGLE_CLIENT_ID=test_client_id
-      - GOOGLE_CLIENT_SECRET=test_client_secret
-      - GOOGLE_REDIRECT_URI=http://localhost:8000/auth/callback
-      - GOOGLE_SCOPES=https://www.googleapis.com/auth/calendar.readonly
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REST_SERVICE_URL=http://rest-service:8000
-      - LOG_LEVEL=DEBUG
-      - PYTHONPATH=/src
-      - TELEGRAM_BOT_USERNAME=test_bot
-      - REDIS_QUEUE_TO_SECRETARY=test_queue 
+    env_file:
+      - ./tests/.env.test
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3 

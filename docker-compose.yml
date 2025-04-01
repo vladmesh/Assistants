@@ -78,15 +78,26 @@ services:
   rest_service:
       build:
         context: ./rest_service
+        dockerfile: Dockerfile
       container_name: rest-service
       environment:
-        ASYNC_DATABASE_URL: ${ASYNC_DATABASE_URL}
+        - ASYNC_DATABASE_URL=${ASYNC_DATABASE_URL}
+      env_file:
+        - .env
       ports:
         - "8000:8000"
+      volumes:
+        - ./rest_service/src:/src
       depends_on:
-        - db
+        db:
+          condition: service_healthy
       networks:
         - app_network
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
 
   cron_service:
     build:
@@ -129,11 +140,17 @@ services:
     env_file:
       - .env
     depends_on:
-      - rest_service
-      - redis
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+      rest_service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   redis:
     image: redis:7-alpine

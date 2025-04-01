@@ -1,17 +1,17 @@
 FROM python:3.11-slim
 
-WORKDIR /src
+WORKDIR /
+
+ENV PYTHONPATH=/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TESTING=1
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install pytest pytest-asyncio pytest-cov
 
-ENV PYTHONPATH=/src
+COPY src/ /src/
+COPY tests/ /tests/
 
-# Copy source code first
-COPY src/ .
-
-# Then copy tests
-COPY tests/ tests/
-
-CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "tests/"] 
+CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"] 

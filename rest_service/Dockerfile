@@ -1,22 +1,23 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-WORKDIR /src
+WORKDIR /
 
-# Установка зависимостей
+ENV PYTHONPATH=/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копирование кода приложения
-COPY ./src/ .
-COPY ./alembic ./alembic
-COPY ./alembic.ini .
-COPY ./manage.py .
+COPY src/ /src/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+COPY manage.py .
 
-# Установка переменных окружения
-ENV PYTHONPATH=/src
-
-# Сделаем manage.py исполняемым
-RUN chmod +x manage.py
-
-# Команда для запуска FastAPI
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "src/main.py"]
