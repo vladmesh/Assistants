@@ -102,6 +102,7 @@ services:
   cron_service:
     build:
       context: ./cron_service
+      dockerfile: Dockerfile
     container_name: cron-service
     environment:
       - TELEGRAM_ID=${TELEGRAM_ID}
@@ -110,14 +111,20 @@ services:
       - REDIS_DB=${REDIS_DB}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
-    env_file:
-      - .env
+    volumes:
+      - ./cron_service/src:/src  # для разработки
     depends_on:
-      - rest_service
-      - redis
-    restart: unless-stopped
+      redis:
+        condition: service_healthy
+      rest_service:
+        condition: service_healthy
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "ps", "aux", "|", "grep", "python"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   google_calendar_service:
     build:
