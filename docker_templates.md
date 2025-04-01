@@ -154,10 +154,10 @@ volumes:
 - [x] docker-compose.test.yml соответствует шаблону
 
 ### telegram_bot_service
-- [ ] Dockerfile соответствует шаблону
-- [ ] Dockerfile.test соответствует шаблону
-- [ ] Блок в общем docker-compose.yml соответствует шаблону
-- [ ] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile соответствует шаблону
+- [x] Dockerfile.test соответствует шаблону
+- [x] Блок в общем docker-compose.yml соответствует шаблону
+- [x] docker-compose.test.yml соответствует шаблону
 
 ## Примечания
 1. При проверке каждого файла нужно учитывать специфику сервиса
