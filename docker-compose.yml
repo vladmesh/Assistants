@@ -71,9 +71,9 @@ services:
         - app_network
       healthcheck:
         test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-        interval: 5s
+        interval: 3s
         timeout: 5s
-        retries: 5
+        retries: 6
 
   rest_service:
       build:
@@ -170,9 +170,9 @@ services:
       - app_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 2s
       timeout: 3s
-      retries: 3
+      retries: 4
 
 networks:
   app_network:
