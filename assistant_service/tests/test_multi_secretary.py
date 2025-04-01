@@ -1,12 +1,6 @@
-import os
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# Добавляем путь к src в PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-
 from assistants.factory import AssistantFactory
 from messages.base import HumanMessage
 

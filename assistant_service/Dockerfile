@@ -1,16 +1,15 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /
 
-# Copy requirements first for better caching
+ENV PYTHONPATH=/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
-COPY src/ ./src/
-
-# Set Python path
-ENV PYTHONPATH=/app
+COPY src/ /src/
 
 # Run the application
-CMD ["python", "src/main.py"]
+CMD ["python", "/src/main.py"]
