@@ -2,7 +2,7 @@
 import argparse
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Optional
 
 
 def run_command(command: str) -> int:
@@ -45,7 +45,10 @@ def create_migration(message: str):
 
     # Find the newly created migration file in the container
     result = subprocess.run(
-        f'docker exec {container_id} bash -c "ls -t /app/alembic/versions/*.py | head -1"',
+        (
+            f"docker exec {container_id} bash -c "
+            '"ls -t /app/alembic/versions/*.py | head -1"'
+        ),
         shell=True,
         capture_output=True,
         text=True,
@@ -89,13 +92,15 @@ def rebuild_containers(service: Optional[str] = None) -> int:
 
 
 def restart_service(service: Optional[str] = None) -> int:
-    """Stop a service, rebuild all containers, and start the service in detached mode."""
+    """Stop a service, rebuild all containers,
+    and start the service in detached mode."""
     if service:
         return run_command(
-            f"docker compose stop {service} && docker compose build && docker compose up -d"
+            f"docker compose stop {service} && "
+            "docker compose build && docker compose up -d"
         )
     return run_command(
-        "docker compose down && docker compose build && docker compose up -d"
+        "docker compose down && " "docker compose build && docker compose up -d"
     )
 
 

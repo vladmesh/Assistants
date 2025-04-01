@@ -2,7 +2,6 @@
 """Script for running code formatters locally."""
 
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -65,7 +64,6 @@ def main():
     """Format all Python files in the project."""
     import subprocess
     import sys
-    from pathlib import Path
 
     def run_tool(cmd):
         try:

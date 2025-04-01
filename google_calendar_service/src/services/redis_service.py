@@ -1,5 +1,5 @@
 import json
-from typing import Awaitable, Union
+from typing import Awaitable
 
 import redis.asyncio as redis
 import structlog
