@@ -52,12 +52,6 @@ app.include_router(assistant_tools.router, prefix="/api", tags=["Assistant Tools
 app.include_router(secretaries.router, prefix="/api", tags=["Secretaries"])
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup"""
-    await init_db()
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
