@@ -95,9 +95,9 @@ services:
         - app_network
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-        interval: 30s
+        interval: 10s
         timeout: 10s
-        retries: 3
+        retries: 4
 
   cron_service:
     build:
