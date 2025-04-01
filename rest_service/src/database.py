@@ -34,13 +34,20 @@ async def drop_all_tables() -> None:
         await conn.execute(text("CREATE SCHEMA public"))
 
 
-async def init_db() -> None:
-    """Initialize database with tables and test data"""
-    # Drop all tables first
-    # await drop_all_tables()
-    # Create all tables
-    async with async_engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+async def init_db(drop_tables: bool = False, create_tables: bool = False) -> None:
+    """Initialize database with tables and test data
+
+    Args:
+        drop_tables: If True, drops and recreates public schema
+        create_tables: If True, creates all tables from models
+    """
+    if drop_tables:
+        await drop_all_tables()
+
+    if create_tables:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
+
     # Create test data
     # async with AsyncSessionLocal() as session:
     #    await create_test_data(session)
