@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 
 import structlog
@@ -37,7 +38,19 @@ async def process_message(
             await redis.lpush(
                 settings.input_queue,
                 json.dumps(
-                    {"user_id": user["id"], "text": message, "username": username}
+                    {
+                        "type": "human_message",
+                        "user_id": user["id"],
+                        "source": "user",
+                        "content": {
+                            "message": message,
+                            "metadata": {
+                                "username": username,
+                                "telegram_id": telegram_id,
+                            },
+                        },
+                        "timestamp": datetime.datetime.utcnow().isoformat(),
+                    }
                 ),
             )
             logger.info("Message sent to assistant queue", message=message)
