@@ -147,8 +147,7 @@ class ReminderTool(BaseTool):
             # Получаем пользователя по telegram_id
             try:
                 user_response = await self.client.get(
-                    f"{self.rest_service_url}/api/users/",
-                    params={"telegram_id": int(self.user_id)},
+                    f"{self.rest_service_url}/api/users/{int(self.user_id)}"
                 )
 
                 if user_response.status_code != 200:
@@ -160,7 +159,7 @@ class ReminderTool(BaseTool):
                     raise ToolError(
                         message="Пользователь не найден",
                         error_code="USER_NOT_FOUND",
-                        details={"telegram_id": self.user_id},
+                        details={"user_id": self.user_id},
                     )
 
                 user_data = user_response.json()
