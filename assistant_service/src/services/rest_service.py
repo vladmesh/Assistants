@@ -9,6 +9,14 @@ from config.settings import settings
 from pydantic import BaseModel
 
 
+class User(BaseModel):
+    """User model from REST service"""
+
+    id: int
+    telegram_id: int
+    username: Optional[str] = None
+
+
 class Assistant(BaseModel):
     """Assistant model from REST service"""
 
@@ -193,3 +201,19 @@ class RestServiceClient:
         )
         response.raise_for_status()
         return UserAssistantThread(**response.json())
+
+    async def get_user(self, user_id: int) -> User:
+        """Get user by ID
+
+        Args:
+            user_id: User ID (not telegram_id)
+
+        Returns:
+            User object
+
+        Raises:
+            httpx.HTTPError: If request fails
+        """
+        response = await self._client.get(f"{self.base_url}/api/users/{user_id}")
+        response.raise_for_status()
+        return User(**response.json())
