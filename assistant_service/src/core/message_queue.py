@@ -52,17 +52,25 @@ class MessageQueue:
         """
         try:
             # Get message from queue (FIFO order)
+            logger.debug("Waiting for message", queue=self.input_queue, timeout=timeout)
             message = await self.redis.blpop(self.input_queue, timeout=timeout)
             if not message:
+                logger.debug("No message received", queue=self.input_queue)
                 return None
 
             # Parse message
+            logger.info("Raw message received", message=message[1])
             message_data = json.loads(message[1])
 
-            logger.debug(
-                "Message received",
+            logger.info(
+                "Message parsed successfully",
                 queue=self.input_queue,
                 message_id=message_data.get("message_id"),
+                type=message_data.get("type"),
+                source=message_data.get("source"),
+                user_id=message_data.get("user_id"),
+                content=message_data.get("content"),
+                timestamp=message_data.get("timestamp"),
             )
 
             return message_data
@@ -91,10 +99,21 @@ class MessageQueue:
             response_json = json.dumps(response)
 
             # Send to queue
+            logger.info(
+                "Sending response to queue",
+                queue=self.output_queue,
+                message_id=response.get("message_id"),
+                type=response.get("type"),
+                user_id=response.get("user_id"),
+                status=response.get("status"),
+                content=response.get("content"),
+                error=response.get("error"),
+            )
+
             await self.redis.rpush(self.output_queue, response_json)
 
-            logger.debug(
-                "Response sent",
+            logger.info(
+                "Response sent successfully",
                 queue=self.output_queue,
                 message_id=response.get("message_id"),
             )
