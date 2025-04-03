@@ -1,293 +1,172 @@
-# LLM Context Assistant
+# Assistant Service Detailed Overview
 
-## 1. Общее описание
-Система ассистентов построена на двух основных типах реализации:
+## 1. Overview
+The assistant service is the core engine of the Smart Assistant project. It handles:
+- Processing of incoming user messages
+- Management of conversation context
+- Coordination of tool invocations
+- Asynchronous message processing via Redis queues
+- Supporting multiple secretary instances
+- Maintaining context isolation between users
 
-### 1.1 BaseLLMChat (LangGraph)
-- Реализация через LangGraph
-- Использует граф обработки сообщений
-- Поддерживает сложные сценарии взаимодействия
-- Имеет встроенную поддержку инструментов
+## 2. Architecture
 
-### 1.2 OpenAIAssistant (OpenAI Assistants API)
-- Реализация через OpenAI Assistants API
-- Использует thread-based контекст
-- Интегрируется с инструментами через оркестратор
-- Поддерживает асинхронную обработку
+### 2.1 Core Components
 
-## 2. Реализация через LangGraph (BaseLLMChat)
-### 2.1 Структура
-- Инициализация и конфигурация
-  ```python
-  class BaseLLMChat(BaseAssistant):
-      def __init__(self, settings: Settings, is_secretary: bool = False):
-          self.settings = settings
-          self.is_secretary = is_secretary
-          self.agent = None
-  ```
-- Граф обработки сообщений
-  - Узлы для обработки сообщений
-  - Узлы для работы с инструментами
-  - Узлы для форматирования ответов
-- Состояние и контекст
-  - Передача user_id через граф
-  - Сохранение контекста между узлами
-  - Управление историей сообщений
+#### BaseLLMChat (LangGraph)
+- Primary implementation using LangGraph
+- Message processing graph
+- Built-in tool support
+- Complex interaction scenarios
 
-### 2.2 Обработка сообщений
-- Формат сообщений LangGraph
-  ```python
-  {
-      "role": "user" | "assistant",
-      "content": str
-  }
-  ```
-- Процесс обработки
-  1. Получение сообщения
-  2. Форматирование для графа
-  3. Обработка через узлы
-  4. Форматирование ответа
-- Передача контекста пользователя
-  - Включение user_id в состояние
-  - Передача в инструменты
-  - Сохранение в истории
+#### OpenAIAssistant (OpenAI Assistants API)
+- Secondary implementation using OpenAI API
+- Thread-based context
+- Tool orchestration
+- Asynchronous processing
 
-### 2.3 Инструменты
-- Инициализация инструментов
-  ```python
-  def _initialize_tools(self):
-      tools = [
-          TimeToolWrapper(),
-          CalendarCreateTool(settings=self.settings),
-          CalendarListTool(settings=self.settings),
-          SubAssistantTool(settings=self.settings)
-      ]
-  ```
-- Передача user_id
-  ```python
-  def _set_tool_context(self, user_id: str):
-      for tool in self.tools:
-          if hasattr(tool, 'user_id'):
-              tool.user_id = user_id
-  ```
-- Специфика работы с календарем
-  - Проверка наличия user_id
-  - Форматирование ответов
-  - Обработка ошибок
+### 2.2 Directory Structure
 
-### 2.4 Обработка ошибок
-- Специфичные ошибки LangGraph
-  - Ошибки формата сообщений
-  - Ошибки узлов графа
-  - Ошибки инструментов
-- Логирование
-  - Трейсинг через граф
-  - Логирование ошибок
-  - Мониторинг состояния
-- Обработка исключений
-  - Graceful degradation
-  - Восстановление состояния
-  - Информативные сообщения
+```
+assistant_service/src/
+├── assistants/           # Assistant implementations
+│   ├── base.py          # Base assistant class
+│   ├── factory.py       # Assistant factory
+│   ├── langgraph.py     # LangGraph implementation
+│   └── openai.py        # OpenAI implementation
+├── tools/               # Tool implementations
+│   ├── base.py         # Base tool class
+│   ├── calendar.py     # Calendar operations
+│   ├── reminder.py     # Reminder management
+│   ├── rest.py         # REST service interface
+│   ├── sub_assistant.py # Sub-assistant wrapper
+│   └── time.py         # Time operations
+├── messages/           # Message handling
+│   ├── base.py        # Base message class
+│   └── types.py       # Message types
+├── services/          # External service clients
+├── storage/           # Context storage
+├── config/            # Service configuration
+├── core/              # Core logic
+├── utils/             # Utilities
+└── orchestrator.py    # Main orchestrator
+```
 
-## 3. Реализация через OpenAI Assistants API (OpenAIAssistant)
-### 3.1 Структура
-- Инициализация и конфигурация
-  ```python
-  class OpenAIAssistant(BaseAssistant):
-      def __init__(self, settings: Settings):
-          self.settings = settings
-          self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-  ```
-- Оркестратор
-  - Управление потоками
-  - Координация инструментов
-  - Обработка состояний
-- Управление состоянием
-  - Thread-based контекст
-  - Сохранение истории
-  - Изоляция пользователей
+## 3. Implementation Details
 
-### 3.2 Обработка сообщений
-- Формат сообщений OpenAI
-  ```python
-  {
-      "role": "user" | "assistant",
-      "content": str,
-      "name": str  # для инструментов
-  }
-  ```
-- Процесс обработки
-  1. Создание/получение thread
-  2. Добавление сообщения
-  3. Запуск run
-  4. Обработка ответа
-- Управление контекстом
-  - Сохранение в thread
-  - Ограничение длины
-  - Очистка истории
+### 3.1 LangGraph Implementation
 
-### 3.3 Инструменты
-- Регистрация инструментов
-  ```python
-  tools = [
-      {
-          "type": "function",
-          "function": {
-              "name": "calendar_create",
-              "description": "Create a calendar event",
-              "parameters": {...}
-          }
-      }
-  ]
-  ```
-- Координация через оркестратор
-  - Обработка запросов
-  - Вызов инструментов
-  - Форматирование ответов
-- Специфика работы с календарем
-  - Передача user_id
-  - Обработка результатов
-  - Обработка ошибок
+#### Message Processing
+```python
+class BaseLLMChat(BaseAssistant):
+    def __init__(self, settings: Settings, is_secretary: bool = False):
+        self.settings = settings
+        self.is_secretary = is_secretary
+        self.agent = None
+```
 
-### 3.4 Обработка ошибок
-- Специфичные ошибки OpenAI
-  - API ошибки
-  - Ошибки thread
-  - Ошибки run
-- Логирование
-  - Трейсинг запросов
-  - Логирование ошибок
-  - Мониторинг состояния
-- Обработка исключений
-  - Retry механизмы
-  - Graceful degradation
-  - Информативные сообщения
+#### Tool Integration
+```python
+def _initialize_tools(self):
+    tools = [
+        TimeToolWrapper(),
+        CalendarCreateTool(settings=self.settings),
+        CalendarListTool(settings=self.settings),
+        SubAssistantTool(settings=self.settings)
+    ]
+```
 
-## 4. Общие компоненты
-### 4.1 Базовые классы
-- `BaseAssistant`
-  ```python
-  class BaseAssistant:
-      def process_message(self, message: str, user_id: str) -> str:
-          pass
-  ```
-- `BaseTool`
-  ```python
-  class BaseTool:
-      def _execute(self, *args, **kwargs) -> Any:
-          pass
-  ```
-- `BaseMessage`
-  ```python
-  class BaseMessage:
-      def __init__(self, content: str, source: str):
-          self.content = content
-          self.source = source
-          self.timestamp = datetime.utcnow()
-  ```
+### 3.2 OpenAI Implementation
 
-### 4.2 Утилиты
-- `TimeToolWrapper`
-  - Форматирование времени
-  - Валидация дат
-  - Конвертация часовых поясов
-- `RestServiceTool`
-  - HTTP запросы
-  - Обработка ответов
-  - Обработка ошибок
-- Общие хелперы
-  - Форматирование
-  - Валидация
-  - Логирование
+#### Thread Management
+```python
+class OpenAIAssistant(BaseAssistant):
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+```
 
-### 4.3 Конфигурация
-- Настройки
-  ```python
-  class Settings(BaseSettings):
-      openai_api_key: str
-      redis_url: str
-      log_level: str
-  ```
-- Переменные окружения
-  - API ключи
-  - URL сервисов
-  - Настройки логирования
-- Логирование
-  - Форматы
-  - Уровни
-  - Обработчики
+#### Tool Registration
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "calendar_create",
+            "description": "Create a calendar event",
+            "parameters": {...}
+        }
+    }
+]
+```
 
-## 5. Интеграция с внешними сервисами
+## 4. Message & Context Handling
+
+### 4.1 Message Types
+- HumanMessage: User messages
+- SecretaryMessage: Secretary responses
+- ToolMessage: Tool execution results
+- SystemMessage: System notifications
+
+### 4.2 Context Management
+- LangGraph: Graph-based state management
+- OpenAI: Thread-based storage
+- Redis: Persistent storage and queues
+
+## 5. External Integration
+
 ### 5.1 Redis
-- Хранение контекста
-  - Ключи
-  - Форматы
-  - TTL
-- Управление состоянием
-  - Сохранение
-  - Восстановление
-  - Очистка
-- Кэширование
-  - Стратегии
-  - Инвалидация
-  - Мониторинг
+- Message queues
+- Context storage
+- State management
 
-### 5.2 OpenAI
-- Конфигурация API
-  - Ключи
-  - Модели
-  - Таймауты
-- Управление токенами
-  - Подсчет
-  - Лимиты
-  - Оптимизация
-- Обработка ответов
-  - Форматирование
-  - Валидация
-  - Обработка ошибок
+### 5.2 External Services
+- REST API service
+- Google Calendar service
+- Telegram Bot service
 
-## 6. Разработка и тестирование
-### 6.1 Добавление новых инструментов
-- Создание инструмента
-  ```python
-  class NewTool(BaseTool):
-      def _execute(self, *args, **kwargs) -> Any:
-          # Реализация
-          pass
-  ```
-- Интеграция с ассистентами
-  - Регистрация
-  - Конфигурация
-  - Тестирование
-- Тестирование
-  - Unit-тесты
-  - Интеграционные тесты
-  - E2E тесты
+## 6. Error Handling & Logging
 
-### 6.2 Отладка
-- Логирование
-  - Уровни
-  - Форматы
-  - Фильтрация
-- Трейсинг
-  - ID запросов
-  - Время выполнения
-  - Зависимости
-- Мониторинг
-  - Метрики
-  - Алерты
-  - Дашборды
+### 6.1 Error Management
+- Structured error handling
+- Retry mechanisms
+- Graceful degradation
 
-### 6.3 Тестирование
-- Unit-тесты
-  - Изоляция
-  - Моки
-  - Сценарии
-- Интеграционные тесты
-  - Сервисы
-  - Базы данных
-  - API
-- E2E тесты
-  - Сценарии
-  - Окружение
-  - Автоматизация 
+### 6.2 Logging
+- Request tracing
+- Error logging
+- Performance monitoring
+
+## 7. Configuration
+
+### 7.1 Settings
+```python
+class Settings(BaseSettings):
+    openai_api_key: str
+    redis_url: str
+    log_level: str
+```
+
+### 7.2 Environment Variables
+- API keys
+- Service URLs
+- Logging settings
+
+## 8. Development Guidelines
+
+### 8.1 Adding New Tools
+- Extend BaseTool
+- Implement _execute method
+- Add error handling
+- Update documentation
+
+### 8.2 Testing
+- Unit tests for tools
+- Integration tests
+- Performance tests
+
+### 8.3 Best Practices
+- Use type hints
+- Follow naming conventions
+- Document changes
+- Maintain test coverage 

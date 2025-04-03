@@ -3,167 +3,236 @@
 ## 1. Overview
 - **Purpose:** Provides a RESTful API to manage user data, assistant configurations, and operational data.
 - **Functions:**
-  - CRUD operations for assistants, tools, links, and scheduled tasks.
-  - Data validation using Pydantic models.
-  - Persistent storage with PostgreSQL.
+  - CRUD operations for assistants, tools, and scheduled tasks
+  - User management and authentication
+  - Calendar integration
+  - Task scheduling
+  - Assistant-user mapping
+- **Tech Stack:** 
+  - FastAPI for API endpoints
+  - SQLModel/SQLAlchemy for ORM
+  - PostgreSQL for data storage
+  - Alembic for migrations
 
-## 2. Directory Structure (Simplified)
+## 2. Directory Structure
+```
 rest_service/
-├── app/                  
-│   ├── models/          
-│   │   ├── assistant.py   # Assistant and tool models
-│   │   ├── base.py        # Base models
-│   │   ├── calendar.py    # Calendar-related models
-│   │   ├── cron.py        # Scheduler models
-│   │   └── user.py        # User models
-│   ├── routers/         
-│   │   ├── assistants.py      # Assistant management endpoints
-│   │   ├── assistant_tools.py # Linking assistants and tools
-│   │   ├── calendar.py        # Calendar management endpoints
-│   │   ├── cron_jobs.py       # Task scheduling endpoints
-│   │   ├── tools.py           # Tool management endpoints
-│   │   └── users.py           # User management endpoints
-│   ├── database.py        # Database connection and ORM setup
-│   ├── main.py            # Application entry point
-│   └── config.py          # Configuration settings
-├── tests/                 # Automated tests
-└── requirements.txt       # Project dependencies
+├── src/
+│   ├── main.py              # FastAPI application entry point
+│   ├── database.py          # Database connection and ORM setup
+│   ├── config.py            # Configuration settings
+│   ├── models/              # Database models
+│   │   ├── base.py          # Base model with timestamps
+│   │   ├── assistant.py     # Assistant and tool models
+│   │   ├── calendar.py      # Calendar integration models
+│   │   ├── cron.py          # Task scheduling models
+│   │   ├── user.py          # User models
+│   │   └── user_secretary.py # User-secretary mapping
+│   ├── routers/             # API endpoints
+│   │   ├── assistants.py    # Assistant management
+│   │   ├── tools.py         # Tool management
+│   │   ├── users.py         # User management
+│   │   ├── calendar.py      # Calendar integration
+│   │   ├── cron_jobs.py     # Task scheduling
+│   │   └── secretaries.py   # Secretary management
+│   └── schemas/             # Pydantic models
+└── tests/                   # Test suite
+```
 
-## 3. Key Components
+## 3. Data Models
 
-- **FastAPI Application (main.py):**
-  - Initializes the REST API, attaches routers, and manages the service lifecycle.
+### 3.1 Base Model
+```python
+class BaseModel(SQLModel):
+    created_at: datetime = Field(default_factory=get_utc_now)
+    updated_at: datetime = Field(default_factory=get_utc_now)
+```
 
-- **Database Module (database.py):**
-  - Sets up the PostgreSQL connection using SQLAlchemy/SQLModel.
-  - Manages connection pooling, session handling, and Alembic migrations.
+### 3.2 Assistant Models
+```python
+class AssistantType(str, enum.Enum):
+    LLM = "llm"
+    OPENAI_API = "openai_api"
 
-- **Routers:**
-  - Organize endpoints for assistants, tools, calendar, cron jobs, and users.
-  - Validate incoming data with Pydantic and interface with ORM models.
+class Assistant(BaseModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str
+    is_secretary: bool
+    model: str
+    instructions: str
+    assistant_type: AssistantType
+```
 
-- **Configuration (config.py):**
-  - Centralizes environment variables and service settings for consistent behavior.
+### 3.3 Tool Models
+```python
+class ToolType(str, enum.Enum):
+    CALENDAR = "calendar"
+    REMINDER = "reminder"
+    TIME = "time"
+    SUB_ASSISTANT = "sub_assistant"
+    WEATHER = "weather"
 
-- **Testing Framework:**
-  - Contains unit and integration tests to verify endpoints and database operations.
+class Tool(BaseModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str
+    tool_type: ToolType
+    description: str
+    input_schema: dict
+```
 
-## 4. Integration & Workflow
+### 3.4 User Models
+```python
+class TelegramUser(BaseModel, table=True):
+    id: int = Field(primary_key=True)
+    telegram_id: int = Field(unique=True)
+    username: Optional[str]
+    
+    # Relationships
+    cronjobs: List[CronJob]
+    calendar_credentials: Optional[CalendarCredentials]
+    secretary_links: List[UserSecretaryLink]
+```
 
-- **Inter-Service Communication:**
-  - Acts as the central hub by providing REST endpoints for other microservices (assistant, google_calendar_service, cron_service, tg_bot).
-  - Exposes APIs to manage user data, configuration, and operational state.
+### 3.5 Calendar Models
+```python
+class CalendarCredentials(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    user_id: int = Field(foreign_key="telegramuser.id")
+    access_token: str
+    refresh_token: str
+    token_expiry: datetime
+```
 
-- **Request Handling:**
-  - Validates incoming requests using Pydantic models.
-  - Processes CRUD operations by interfacing with the PostgreSQL database through SQLAlchemy/SQLModel.
+### 3.6 Cron Models
+```python
+class CronJobType(str, enum.Enum):
+    NOTIFICATION = "notification"
+    SCHEDULE = "schedule"
 
-- **Data Consistency & Migrations:**
-  - Ensures data integrity via ORM-based models and structured validations.
-  - Manages database schema changes with Alembic migrations.
+class CronJob(BaseModel, table=True):
+    id: int = Field(primary_key=True)
+    name: str
+    type: CronJobType
+    cron_expression: str
+    user_id: int = Field(foreign_key="telegramuser.id")
+    is_active: bool
+```
 
-- **Configuration Management:**
-  - Centralized settings in `config.py` control service behavior and environment-specific configurations.
+### 3.7 User-Secretary Mapping
+```python
+class UserSecretaryLink(BaseModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: int = Field(foreign_key="telegramuser.id")
+    secretary_id: UUID = Field(foreign_key="assistant.id")
+    is_active: bool
+```
 
+## 4. API Endpoints
 
-## 6. Models & Relationships
+### 4.1 Assistant Management
+- **GET /api/assistants**: List all assistants
+- **POST /api/assistants**: Create new assistant
+- **GET /api/assistants/{id}**: Get assistant details
+- **PUT /api/assistants/{id}**: Update assistant
+- **DELETE /api/assistants/{id}**: Delete assistant
 
-- **Assistant Model:**
-  - **Fields:**  
-    - `id` (UUID)
-    - `name`
-    - `is_secretary`
-    - `model`
-    - `instructions`
-    - `assistant_type` (e.g., "llm" or "openai_api")
-    - `openai_assistant_id`
-    - `is_active`
-    - `created_at`, `updated_at`
-  - **Relationships:**  
-    - Associated with multiple tools via `AssistantToolLink`.
-    - Engaged in conversation threads managed by `UserAssistantThread`.
+### 4.2 Tool Management
+- **GET /api/tools**: List all tools
+- **POST /api/tools**: Create new tool
+- **GET /api/tools/{id}**: Get tool details
+- **PUT /api/tools/{id}**: Update tool
+- **DELETE /api/tools/{id}**: Delete tool
 
-- **Tool Model:**
-  - **Fields:**  
-    - `id` (UUID)
-    - `name`
-    - `tool_type` (e.g., "calendar", "reminder", "time", "weather", "sub_assistant")
-    - `description`
-    - `input_schema` (JSON schema)
-    - `assistant_id` (optional, for sub_assistant type)
-    - `is_active`
-    - `created_at`, `updated_at`
-  - **Relationships:**  
-    - Linked to an assistant, or utilized within sub-assistant contexts.
+### 4.3 User Management
+- **GET /api/users**: List all users
+- **POST /api/users**: Create new user
+- **GET /api/users/{id}**: Get user details
+- **PUT /api/users/{id}**: Update user
+- **DELETE /api/users/{id}**: Delete user
 
-- **AssistantToolLink Model:**
-  - **Purpose:** Establishes a many-to-many relationship between assistants and tools.
-  - **Key Fields:**  
-    - `sub_assistant_id`
-    - `is_active`
-    - `created_at`, `updated_at`
+### 4.4 Calendar Integration
+- **GET /api/calendar/{user_id}**: Get calendar credentials
+- **POST /api/calendar/{user_id}**: Store calendar credentials
+- **DELETE /api/calendar/{user_id}**: Remove calendar credentials
 
-- **UserAssistantThread Model:**
-  - **Purpose:** Stores conversation thread identifiers for each user-assistant pair.
-  - **Details:**  
-    - Ensures a unique mapping between `user_id` and `assistant_id` to maintain conversation continuity.
+### 4.5 Task Scheduling
+- **GET /api/cron-jobs**: List all scheduled tasks
+- **POST /api/cron-jobs**: Create new task
+- **GET /api/cron-jobs/{id}**: Get task details
+- **PUT /api/cron-jobs/{id}**: Update task
+- **DELETE /api/cron-jobs/{id}**: Delete task
 
-- **TelegramUser Model:**
-  - **Fields:**  
-    - `id` (Integer, Primary Key)
-    - `telegram_id` (BigInteger, Unique)
-    - `username` (Optional String)
-    - `created_at`, `updated_at` (from BaseModel)
-  - **Relationships:**  
-    - Associated with multiple `CronJob`s
-    - Has one `CalendarCredentials`
+## 5. Configuration
 
-- **CalendarCredentials Model:**
-  - **Fields:**  
-    - `id` (Integer, Primary Key)
-    - `user_id` (Foreign Key to TelegramUser)
-    - `access_token` (String)
-    - `refresh_token` (String)
-    - `token_expiry` (DateTime)
-    - `created_at`, `updated_at` (DateTime)
-  - **Relationships:**  
-    - Belongs to one `TelegramUser`
+### 5.1 Settings
+```python
+class Settings(BaseSettings):
+    ASYNC_DATABASE_URL: str
+    DB_ECHO: bool = False
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+```
 
-- **CronJob Model:**
-  - **Fields:**  
-    - `id` (Integer, Primary Key)
-    - `name` (String)
-    - `type` (CronJobType Enum: "notification" or "schedule")
-    - `cron_expression` (String)
-    - `user_id` (Foreign Key to TelegramUser)
-    - `created_at`, `updated_at` (from BaseModel)
-  - **Relationships:**  
-    - Belongs to one `TelegramUser`
-    - Has many `CronJobNotification`s
-    - Has many `CronJobRecord`s
+### 5.2 Environment Variables
+- `ASYNC_DATABASE_URL`: Database connection string
+- `DB_ECHO`: SQL query logging
+- `DB_POOL_SIZE`: Connection pool size
+- `DB_MAX_OVERFLOW`: Maximum overflow connections
 
-- **CronJobNotification Model:**
-  - **Fields:**  
-    - `id` (Integer, Primary Key)
-    - `cron_job_id` (Foreign Key to CronJob)
-    - `message` (String)
-    - `created_at`, `updated_at` (from BaseModel)
+## 6. Database Management
 
-- **CronJobRecord Model:**
-  - **Fields:**  
-    - `id` (Integer, Primary Key)
-    - `cron_job_id` (Foreign Key to CronJob)
-    - `started_at` (DateTime)
-    - `finished_at` (Optional DateTime)
-    - `status` (CronJobStatus Enum: "created", "running", "done", "failed")
-    - `created_at`, `updated_at` (from BaseModel)
+### 6.1 Connection Setup
+```python
+async_engine = create_async_engine(
+    settings.ASYNC_DATABASE_URL,
+    echo=settings.DB_ECHO,
+    pool_pre_ping=True,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+)
+```
 
-- **BaseModel:**
-  - **Purpose:** Base class for all models providing common functionality
-  - **Fields:**  
-    - `created_at` (DateTime, UTC)
-    - `updated_at` (DateTime, UTC)
-  - **Features:**  
-    - Automatic timestamp management
-    - UTC timezone handling
-    - Automatic update of `updated_at` on model changes
+### 6.2 Session Management
+```python
+AsyncSessionLocal = sessionmaker(
+    async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+```
+
+## 7. Testing
+
+### 7.1 Test Structure
+- **Unit Tests:**
+  - Model validation
+  - API endpoints
+  - Database operations
+
+### 7.2 Test Environment
+- Isolated test database
+- Mock services
+- Environment variables
+- Test fixtures
+
+## 8. Best Practices
+
+### 8.1 Development Guidelines
+- Use type hints
+- Follow naming conventions
+- Document changes
+- Maintain test coverage
+
+### 8.2 Error Handling
+- Structured logging
+- Validation errors
+- Database errors
+- API errors
+
+### 8.3 Performance
+- Connection pooling
+- Query optimization
+- Caching
+- Indexing

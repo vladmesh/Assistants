@@ -1,9 +1,43 @@
 # High-Level Overview
 
+## Project Structure
+
+The project is organized as a monorepo with the following structure:
+
+```
+smart-assistant/
+├── assistant_service/          # Core assistant service
+├── rest_service/              # REST API service
+├── google_calendar_service/   # Google Calendar integration
+├── cron_service/             # Task scheduler service
+├── telegram_bot_service/     # Telegram bot interface
+├── scripts/                  # Utility scripts
+├── manage.py                # Project management script
+├── run_tests.sh            # Test execution script
+├── run_formatters.sh       # Code formatting script
+├── docker-compose.yml      # Main Docker configuration
+├── pyproject.toml          # Poetry configuration
+└── poetry.lock            # Fixed dependency versions
+```
+
+Each service follows a consistent structure:
+```
+service_name/
+├── src/                    # Source code
+├── tests/                  # Test suite
+├── Dockerfile             # Main Dockerfile
+├── Dockerfile.test        # Test environment Dockerfile
+├── docker-compose.test.yml # Test environment configuration
+├── requirements.txt       # Service dependencies
+├── llm_context_*.md      # Service documentation
+└── __init__.py           # Package initialization
+```
+
 ## Services
 
 The project is divided into several independent microservices:
-- **assistant**  
+
+- **assistant_service**  
   - Core engine for handling user messages and coordinating various LLM-based functionalities.
   - Manages context, threads, and asynchronous message processing via Redis.
   - Supports multiple secretary instances with user-specific configurations.
@@ -24,96 +58,276 @@ The project is divided into several independent microservices:
   - A scheduler service using APScheduler to manage and execute scheduled tasks.
   - Periodically pulls job configurations from the REST API and sends notifications via Redis.
   
-- **tg_bot**  
+- **telegram_bot_service**  
   - A Telegram Bot interface for end-user interaction.
   - Receives user messages, identifies users via REST API, and sends formatted responses.
 
+## Project Management
+
+The project includes several management scripts:
+
+- **manage.py** - Main management script for:
+  - Database migrations
+  - Service testing
+  - Container management
+  - Service lifecycle control
+
+- **run_tests.sh** - Script for running tests in Docker containers
+- **run_formatters.sh** - Script for code formatting and linting
+
+Detailed information about each service is available in their respective `llm_context_*.md` files.
+
 ## Deployment
 
-- **Docker & Docker Compose**  
-  - Each service runs in its own container.
-  - Deployment is managed using `docker compose` commands.
-  - Example for running tests and managing containers:
-    - **Build and start containers:**  
-      ```bash
-      docker compose up --build -d
-      ```
-    - **Check container status:**  
-      ```bash
-      docker compose ps
-      ```
+### Docker & Docker Compose
 
-- **Environment Variables**  
-  - Configuration (e.g., database URLs, tokens) is managed via environment variables.
-  - For testing, a separate Docker Compose file (`docker-compose.test.yml`) is used to set up an isolated test environment.
+The project uses Docker Compose for container orchestration. Each service runs in its own container with the following configuration:
+
+- **Base Services:**
+  - `redis`: Redis server for message queues and caching
+  - `db`: PostgreSQL database for persistent storage
+  - `rest_service`: REST API service (port 8000)
+  - `google_calendar_service`: Calendar integration (port 8001)
+  - `assistant_service`: Core assistant service
+  - `telegram_bot_service`: Telegram bot interface
+  - `cron_service`: Task scheduler service
+
+- **Container Management:**
+  ```bash
+  # Build and start all containers
+  docker compose up --build -d
+
+  # Check container status
+  docker compose ps
+
+  # View logs for a specific service
+  docker compose logs -f assistant_service
+
+  # Restart a specific service
+  docker compose restart assistant_service
+  ```
+
+- **Health Checks:**
+  - Each service implements health checks
+  - Services wait for dependencies to be healthy before starting
+  - Automatic retries and timeouts are configured
+
+### Environment Configuration
+
+The project uses environment variables for configuration:
+
+- **Core Services:**
+  - `POSTGRES_*`: Database configuration
+  - `REDIS_*`: Redis connection settings
+  - `ASYNC_DATABASE_URL`: Async database connection string
+
+- **API Keys & Secrets:**
+  - `OPENAI_API_KEY`: OpenAI API key
+  - `OPEN_API_SECRETAR_ID`: OpenAI Assistant ID
+  - `TELEGRAM_TOKEN`: Telegram Bot token
+  - `GOOGLE_*`: Google Calendar API credentials
+
+- **Service Communication:**
+  - `REDIS_QUEUE_TO_TELEGRAM`: Queue for messages to Telegram
+  - `REDIS_QUEUE_TO_SECRETARY`: Queue for messages to Assistant
+  - `REST_SERVICE_URL`: REST API endpoint
+
+### Development Setup
+
+For development:
+- Source code is mounted as volumes for live updates
+- Each service has its own test environment (`docker-compose.test.yml`)
+- Health checks ensure proper service initialization
+- Network isolation using Docker networks
+
+### Testing Environment
+
+- Separate Docker Compose configuration for tests
+- Isolated test databases and Redis instances
+- Automated test execution in containers
+- Health checks for test services
 
 ## Testing
 
-- **Types of Tests:**
-  - **Unit Tests:**  
-    - Validate individual components, business logic, and data models.
-    - Use mocks for external dependencies.
-  - **Integration Tests:**  
-    - Verify API endpoints and inter-service interactions.
-    - Ensure correct behavior of asynchronous operations.
-  - **End-to-End Tests:**  
-    - Test full user workflows in a complete Docker environment.
-    - Enforce isolation from the local development environment.
+### Test Types and Structure
 
-- **Test Execution:**
-  - Tests are designed to run exclusively within Docker containers.
-  - A dedicated script (`run_tests.sh`) is provided to launch all tests:
-    ```bash
-    ./manage.py test --service rest_service
-    ```
-  - Direct execution inside a container (e.g., `docker compose exec rest_service python -m pytest`) is discouraged.
+The project implements a comprehensive testing strategy with the following components:
+
+- **Unit Tests:**
+  - Validate individual components and business logic
+  - Use mocks for external dependencies
+  - Focus on isolated functionality testing
+
+- **Integration Tests:**
+  - Verify inter-service communication
+  - Test API endpoints and database operations
+  - Validate asynchronous operations
+
+- **End-to-End Tests:**
+  - Test complete user workflows
+  - Run in isolated Docker environments
+  - Validate service interactions
+
+### Test Execution
+
+Tests are executed using Docker containers for isolation and consistency:
+
+```bash
+# Run all tests
+./run_tests.sh
+
+# Run tests for specific services
+./run_tests.sh rest_service assistant_service
+
+# Available services:
+# - rest_service
+# - cron_service
+# - telegram_bot_service
+# - assistant_service
+# - google_calendar_service
+```
+
+### Test Environment
+
+Each service has its own test environment:
+
+- **Docker Configuration:**
+  - `Dockerfile.test` - Test-specific Dockerfile
+  - `docker-compose.test.yml` - Test environment configuration
+  - Isolated databases and Redis instances
+
+- **Environment Variables:**
+  - `TESTING=1` - Test mode flag
+  - `PYTHONPATH=/src` - Source code path
+  - `ASYNC_DATABASE_URL` - Test database connection
+  - Service-specific test configurations
+
+### Test Management
+
+- **Test Results:**
+  - Color-coded output for better visibility
+  - Detailed error reporting
+  - Service-specific test status
+
+- **Test Isolation:**
+  - Each service runs in its own container
+  - Clean environment for each test run
+  - Automatic cleanup after tests
+
+- **Continuous Integration:**
+  - Automated test execution
+  - Service-specific test suites
+  - Integration with CI/CD pipeline
+
+### Best Practices
+
+- **Test Organization:**
+  - Clear separation of test types
+  - Consistent naming conventions
+  - Proper test isolation
+
+- **Test Data:**
+  - Use of fixtures and factories
+  - Clean test data management
+  - Proper cleanup after tests
+
+- **Test Coverage:**
+  - Coverage reports for each service
+  - Integration with coverage tools
+  - Regular coverage monitoring
 
 ## Scripts & Tools
 
-### Management Scripts (manage.py)
-- **migrate:**  
-  - Create and apply database migrations.
-  - Example:  
-    ```bash
-    ./manage.py migrate "Initial migration"
-    ```
-- **upgrade:**  
-  - Apply pending migrations.
-- **test:**  
-  - Run the full suite of tests in the appropriate Docker container.
-- **rebuild:**  
-  - Rebuild specific service containers.  
-    Example:  
-    ```bash
-    ./manage.py rebuild --service rest_service
-    ```
-- **restart:**  
-  - Restart the services.
-- **start/stop:**  
-  - Manage service lifecycle.
+### Management Scripts
 
-### Tools for the Assistant
+The project provides several management scripts for development and deployment:
 
-- **Calendar Tool:**  
-  - Handles creation and retrieval of calendar events.
-  - Integrates with Google Calendar API.
-  
-- **Reminder Tool:**  
-  - Manages user reminders and notifications.
-  
-- **Time Tool:**  
-  - Provides time-related functionalities.
-  
-- **Sub Assistant Tool:**  
-  - Delegates specialized tasks to sub-assistants.
-  
-- **Weather Tool:**  
-  - Fetches and provides weather information (if integrated).
+#### manage.py
 
-- **Secretary Management Tool:**
-  - Handles user-secretary mapping
-  - Manages secretary configurations and preferences
-  - Provides secretary selection functionality
+Main management script with the following commands:
+
+```bash
+# Database Management
+./manage.py migrate "Migration message"  # Create new migration
+./manage.py upgrade                      # Apply pending migrations
+
+# Service Management
+./manage.py start [--service SERVICE]    # Start service(s)
+./manage.py stop [--service SERVICE]     # Stop service(s)
+./manage.py restart [--service SERVICE]  # Restart service(s)
+./manage.py rebuild [--service SERVICE]  # Rebuild service(s)
+
+# Testing
+./manage.py test [--service SERVICE]     # Run tests
+
+# Code Formatting
+./manage.py black [--service SERVICE]    # Run black formatter
+./manage.py isort [--service SERVICE]    # Run isort formatter
+```
+
+#### run_tests.sh
+
+Test execution script:
+```bash
+# Run all tests
+./run_tests.sh
+
+# Run specific service tests
+./run_tests.sh rest_service assistant_service
+```
+
+#### run_formatters.sh
+
+Code formatting script:
+- Runs black and isort on changed files
+- Checks formatting before commit
+- Provides instructions for fixing formatting issues
+
+### Development Tools
+
+#### Code Formatters
+- **Black**: Python code formatter
+- **isort**: Import statement sorter
+- **flake8**: Code style checker
+- **mypy**: Static type checker
+
+#### Testing Tools
+- **pytest**: Test framework
+- **pytest-asyncio**: Async test support
+- **pytest-cov**: Coverage reporting
+- **pytest-mock**: Mocking utilities
+
+#### Database Tools
+- **Alembic**: Database migrations
+- **SQLAlchemy**: ORM and database toolkit
+- **psycopg2**: PostgreSQL adapter
+
+#### Container Management
+- **Docker**: Containerization
+- **Docker Compose**: Container orchestration
+- **Health Checks**: Service monitoring
+
+### Best Practices
+
+- **Code Formatting:**
+  - Run formatters before committing
+  - Use consistent formatting rules
+  - Check formatting in CI/CD
+
+- **Testing:**
+  - Write tests for new features
+  - Maintain test coverage
+  - Run tests in containers
+
+- **Database:**
+  - Use migrations for schema changes
+  - Test migrations before deployment
+  - Maintain migration history
+
+- **Container Management:**
+  - Use health checks
+  - Monitor container status
+  - Follow container best practices
 
 ---
 
@@ -122,26 +336,107 @@ This high-level summary encapsulates the primary components, deployment strategy
 # General Recommendations and Future Plans
 
 ## Best Practices & Internal Guidelines
-- **Minimal Changes:** Modify only what's necessary and avoid optimizations without validation.
-- **Strict Verification:** Run tests for every change; verify service status and logs after deployments.
-- **Clear Communication:** Use English for code comments, commit messages, and documentation.
-- **Docker-First Approach:** Always manage containers using `docker compose` and check service status (e.g., using `docker compose ps`).
-- **Database Integrity:** Use synchronous migrations (psycopg2) for Alembic and log connection URLs for debugging.
-- **Secretary Management:** Ensure proper context isolation between different users' secretaries.
 
-## Planned Enhancements
-- **Caching:** Implement Redis-based caching to speed up data retrieval.
-- **Dynamic Configuration:** Develop a mechanism for real-time configuration updates across services.
-- **Expanded LLM Integrations:** Integrate additional LLM APIs beyond OpenAI.
-- **Enhanced Testing:** Introduce more comprehensive end-to-end and performance tests, ensuring all tests run only within Docker.
-- **CI/CD Automation:** Automate Docker image builds, test executions, and deployments in the CI/CD pipeline.
-- **Improved Documentation:** Continuously update internal guides and documentation as features evolve.
-- **Secretary Features:** Add support for secretary switching, custom prompts, and performance monitoring.
+- **Code Quality:**
+  - Use consistent naming conventions (snake_case for services, kebab-case for containers)
+  - Follow standardized service structure
+  - Maintain high test coverage
+  - Use type hints and static type checking
 
-## Future Roadmap
-- **Centralized Logging & Monitoring:** Integrate systems like ELK Stack, Prometheus, Grafana, and OpenTelemetry for better observability.
-- **Workflow Automation:** Explore integration with workflow tools (e.g., n8n) for advanced process automation.
-- **Code Refactoring:** Incrementally refactor code to improve modularity and performance without disrupting current functionality.
-- **Secretary Analytics:** Implement usage tracking and performance metrics for different secretary configurations.
+- **Development Workflow:**
+  - Run formatters before committing
+  - Use pre-commit hooks for code quality
+  - Test changes in Docker containers
+  - Document all significant changes
+
+- **Security:**
+  - Validate configuration at startup
+  - Use environment-specific configuration
+  - Implement proper secret management
+  - Regular dependency updates
+
+- **Container Management:**
+  - Use health checks for all services
+  - Monitor container status
+  - Follow Docker best practices
+  - Maintain clean container images
+
+### Current Status
+
+✅ Completed:
+- Standardized naming conventions
+- Service structure standardization
+- Linter implementation
+- Basic dependency management
+- Initial documentation updates
+
+🔄 In Progress:
+- Dependency updates
+- Configuration system improvements
+- Service-specific updates
+- Testing infrastructure
+
+⏳ Planned:
+- Enhanced monitoring and logging
+- CI/CD pipeline improvements
+- Advanced testing capabilities
+- Documentation updates
+
+### Future Enhancements
+
+#### Configuration & Security
+- Implement centralized configuration management
+- Add configuration validation
+- Improve secret management
+- Environment-specific configurations
+
+#### Testing & Quality
+- Increase test coverage (>80%)
+- Add integration tests
+- Implement performance testing
+- Enhance CI/CD pipeline
+
+#### Monitoring & Observability
+- Centralized logging with structlog
+- Prometheus metrics integration
+- Grafana dashboards
+- Request tracing
+
+#### Documentation
+- Update service documentation
+- Add development guidelines
+- Create API documentation
+- Maintain change logs
+
+### Roadmap
+
+1. **Short-term (1-2 months):**
+   - Complete dependency updates
+   - Implement configuration system
+   - Update service documentation
+   - Add basic monitoring
+
+2. **Medium-term (3-6 months):**
+   - Enhance testing infrastructure
+   - Improve CI/CD pipeline
+   - Add advanced monitoring
+   - Update all services
+
+3. **Long-term (6+ months):**
+   - Implement advanced features
+   - Optimize performance
+   - Scale infrastructure
+   - Enhance security
+
+### Success Criteria
+
+- All services follow standardized structure
+- High test coverage (>80%)
+- Secure configuration management
+- Efficient monitoring and logging
+- Comprehensive documentation
+- Successful CI/CD pipeline
+- Regular dependency updates
+- Clean and maintainable code
 
 detailed information on each service in the "llm_context_**" files
