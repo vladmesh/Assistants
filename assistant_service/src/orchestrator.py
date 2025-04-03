@@ -6,7 +6,8 @@ from assistants.base import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
-from messages.base import HumanMessage
+from messages.base import HumanMessage, ToolMessage
+from messages.queue_models import QueueMessage, QueueMessageSource, QueueMessageType
 from services.rest_service import RestServiceClient
 
 logger = get_logger(__name__)
@@ -30,16 +31,38 @@ class AssistantOrchestrator:
 
         logger.info("Assistant service initialized")
 
-    async def process_message(self, message: dict) -> dict:
-        """Process an incoming message."""
-        try:
-            # Get message data
-            if "user_id" not in message:
-                raise ValueError("Message must contain user_id")
-            user_id = int(message["user_id"])
-            text = message.get("text", "")
+    def _create_message(
+        self, queue_message: QueueMessage
+    ) -> HumanMessage | ToolMessage:
+        """Create appropriate message type from queue message."""
+        if queue_message.type == QueueMessageType.HUMAN:
+            return HumanMessage(
+                content=queue_message.content.message,
+                metadata=queue_message.content.metadata,
+            )
+        elif queue_message.type == QueueMessageType.TOOL:
+            return ToolMessage(
+                content=queue_message.content.message,
+                tool_call_id=str(queue_message.timestamp.timestamp()),
+                tool_name=queue_message.content.metadata.get("tool_name", "unknown"),
+                metadata=queue_message.content.metadata,
+            )
+        else:
+            raise ValueError(f"Unsupported message type: {queue_message.type}")
 
-            logger.info("Processing message", user_id=user_id, message_length=len(text))
+    async def process_message(self, queue_message: QueueMessage) -> dict:
+        """Process an incoming message from queue."""
+        try:
+            user_id = queue_message.user_id
+            text = queue_message.content.message
+
+            logger.info(
+                "Processing message",
+                user_id=user_id,
+                message_length=len(text),
+                source=queue_message.source,
+                type=queue_message.type,
+            )
 
             # Get user's secretary
             if user_id in self.secretaries:
@@ -48,37 +71,49 @@ class AssistantOrchestrator:
                 secretary = await self.factory.get_user_secretary(user_id)
                 self.secretaries[user_id] = secretary
 
-            # Convert text to HumanMessage
-            human_message = HumanMessage(content=text)
+            # Create appropriate message type
+            message = self._create_message(queue_message)
 
             # Process message with user's secretary
-            response = await secretary.process_message(human_message, str(user_id))
+            response = await secretary.process_message(message, str(user_id))
 
             return {
                 "user_id": user_id,
                 "text": text,
                 "response": response,
                 "status": "success",
+                "source": queue_message.source,
+                "type": queue_message.type,
+                "metadata": queue_message.content.metadata,
             }
 
         except Exception as e:
             logger.error("Message processing failed", error=str(e), exc_info=True)
             return {
-                "user_id": message.get("user_id", ""),
-                "text": message.get("text", ""),
+                "user_id": queue_message.user_id,
+                "text": queue_message.content.message,
                 "status": "error",
                 "error": str(e),
+                "source": queue_message.source,
+                "type": queue_message.type,
             }
 
-    async def listen_for_messages(self):
-        """Listen for messages from Redis queue."""
+    async def listen_for_messages(self, max_messages: int | None = None):
+        """Listen for messages from Redis queue.
+
+        Args:
+            max_messages: Maximum number of messages to process before exiting.
+                        If None, will process messages indefinitely.
+        """
         try:
             logger.info(
                 "Starting message listener",
                 input_queue=self.settings.INPUT_QUEUE,
                 output_queue=self.settings.OUTPUT_QUEUE,
+                max_messages=max_messages,
             )
 
+            messages_processed = 0
             while True:
                 try:
                     # Get message from input queue
@@ -86,16 +121,24 @@ class AssistantOrchestrator:
                     if not message:
                         continue
 
-                    # Parse message
+                    # Parse and validate message
                     message_data = json.loads(message[1])
+                    queue_message = QueueMessage.from_dict(message_data)
 
                     # Process message
-                    response = await self.process_message(message_data)
+                    response = await self.process_message(queue_message)
 
                     # Send response to output queue
                     await self.redis.rpush(
                         self.settings.OUTPUT_QUEUE, json.dumps(response)
                     )
+
+                    messages_processed += 1
+                    if max_messages and messages_processed >= max_messages:
+                        logger.info(
+                            f"Processed {max_messages} messages, stopping listener"
+                        )
+                        break
 
                 except Exception as e:
                     logger.error(
