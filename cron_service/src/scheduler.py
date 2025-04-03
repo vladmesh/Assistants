@@ -15,7 +15,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CHAT_ID = int(os.getenv("TELEGRAM_ID", "0"))
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # секунды
 
@@ -110,7 +109,7 @@ def update_jobs_from_rest():
                     logger.info(f"Задача {job['name']} уже существует в планировщике")
 
             logger.info("Обновление списка задач успешно завершено")
-            break  # Выходим из цикла после успешного обновления
+            break
 
         except Exception as e:
             retries += 1
@@ -150,7 +149,17 @@ def execute_job(job):
     """Выполняет задачу."""
     try:
         logger.info(f"Выполняем задачу: {job['name']}")
-        send_notification(CHAT_ID, f"Запланированная задача: {job['name']}")
+        metadata = {
+            "job_id": job["id"],
+            "job_name": job["name"],
+            "cron_expression": job["cron_expression"],
+        }
+        send_notification(
+            user_id=job["user_id"],
+            message=f"Запланированная задача: {job['name']}",
+            metadata=metadata,
+        )
         logger.info(f"Задача {job['name']} успешно выполнена")
     except Exception as e:
         logger.error(f"Ошибка при выполнении задачи {job['name']}: {e}")
+        raise

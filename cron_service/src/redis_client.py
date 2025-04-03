@@ -3,32 +3,37 @@ import logging
 import os
 
 import redis
+from models import MessageContent, QueueMessage
 
 logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
-OUTPUT_QUEUE = os.getenv("REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram")
+OUTPUT_QUEUE = os.getenv("REDIS_QUEUE_TO_ORCHESTRATOR", "queue:to_orchestrator")
 
 redis_client = redis.Redis(
     host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
 )
 
 
-def send_notification(chat_id: int, message: str, priority: str = "normal") -> None:
+def send_notification(user_id: int, message: str, metadata: dict = None) -> None:
     """
-    Отправляет уведомление через Redis.
+    Отправляет уведомление через Redis в стандартизированном формате.
 
     Args:
-        chat_id: ID чата в Telegram
+        user_id: ID пользователя в базе данных
         message: Текст сообщения
-        priority: Приоритет уведомления (normal, high, low)
+        metadata: Дополнительные данные о напоминании
     """
     try:
-        data = {"chat_id": chat_id, "response": message, "status": "success"}
+        queue_message = QueueMessage(
+            user_id=user_id,
+            content=MessageContent(message=message, metadata=metadata or {}),
+        )
 
-        redis_client.rpush(OUTPUT_QUEUE, json.dumps(data))
+        redis_client.rpush(OUTPUT_QUEUE, queue_message.model_dump_json())
         logger.info("Уведомление успешно отправлено в Redis")
     except Exception as e:
         logger.error(f"Ошибка при отправке уведомления в Redis: {str(e)}")
+        raise
