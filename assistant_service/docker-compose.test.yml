@@ -1,8 +1,8 @@
 services:
   test:
     build:
-      context: .
-      dockerfile: Dockerfile.test
+      context: ..
+      dockerfile: assistant_service/Dockerfile.test
     environment:
       - TESTING=1
       - PYTHONPATH=/src

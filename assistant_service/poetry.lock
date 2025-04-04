@@ -2122,7 +2122,7 @@ optional = false
 python-versions = "^3.11"
 groups = ["main", "dev", "test"]
 files = []
-develop = true
+develop = false
 
 [package.dependencies]
 pydantic = "^2.4.2"
@@ -2751,4 +2751,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "41f282cbee4bfeaa3ea7837255655cf85943629024fa807da127f39c9415172f"
+content-hash = "ab7f25d60cd61bf30ef63acffac4558ff25b06a25e1eaf33dcabbbd4c8f1b5a3"
