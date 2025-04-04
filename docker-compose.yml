@@ -1,8 +1,8 @@
 services:
   assistant_service:
     build:
-      context: ./assistant_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: assistant_service/Dockerfile
     container_name: assistant-service
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
