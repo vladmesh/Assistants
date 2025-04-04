@@ -25,14 +25,7 @@ name = "smart-assistant"
 version = "0.1.0"
 description = "Smart Assistant Project"
 authors = ["Your Name <your.email@example.com>"]
-readme = "README.md"
-packages = [
-    { include = "assistant_service" },
-    { include = "rest_service" },
-    { include = "google_calendar_service" },
-    { include = "cron_service" },
-    { include = "telegram_bot_service" },
-]
+packages = []
 
 [tool.poetry.scripts]
 format = "scripts.format:main"
@@ -40,22 +33,6 @@ lint = "scripts.lint:main"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.104.0"
-uvicorn = "^0.24.0"
-pydantic = "^2.4.2"
-pydantic-settings = "^2.0.3"
-httpx = "^0.25.0"
-python-dotenv = "^1.0.0"
-redis = "^5.0.1"
-sqlalchemy = "^2.0.23"
-alembic = "^1.12.1"
-psycopg2-binary = "^2.9.9"
-apscheduler = "^3.10.4"
-python-telegram-bot = "^20.7"
-google-auth = "^2.23.4"
-google-auth-oauthlib = "^1.1.0"
-google-auth-httplib2 = "^0.1.1"
-google-api-python-client = "^2.108.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.10.1"
