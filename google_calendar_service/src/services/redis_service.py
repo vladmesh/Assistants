@@ -5,6 +5,8 @@ import redis.asyncio as redis
 import structlog
 from config.settings import Settings
 
+from shared_models import HumanQueueMessage, QueueMessageSource
+
 logger = structlog.get_logger()
 
 
@@ -23,15 +25,22 @@ class RedisService:
     async def send_to_assistant(self, user_id: int, message: str) -> bool:
         """Send message to assistant input queue"""
         try:
-            data = {"user_id": user_id, "text": message}
+            # Create a HumanQueueMessage using shared_models
+            queue_message = HumanQueueMessage(
+                user_id=user_id,
+                source=QueueMessageSource.CALENDAR,
+                content={"message": message},
+            )
+
             logger.info(
                 "Sending message to Redis",
                 user_id=user_id,
                 message=message,
                 queue=self.settings.REDIS_QUEUE_TO_SECRETARY,
             )
+
             result: Awaitable[int] = self.redis.lpush(  # type: ignore[assignment]
-                self.settings.REDIS_QUEUE_TO_SECRETARY, json.dumps(data)
+                self.settings.REDIS_QUEUE_TO_SECRETARY, queue_message.to_dict()
             )
             await result
             logger.info("Message sent successfully")

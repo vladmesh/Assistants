@@ -29,22 +29,22 @@
 - [x] Проверена работа сервиса
 
 ### 2.2 rest_service
-- [ ] Создан pyproject.toml
-- [ ] Проверены и удалены дублирующие зависимости
-- [ ] Подключен shared_models
-- [ ] Обновлены импорты на использование shared_models
-- [ ] Проверена сборка в Docker
-- [ ] Проверена тестовая сборка
-- [ ] Проверена работа сервиса
+- [x] Создан pyproject.toml
+- [x] Проверены и удалены дублирующие зависимости
+- [x] Подключен shared_models
+- [x] Обновлены импорты на использование shared_models
+- [x] Проверена сборка в Docker
+- [x] Проверена тестовая сборка
+- [x] Проверена работа сервиса
 
 ### 2.3 google_calendar_service
-- [ ] Создан pyproject.toml
-- [ ] Проверены и удалены дублирующие зависимости
-- [ ] Подключен shared_models
-- [ ] Обновлены импорты на использование shared_models
-- [ ] Проверена сборка в Docker
-- [ ] Проверена тестовая сборка
-- [ ] Проверена работа сервиса
+- [x] Создан pyproject.toml
+- [x] Проверены и удалены дублирующие зависимости
+- [x] Подключен shared_models
+- [x] Обновлены импорты на использование shared_models
+- [x] Проверена сборка в Docker
+- [x] Проверена тестовая сборка
+- [x] Проверена работа сервиса
 
 ### 2.4 cron_service
 - [ ] Создан pyproject.toml
@@ -109,12 +109,20 @@
 - [x] Подключен shared_models в assistant_service
 - [x] Обновлены импорты в assistant_service для использования shared_models
 - [x] Настроен Docker для работы с shared_models
+- [x] Создан pyproject.toml для rest_service
+- [x] Удалены дублирующие зависимости в rest_service
+- [x] Подключен shared_models в rest_service
+- [x] Обновлены импорты в rest_service для использования shared_models
+- [x] Настроен Docker для работы с shared_models в rest_service
+- [x] Создан pyproject.toml для google_calendar_service
+- [x] Удалены дублирующие зависимости в google_calendar_service
+- [x] Подключен shared_models в google_calendar_service
+- [x] Обновлены импорты в google_calendar_service для использования shared_models
+- [x] Настроен Docker для работы с shared_models в google_calendar_service
 
 ### В процессе
-- [ ] Проверка корневого pyproject.toml
 - [ ] Миграция остальных сервисов
 
 ### Ожидает
-- [ ] Миграция остальных сервисов
 - [ ] Обновление документации
 - [ ] Обновление CI/CD 

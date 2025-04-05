@@ -133,8 +133,8 @@ services:
 
   google_calendar_service:
     build:
-      context: ./google_calendar_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: google_calendar_service/Dockerfile
     container_name: google-calendar-service
     ports:
       - "8001:8000"
@@ -151,6 +151,9 @@ services:
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
     env_file:
       - .env
+    volumes:
+      - ./google_calendar_service/src:/src
+      - ./shared_models:/shared_models
     depends_on:
       rest_service:
         condition: service_healthy
