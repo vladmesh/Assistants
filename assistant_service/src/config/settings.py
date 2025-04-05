@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # API Keys (loaded from .env)
     OPENAI_API_KEY: str
     OPEN_API_SECRETAR_ID: str
+    TAVILY_API_KEY: Optional[str] = None
 
     # Redis settings
     REDIS_HOST: str = "redis"

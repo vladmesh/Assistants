@@ -20,6 +20,7 @@ class ToolType(str, enum.Enum):
     TIME = "time"
     SUB_ASSISTANT = "sub_assistant"
     WEATHER = "weather"
+    WEB_SEARCH = "web_search"
 
 
 class AssistantToolLink(BaseModel, table=True):

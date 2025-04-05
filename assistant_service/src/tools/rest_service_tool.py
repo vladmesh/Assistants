@@ -27,6 +27,7 @@ class RestServiceTool(BaseModel):
         from .reminder_tool import ReminderTool
         from .sub_assistant_tool import SubAssistantTool
         from .time_tool import TimeToolWrapper
+        from .web_search_tool import WebSearchTool
 
         logger.info(
             "Converting tool",
@@ -77,5 +78,12 @@ class RestServiceTool(BaseModel):
                 )  # Will be set later
             else:
                 raise ValueError(f"Unknown calendar tool name: {self.name}")
+        elif self.tool_type == "web_search":
+            if not self.settings:
+                raise ValueError("settings is required for web_search tool")
+            logger.info("Creating WebSearchTool")
+            return WebSearchTool(
+                settings=self.settings, user_id=None
+            )  # Will be set later
         else:
             raise ValueError(f"Unknown tool type: {self.tool_type}")

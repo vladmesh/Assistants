@@ -40,7 +40,8 @@ assistant_service/src/
 │   ├── reminder.py     # Reminder management
 │   ├── rest.py         # REST service interface
 │   ├── sub_assistant.py # Sub-assistant wrapper
-│   └── time.py         # Time operations
+│   ├── time.py         # Time operations
+│   └── web_search.py   # Web search using Tavily
 ├── messages/           # Message handling
 │   ├── base.py        # Base message class
 │   └── types.py       # Message types
@@ -72,7 +73,8 @@ def _initialize_tools(self):
         TimeToolWrapper(),
         CalendarCreateTool(settings=self.settings),
         CalendarListTool(settings=self.settings),
-        SubAssistantTool(settings=self.settings)
+        SubAssistantTool(settings=self.settings),
+        WebSearchTool(settings=self.settings)
     ]
 ```
 
@@ -94,6 +96,14 @@ tools = [
         "function": {
             "name": "calendar_create",
             "description": "Create a calendar event",
+            "parameters": {...}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the internet for information on a specific topic",
             "parameters": {...}
         }
     }
@@ -124,6 +134,7 @@ tools = [
 - REST API service
 - Google Calendar service
 - Telegram Bot service
+- Tavily API for web search
 
 ## 6. Error Handling & Logging
 
@@ -145,6 +156,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     redis_url: str
     log_level: str
+    tavily_api_key: Optional[str] = None
 ```
 
 ### 7.2 Environment Variables

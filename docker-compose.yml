@@ -12,6 +12,7 @@ services:
       - REDIS_DB=${REDIS_DB}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
     env_file:
       - .env
     volumes:
