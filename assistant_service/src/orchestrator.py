@@ -51,7 +51,7 @@ class AssistantOrchestrator:
             )
             logger.info("Created human message", message=str(message))
             return message
-        elif queue_message.type == QueueMessageType.TOOL:
+        if queue_message.type == QueueMessageType.TOOL:
             message = ToolMessage(
                 content=queue_message.content.message,
                 tool_call_id=str(queue_message.timestamp.timestamp()),

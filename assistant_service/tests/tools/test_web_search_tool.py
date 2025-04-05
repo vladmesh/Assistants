@@ -98,6 +98,10 @@ async def test_web_search_tool_execute_with_invalid_depth(web_search_tool):
             query="test query", search_depth="basic", max_results=5
         )
 
+        # Check result
+        expected_result = "Search Results:\n\n1. Test Title\n   URL: https://example.com\n   Test content\n\n"
+        assert result == expected_result
+
 
 @pytest.mark.asyncio
 async def test_web_search_tool_execute_with_invalid_max_results(web_search_tool):

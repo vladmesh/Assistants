@@ -280,7 +280,7 @@ class BaseLLMChat(BaseAssistant, ABC):
                             "content",
                             "Извините, произошла ошибка при обработке сообщения",
                         )
-                except:
+                except (SyntaxError, ValueError):
                     pass
             return str(last_message)
 
