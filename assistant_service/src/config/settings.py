@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Basic settings
     ENVIRONMENT: str = "development"
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str = "DEBUG"
 
     # API Keys (loaded from .env)
     OPENAI_API_KEY: str

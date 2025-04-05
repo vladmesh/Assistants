@@ -142,10 +142,34 @@ class BaseLLMChat(BaseAssistant, ABC):
                 else:
                     messages.append({"role": "user", "content": str(msg)})
 
-            # Add user_id to the input for tools
-            response = await self.agent.ainvoke(
-                {"messages": messages, "user_id": state["user_id"]}
+            logger.debug(
+                "Invoking agent with messages",
+                messages=messages,
+                user_id=state["user_id"],
+                assistant_name=self.name,
             )
+
+            # Add user_id to the input for tools
+            try:
+                response = await self.agent.ainvoke(
+                    {"messages": messages, "user_id": state["user_id"]}
+                )
+                logger.debug(
+                    "Agent response received",
+                    response=response,
+                    response_type=type(response).__name__,
+                    assistant_name=self.name,
+                )
+            except Exception as e:
+                logger.error(
+                    "Agent invocation failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    error_traceback=e.__traceback__,
+                    assistant_name=self.name,
+                    exc_info=True,
+                )
+                raise
 
             if not response:
                 raise MessageProcessingError("Agent returned empty response", self.name)
@@ -163,6 +187,12 @@ class BaseLLMChat(BaseAssistant, ABC):
             else:
                 response = {"role": "assistant", "content": str(response)}
 
+            logger.debug(
+                "Converted response",
+                response=response,
+                assistant_name=self.name,
+            )
+
             # Update state
             state["messages"].append(response)
             state["dialog_state"].pop()  # Remove "processing"
@@ -171,9 +201,18 @@ class BaseLLMChat(BaseAssistant, ABC):
             return state
 
         except Exception as e:
+            logger.error(
+                "Error in _process_message",
+                error=str(e),
+                error_type=type(e).__name__,
+                error_traceback=e.__traceback__,
+                state=state,
+                assistant_name=self.name,
+                exc_info=True,
+            )
             error_msg = handle_assistant_error(e, self.name)
             state["dialog_state"].append("error")
-            state["messages"].append({"type": "error", "content": error_msg})
+            state["messages"].append({"role": "system", "content": error_msg})
             return state
 
     async def process_message(
@@ -192,8 +231,17 @@ class BaseLLMChat(BaseAssistant, ABC):
             MessageProcessingError: If message processing fails
         """
         try:
+            logger.debug(
+                "Starting message processing",
+                message_type=type(message).__name__,
+                message_content=message.content,
+                user_id=user_id,
+                assistant_name=self.name,
+            )
+
             # Set tool context with user_id
             self._set_tool_context(user_id)
+            logger.debug("Tool context set", user_id=user_id)
 
             # Initialize state
             state = {
@@ -202,27 +250,47 @@ class BaseLLMChat(BaseAssistant, ABC):
                 "dialog_state": ["idle"],
                 "last_activity": datetime.now(),
             }
+            logger.debug("State initialized", state=state)
 
             # Process through graph
+            logger.debug("Starting graph processing")
             result = await self.graph.ainvoke(state)
+            logger.debug("Graph processing completed", result=result)
 
             # Get last message
             if not result["messages"]:
+                logger.error("No messages in result")
                 return "Извините, произошла ошибка при обработке сообщения"
 
             last_message = result["messages"][-1]
+            logger.debug("Processing last message", last_message=last_message)
+
             if isinstance(last_message, AIMessage):
                 return last_message.content
             elif isinstance(last_message, dict):
                 return last_message.get(
                     "content", "Извините, произошла ошибка при обработке сообщения"
                 )
-            else:
-                return str(last_message)
+            elif isinstance(last_message, str):
+                # Try to parse as dict
+                try:
+                    msg_dict = eval(last_message)
+                    if isinstance(msg_dict, dict):
+                        return msg_dict.get(
+                            "content",
+                            "Извините, произошла ошибка при обработке сообщения",
+                        )
+                except:
+                    pass
+            return str(last_message)
 
         except Exception as e:
             logger.error(
-                "Unexpected error in process_message", error=str(e), exc_info=True
+                "Unexpected error in process_message",
+                error=str(e),
+                error_type=type(e).__name__,
+                assistant_name=self.name,
+                exc_info=True,
             )
             return "Извините, произошла непредвиденная ошибка"
 

@@ -111,7 +111,7 @@ class AssistantFactory:
             List of initialized tools
         """
         # Get tools for secretary
-        logger.info("Getting tools for secretary")
+        logger.info("Getting tools for secretary", secretary_id=secretary_id)
         secretary_tools = await self.rest_client.get_assistant_tools(str(secretary_id))
         logger.info("Tools fetched", tool_count=len(secretary_tools))
 
@@ -122,6 +122,8 @@ class AssistantFactory:
                 "Initializing tool",
                 tool_name=tool_data.name,
                 tool_type=tool_data.tool_type,
+                tool_id=tool_data.id,
+                assistant_id=tool_data.assistant_id,
             )
 
             # Convert REST service tool data to RestServiceTool
@@ -129,14 +131,28 @@ class AssistantFactory:
             tool_dict["settings"] = self.settings
             logger.info("Tool data from REST service", tool_dict=tool_dict)
             rest_tool = RestServiceTool(**tool_dict)
+            logger.info(
+                "Created RestServiceTool",
+                name=rest_tool.name,
+                tool_type=rest_tool.tool_type,
+                assistant_id=rest_tool.assistant_id,
+            )
 
             # Convert to actual tool
             tool = rest_tool.to_tool()
+            logger.info(
+                "Converted to actual tool",
+                name=tool.name,
+                tool_type=getattr(tool, "tool_type", None),
+                assistant_id=getattr(tool, "assistant_id", None),
+            )
 
             # For sub_assistant type, get and set the sub-assistant
             if rest_tool.tool_type == "sub_assistant":
                 logger.info(
-                    "Creating sub_assistant tool", assistant_id=rest_tool.assistant_id
+                    "Creating sub_assistant tool",
+                    assistant_id=rest_tool.assistant_id,
+                    tool_name=tool.name,
                 )
                 sub_assistant = await self.rest_client.get_assistant(
                     rest_tool.assistant_id
@@ -145,12 +161,16 @@ class AssistantFactory:
                     "Got sub_assistant from REST service",
                     assistant_id=sub_assistant.id,
                     name=sub_assistant.name,
+                    assistant_type=sub_assistant.assistant_type,
                 )
                 sub_assistant_instance = await self.create_sub_assistant(sub_assistant)
                 logger.info(
                     "Created sub_assistant instance",
                     assistant_id=sub_assistant_instance.assistant_id,
                     name=sub_assistant_instance.name,
+                    assistant_type=getattr(
+                        sub_assistant_instance, "assistant_type", None
+                    ),
                 )
                 tool.sub_assistant = sub_assistant_instance
                 tool.assistant_id = rest_tool.assistant_id
@@ -158,6 +178,7 @@ class AssistantFactory:
                     "Set sub_assistant in tool",
                     tool_assistant_id=tool.assistant_id,
                     tool_name=tool.name,
+                    tool_type=getattr(tool, "tool_type", None),
                 )
 
             tools.append(tool)

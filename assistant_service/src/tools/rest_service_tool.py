@@ -2,8 +2,11 @@
 
 from typing import Optional
 
+from config.logger import get_logger
 from config.settings import Settings
 from pydantic import BaseModel
+
+logger = get_logger(__name__)
 
 
 class RestServiceTool(BaseModel):
@@ -25,28 +28,50 @@ class RestServiceTool(BaseModel):
         from .sub_assistant_tool import SubAssistantTool
         from .time_tool import TimeToolWrapper
 
+        logger.info(
+            "Converting tool",
+            name=self.name,
+            tool_type=self.tool_type,
+            assistant_id=self.assistant_id,
+        )
+
         if self.tool_type == "time":
+            logger.info("Creating TimeToolWrapper")
             return TimeToolWrapper()
         elif self.tool_type == "sub_assistant":
             if not self.assistant_id:
                 raise ValueError("assistant_id is required for sub_assistant tool type")
-            return SubAssistantTool(
+            logger.info(
+                "Creating SubAssistantTool",
+                name=self.name,
+                assistant_id=self.assistant_id,
+            )
+            tool = SubAssistantTool(
                 sub_assistant=None,  # Will be set later
                 assistant_id=self.assistant_id,
                 name=self.name,
                 description=self.description,
                 user_id=None,  # Will be set later
             )
+            logger.info(
+                "Created SubAssistantTool",
+                name=tool.name,
+                assistant_id=tool.assistant_id,
+            )
+            return tool
         elif self.tool_type == "reminder":
+            logger.info("Creating ReminderTool")
             return ReminderTool()
         elif self.tool_type == "calendar":
             if not self.settings:
                 raise ValueError("settings is required for calendar tools")
             if self.name == "calendar_create":
+                logger.info("Creating CalendarCreateTool")
                 return CalendarCreateTool(
                     settings=self.settings, user_id=None
                 )  # Will be set later
             elif self.name == "calendar_list":
+                logger.info("Creating CalendarListTool")
                 return CalendarListTool(
                     settings=self.settings, user_id=None
                 )  # Will be set later

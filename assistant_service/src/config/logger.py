@@ -2,6 +2,7 @@ import logging
 import sys
 
 import structlog
+from config.settings import settings
 
 
 def configure_logger(environment: str = "development") -> None:
@@ -11,8 +12,11 @@ def configure_logger(environment: str = "development") -> None:
     Args:
         environment: Current environment (development/production)
     """
+    # Get log level from settings
+    log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+
     # Set up standard logging
-    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
+    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=log_level)
 
     # Configure structlog
     structlog.configure(
