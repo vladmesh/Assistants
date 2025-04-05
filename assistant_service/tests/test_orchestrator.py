@@ -54,9 +54,7 @@ def tool_queue_message():
 @pytest.mark.asyncio
 async def test_process_human_message(settings, human_queue_message):
     # Mock dependencies
-    with patch("orchestrator.AssistantFactory") as mock_factory, patch(
-        "orchestrator.RestServiceClient"
-    ) as mock_rest:
+    with patch("orchestrator.AssistantFactory") as mock_factory:
         # Setup mocks
         mock_secretary = AsyncMock()
         mock_secretary.process_message.return_value = "Hello, user!"
