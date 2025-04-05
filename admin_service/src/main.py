@@ -6,6 +6,7 @@ import streamlit as st
 import structlog
 from config.settings import settings
 from pages.assistants.assistants import show_assistants_page
+from pages.tools.tools import show_tools_page
 from pages.users.users import show_users_page
 from rest_client import RestServiceClient
 
@@ -31,3 +32,5 @@ if page == settings.NAV_ITEMS[0]:  # Пользователи
     show_users_page(rest_client)
 elif page == settings.NAV_ITEMS[1]:  # Ассистенты
     show_assistants_page(rest_client)
+elif page == settings.NAV_ITEMS[2]:  # Инструменты
+    show_tools_page(rest_client)
