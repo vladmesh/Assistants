@@ -7,7 +7,7 @@ WORKDIR /
 RUN pip install poetry
 
 # Copy dependency files
-COPY google_calendar_service/pyproject.toml google_calendar_service/poetry.lock ./google_calendar_service/
+COPY google_calendar_service/pyproject.toml google_calendar_service/poetry.lock* ./google_calendar_service/
 COPY shared_models ./shared_models
 
 # Configure poetry and install dependencies
@@ -28,6 +28,7 @@ ENV PYTHONPATH=/src \
 # Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

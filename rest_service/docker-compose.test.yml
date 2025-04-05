@@ -23,8 +23,6 @@ services:
       - POSTGRES_USER=test_user
       - POSTGRES_PASSWORD=test_password
       - POSTGRES_DB=test_db
-    ports:
-      - "5433:5432"
     volumes:
       - test_db_data:/var/lib/postgresql/data
     healthcheck:

@@ -1,13 +1,28 @@
+# Build stage
+FROM python:3.11-slim as builder
+
+WORKDIR /
+
+# Install poetry
+RUN pip install poetry
+
+# Copy dependency files
+COPY google_calendar_service/pyproject.toml google_calendar_service/poetry.lock* ./google_calendar_service/
+COPY shared_models ./shared_models
+
+# Configure poetry and install dependencies
+RUN poetry config virtualenvs.create false && \
+    cd google_calendar_service && \
+    poetry install --only main --no-interaction --no-ansi --no-root
+
+# Production stage
 FROM python:3.11-slim
 
 WORKDIR /
 
 ENV PYTHONPATH=/src \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    POETRY_VERSION=1.7.1 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_VIRTUALENVS_CREATE=false
+    PYTHONDONTWRITEBYTECODE=1
 
 # Install system dependencies
 RUN apt-get update && \
@@ -16,22 +31,11 @@ RUN apt-get update && \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    cd /usr/local/bin && \
-    ln -s /opt/poetry/bin/poetry && \
-    poetry --version
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
-# Copy shared_models first
-COPY shared_models/ /shared_models/
-
-# Copy poetry files
-COPY google_calendar_service/pyproject.toml google_calendar_service/poetry.lock* ./
-
-# Install dependencies
-RUN poetry install --no-interaction --no-ansi --no-root
-
-# Copy source code
+# Copy application code
 COPY google_calendar_service/src/ /src/
 
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"] 
