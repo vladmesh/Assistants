@@ -24,8 +24,8 @@ services:
 
   telegram_bot_service:
     build:
-      context: ./telegram_bot_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: telegram_bot_service/Dockerfile
     container_name: telegram-bot-service
     environment:
       - ASYNC_DATABASE_URL=postgresql+asyncpg://user:password@db/rest_db
