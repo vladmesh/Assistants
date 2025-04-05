@@ -2,6 +2,7 @@ from typing import ClassVar, Optional
 
 from assistants.llm_chat import BaseLLMChat
 from config.logger import get_logger
+from langchain.schema import HumanMessage
 from tools.base import BaseTool, SubAssistantSchema
 
 logger = get_logger(__name__)
@@ -27,6 +28,7 @@ class SubAssistantTool(BaseTool):
 
     name: str = NAME
     description: str = DESCRIPTION
+    tool_type: str = "sub_assistant"
     sub_assistant: Optional[BaseLLMChat] = None
     assistant_id: Optional[str] = None
 
@@ -72,18 +74,94 @@ class SubAssistantTool(BaseTool):
         Raises:
             ToolError: If execution fails
         """
-        if not self.sub_assistant:
-            raise ValueError("Sub-assistant is not initialized")
-
-        logger.info(
-            "Delegating request to sub-assistant",
-            message=message,
-            assistant_name=self.sub_assistant.name,
-        )
-
         try:
-            response = await self.sub_assistant.process_message(message, self.user_id)
-            return response
+            if not self.sub_assistant:
+                logger.error(
+                    "Sub-assistant is not initialized",
+                    tool_name=self.name,
+                    assistant_id=self.assistant_id,
+                )
+                raise ValueError("Sub-assistant is not initialized")
+
+            logger.info(
+                "Delegating request to sub-assistant",
+                message=message,
+                assistant_name=self.sub_assistant.name,
+                tool_name=self.name,
+                user_id=self.user_id,
+                assistant_id=self.assistant_id,
+            )
+
+            try:
+                logger.debug(
+                    "Creating HumanMessage",
+                    message=message,
+                    tool_name=self.name,
+                )
+                human_message = HumanMessage(content=message)
+                logger.debug(
+                    "HumanMessage created",
+                    message=str(human_message),
+                    tool_name=self.name,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to create HumanMessage",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    tool_name=self.name,
+                    exc_info=True,
+                )
+                raise
+
+            try:
+                logger.debug(
+                    "Processing message with sub-assistant",
+                    message=message,
+                    assistant_name=self.sub_assistant.name,
+                    tool_name=self.name,
+                )
+                logger.debug(
+                    "Calling process_message on sub-assistant",
+                    message=message,
+                    assistant_name=self.sub_assistant.name,
+                    tool_name=self.name,
+                    user_id=self.user_id,
+                )
+                response = await self.sub_assistant.process_message(
+                    human_message, self.user_id
+                )
+                logger.debug(
+                    "process_message completed successfully",
+                    assistant_name=self.sub_assistant.name,
+                    tool_name=self.name,
+                )
+                logger.info(
+                    "Sub-assistant response received",
+                    response=response,
+                    assistant_name=self.sub_assistant.name,
+                    tool_name=self.name,
+                )
+                return response
+            except Exception as e:
+                logger.error(
+                    "Failed to process message with sub-assistant",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    tool_name=self.name,
+                    assistant_name=self.sub_assistant.name,
+                    exc_info=True,
+                )
+                raise
+
         except Exception as e:
-            logger.error("Sub-assistant execution failed", error=str(e), exc_info=True)
+            logger.error(
+                "Sub-assistant execution failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                tool_name=self.name,
+                assistant_name=getattr(self.sub_assistant, "name", None),
+                assistant_id=self.assistant_id,
+                exc_info=True,
+            )
             raise

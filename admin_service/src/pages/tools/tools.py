@@ -2,7 +2,7 @@
 
 import pandas as pd
 import streamlit as st
-from rest_client import RestServiceClient, ToolUpdate
+from rest_client import RestServiceClient, Tool, ToolCreate, ToolUpdate
 from utils.async_utils import run_async
 
 
@@ -10,8 +10,9 @@ def show_tools_page(rest_client: RestServiceClient):
     """Display tools page with management functionality."""
     st.title("Инструменты")
 
-    # Получаем список инструментов
+    # Получаем список инструментов и ассистентов
     tools = run_async(rest_client.get_tools())
+    assistants = run_async(rest_client.get_assistants())
 
     if not tools:
         st.warning("Нет доступных инструментов")
@@ -83,3 +84,53 @@ def show_tools_page(rest_client: RestServiceClient):
                                 run_async(rest_client.delete_tool(tool.id))
                                 st.success(f"Инструмент {tool.name} успешно удален")
                                 st.rerun()
+
+    # Секция создания нового инструмента
+    with st.expander("➕ Создать новый под-ассистент", expanded=False):
+        with st.form("create_tool_form"):
+            name = st.text_input("Имя")
+            description = st.text_area("Описание")
+            is_active = st.checkbox("Активен", value=True)
+
+            # Выбор ассистента для под-ассистента
+            assistant_options = {a.name: a for a in assistants if a.is_active}
+            if not assistant_options:
+                st.error(
+                    "Нет доступных активных ассистентов для создания под-ассистента"
+                )
+            else:
+                selected_assistant = st.selectbox(
+                    "Выберите ассистента",
+                    options=list(assistant_options.keys()),
+                )
+
+            # Добавляем поле для input_schema
+            input_schema = st.text_area(
+                "Схема входных данных (JSON)",
+                value='{"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"]}',
+                help="JSON схема для описания входных данных инструмента",
+            )
+
+            submit_button = st.form_submit_button("Создать под-ассистент")
+
+            if submit_button:
+                if not name or not description or not input_schema:
+                    st.error("Пожалуйста, заполните все обязательные поля")
+                elif not assistant_options:
+                    st.error(
+                        "Невозможно создать под-ассистента без доступных ассистентов"
+                    )
+                else:
+                    with st.spinner("Создаем под-ассистент..."):
+                        selected_assistant_obj = assistant_options[selected_assistant]
+                        new_tool = ToolCreate(
+                            name=name,
+                            tool_type="sub_assistant",
+                            description=description,
+                            input_schema=input_schema,
+                            assistant_id=selected_assistant_obj.id,
+                            is_active=is_active,
+                        )
+                        created_tool = run_async(rest_client.create_tool(new_tool))
+                        st.success(f"Под-ассистент {created_tool.name} успешно создан")
+                        st.rerun()

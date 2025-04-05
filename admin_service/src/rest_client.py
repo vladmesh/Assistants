@@ -64,6 +64,17 @@ class Tool(BaseModel):
     is_active: bool = True
 
 
+class ToolCreate(BaseModel):
+    """Model for creating a new tool"""
+
+    name: str
+    tool_type: str
+    description: str
+    input_schema: Optional[str] = None
+    assistant_id: Optional[UUID] = None
+    is_active: bool = True
+
+
 class ToolUpdate(BaseModel):
     """Model for updating a tool"""
 
@@ -238,6 +249,30 @@ class RestServiceClient:
             f"{self.base_url}/api/assistants/{assistant_id}/tools/{tool_id}"
         )
         response.raise_for_status()
+
+    async def create_tool(self, tool: ToolCreate) -> Tool:
+        """Create a new tool
+
+        Args:
+            tool: Tool data to create
+
+        Returns:
+            Created Tool object
+        """
+        # Преобразуем UUID в строку для JSON сериализации
+        tool_data = tool.model_dump(exclude_none=True)
+        if tool_data.get("assistant_id"):
+            tool_data["assistant_id"] = str(tool_data["assistant_id"])
+
+        # Добавляем отладочный вывод
+        print(f"Sending tool data: {tool_data}")
+
+        response = await self._client.post(
+            f"{self.base_url}/api/tools/",
+            json=tool_data,
+        )
+        response.raise_for_status()
+        return Tool(**response.json())
 
     async def update_tool(self, tool_id: UUID, tool: ToolUpdate) -> Tool:
         """Update an existing tool

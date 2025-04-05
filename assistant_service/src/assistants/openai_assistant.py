@@ -374,11 +374,39 @@ class OpenAIAssistant(BaseAssistant):
         # Get tool instance
         tool = self.tool_instances.get(function_name)
         if not tool:
+            logger.error(
+                "Unknown tool requested",
+                function_name=function_name,
+                available_tools=list(self.tool_instances.keys()),
+            )
             raise Exception(f"Unknown tool: {function_name}")
 
         try:
+            logger.debug(
+                "Executing tool call",
+                function_name=function_name,
+                arguments=arguments,
+                tool_name=tool.name,
+                tool_type=getattr(tool, "tool_type", None),
+            )
             # Execute tool with arguments
             result = await tool._arun(**arguments)
+            logger.info(
+                "Tool execution completed",
+                function_name=function_name,
+                result=result,
+                tool_name=tool.name,
+            )
             return str(result)
         except Exception as e:
+            logger.error(
+                "Tool execution failed",
+                function_name=function_name,
+                error=str(e),
+                error_type=type(e).__name__,
+                tool_name=tool.name,
+                tool_type=getattr(tool, "tool_type", None),
+                arguments=arguments,
+                exc_info=True,
+            )
             raise Exception(f"Error executing {function_name}: {str(e)}")
