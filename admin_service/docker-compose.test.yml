@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  test:
+    build:
+      context: ..
+      dockerfile: admin_service/Dockerfile.test
+    environment:
+      - TESTING=1
+      - PYTHONPATH=/src
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - REST_SERVICE_URL=http://mock-rest:8000
+    env_file:
+      - ./tests/.env.test
+
+volumes:
+  test_db_data: 
