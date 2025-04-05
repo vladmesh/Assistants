@@ -2,7 +2,7 @@
 
 import pandas as pd
 import streamlit as st
-from rest_client import RestServiceClient, Tool, ToolCreate, ToolUpdate
+from rest_client import RestServiceClient, ToolCreate, ToolUpdate
 from utils.async_utils import run_async
 
 

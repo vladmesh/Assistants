@@ -1,7 +1,5 @@
 from datetime import datetime
 
-import pytest
-
 from shared_models import (
     HumanQueueMessage,
     QueueMessage,

@@ -3,7 +3,7 @@
 
 import pandas as pd
 import streamlit as st
-from rest_client import AssistantCreate, AssistantUpdate, RestServiceClient, Tool
+from rest_client import AssistantCreate, AssistantUpdate, RestServiceClient
 from utils.async_utils import run_async
 
 
