@@ -169,3 +169,23 @@ class RestServiceClient:
         assistants = await self.get_assistants()
         secretary_assistants = [a for a in assistants if a.is_secretary and a.is_active]
         return users, secretary_assistants
+
+    async def get_user_secretary(self, user_id: int) -> Optional[Assistant]:
+        """Get secretary assistant for user.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Assistant object if found, None otherwise
+        """
+        try:
+            response = await self._client.get(
+                f"{self.base_url}/api/users/{user_id}/secretary"
+            )
+            response.raise_for_status()
+            return Assistant(**response.json())
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            raise

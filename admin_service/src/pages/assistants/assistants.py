@@ -57,38 +57,37 @@ def show_assistants_page(rest_client: RestServiceClient):
                         st.rerun()
 
     # Секция создания нового ассистента
-    st.subheader("Создать нового ассистента")
+    with st.expander("➕ Создать нового ассистента", expanded=False):
+        with st.form("create_assistant_form"):
+            name = st.text_input("Имя")
+            is_secretary = st.checkbox("Является секретарем")
+            model = st.text_input("Модель")
+            instructions = st.text_area("Инструкции")
+            assistant_type = st.selectbox("Тип ассистента", ["llm", "openai_api"])
+            openai_assistant_id = st.text_input("ID ассистента OpenAI (опционально)")
 
-    with st.form("create_assistant_form"):
-        name = st.text_input("Имя")
-        is_secretary = st.checkbox("Является секретарем")
-        model = st.text_input("Модель")
-        instructions = st.text_area("Инструкции")
-        assistant_type = st.selectbox("Тип ассистента", ["llm", "openai_api"])
-        openai_assistant_id = st.text_input("ID ассистента OpenAI (опционально)")
+            submit_button = st.form_submit_button("Создать ассистента")
 
-        submit_button = st.form_submit_button("Создать ассистента")
-
-        if submit_button:
-            if not name or not model or not instructions:
-                st.error("Пожалуйста, заполните все обязательные поля")
-            else:
-                with st.spinner("Создаем ассистента..."):
-                    new_assistant = AssistantCreate(
-                        name=name,
-                        is_secretary=is_secretary,
-                        model=model,
-                        instructions=instructions,
-                        assistant_type=assistant_type,
-                        openai_assistant_id=openai_assistant_id
-                        if openai_assistant_id
-                        else None,
-                    )
-                    created_assistant = run_async(
-                        rest_client.create_assistant(new_assistant)
-                    )
-                    st.success(f"Ассистент {created_assistant.name} успешно создан")
-                    st.rerun()
+            if submit_button:
+                if not name or not model or not instructions:
+                    st.error("Пожалуйста, заполните все обязательные поля")
+                else:
+                    with st.spinner("Создаем ассистента..."):
+                        new_assistant = AssistantCreate(
+                            name=name,
+                            is_secretary=is_secretary,
+                            model=model,
+                            instructions=instructions,
+                            assistant_type=assistant_type,
+                            openai_assistant_id=openai_assistant_id
+                            if openai_assistant_id
+                            else None,
+                        )
+                        created_assistant = run_async(
+                            rest_client.create_assistant(new_assistant)
+                        )
+                        st.success(f"Ассистент {created_assistant.name} успешно создан")
+                        st.rerun()
 
     # Секция редактирования ассистента
     if "editing_assistant" in st.session_state:

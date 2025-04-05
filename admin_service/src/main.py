@@ -5,8 +5,8 @@ import logging
 import streamlit as st
 import structlog
 from config.settings import settings
-from pages.assistants import show_assistants_page
-from pages.users import show_users_page
+from pages.assistants.assistants import show_assistants_page
+from pages.users.users import show_users_page
 from rest_client import RestServiceClient
 
 # Настройка логирования
