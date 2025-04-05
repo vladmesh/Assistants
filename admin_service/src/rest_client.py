@@ -52,6 +52,25 @@ class AssistantUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class Tool(BaseModel):
+    """Tool model."""
+
+    id: UUID
+    name: str
+    tool_type: str
+    description: str
+    input_schema: Optional[str] = None
+    assistant_id: Optional[UUID] = None
+    is_active: bool = True
+
+
+class ToolUpdate(BaseModel):
+    """Model for updating a tool"""
+
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class RestServiceClient:
     """Client for interacting with the REST service."""
 
@@ -189,3 +208,50 @@ class RestServiceClient:
             if e.response.status_code == 404:
                 return None
             raise
+
+    async def get_tools(self) -> List[Tool]:
+        """Get list of all tools."""
+        response = await self._client.get(f"{self.base_url}/api/tools/")
+        response.raise_for_status()
+        return [Tool(**tool) for tool in response.json()]
+
+    async def get_assistant_tools(self, assistant_id: UUID) -> List[Tool]:
+        """Get list of tools for an assistant."""
+        response = await self._client.get(
+            f"{self.base_url}/api/assistants/{assistant_id}/tools"
+        )
+        response.raise_for_status()
+        return [Tool(**tool) for tool in response.json()]
+
+    async def add_tool_to_assistant(self, assistant_id: UUID, tool_id: UUID) -> None:
+        """Add tool to assistant."""
+        response = await self._client.post(
+            f"{self.base_url}/api/assistants/{assistant_id}/tools/{tool_id}"
+        )
+        response.raise_for_status()
+
+    async def remove_tool_from_assistant(
+        self, assistant_id: UUID, tool_id: UUID
+    ) -> None:
+        """Remove tool from assistant."""
+        response = await self._client.delete(
+            f"{self.base_url}/api/assistants/{assistant_id}/tools/{tool_id}"
+        )
+        response.raise_for_status()
+
+    async def update_tool(self, tool_id: UUID, tool: ToolUpdate) -> Tool:
+        """Update an existing tool
+
+        Args:
+            tool_id: ID of the tool to update
+            tool: Updated tool data
+
+        Returns:
+            Updated Tool object
+        """
+        response = await self._client.put(
+            f"{self.base_url}/api/tools/{tool_id}",
+            json=tool.model_dump(exclude_none=True),
+        )
+        response.raise_for_status()
+        return Tool(**response.json())

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     APP_LAYOUT: str = "wide"
 
     # Navigation
-    NAV_ITEMS: list[str] = ["Пользователи", "Ассистенты"]
+    NAV_ITEMS: list[str] = ["Пользователи", "Ассистенты", "Инструменты"]
 
     model_config = SettingsConfigDict(
         env_file=".env",

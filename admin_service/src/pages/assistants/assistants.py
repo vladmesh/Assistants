@@ -3,7 +3,7 @@
 
 import pandas as pd
 import streamlit as st
-from rest_client import AssistantCreate, AssistantUpdate, RestServiceClient
+from rest_client import AssistantCreate, AssistantUpdate, RestServiceClient, Tool
 from utils.async_utils import run_async
 
 
@@ -11,8 +11,9 @@ def show_assistants_page(rest_client: RestServiceClient):
     """Display assistants page with CRUD functionality."""
     st.title("Ассистенты")
 
-    # Получаем список ассистентов
+    # Получаем список ассистентов и инструментов
     assistants = run_async(rest_client.get_assistants())
+    all_tools = run_async(rest_client.get_tools())
 
     if not assistants:
         st.warning("Нет доступных ассистентов")
@@ -20,6 +21,10 @@ def show_assistants_page(rest_client: RestServiceClient):
         # Создаем DataFrame для отображения ассистентов
         assistants_data = []
         for assistant in assistants:
+            # Получаем инструменты ассистента
+            assistant_tools = run_async(rest_client.get_assistant_tools(assistant.id))
+            tools_count = len(assistant_tools)
+
             assistants_data.append(
                 {
                     "ID": str(assistant.id),
@@ -28,6 +33,7 @@ def show_assistants_page(rest_client: RestServiceClient):
                     "Модель": assistant.model,
                     "Секретарь": "Да" if assistant.is_secretary else "Нет",
                     "Активен": "Да" if assistant.is_active else "Нет",
+                    "Инструменты": f"{tools_count} шт.",
                 }
             )
 
@@ -44,7 +50,7 @@ def show_assistants_page(rest_client: RestServiceClient):
 
         with col2:
             for assistant in assistants:
-                col_edit, col_delete = st.columns(2)
+                col_edit, col_delete, col_tools = st.columns(3)
                 with col_edit:
                     if st.button(
                         "✏️", key=f"edit_{assistant.id}", help="Редактировать"
@@ -55,6 +61,77 @@ def show_assistants_page(rest_client: RestServiceClient):
                     if st.button("🗑️", key=f"delete_{assistant.id}", help="Удалить"):
                         st.session_state["deleting_assistant"] = assistant
                         st.rerun()
+                with col_tools:
+                    if st.button(
+                        "🛠️",
+                        key=f"tools_{assistant.id}",
+                        help="Управление инструментами",
+                    ):
+                        st.session_state["managing_tools"] = assistant
+                        st.rerun()
+
+    # Секция управления инструментами
+    if "managing_tools" in st.session_state:
+        assistant = st.session_state["managing_tools"]
+        st.subheader(f"Управление инструментами: {assistant.name}")
+
+        # Получаем текущие инструменты ассистента
+        assistant_tools = run_async(rest_client.get_assistant_tools(assistant.id))
+
+        # Отображаем текущие инструменты
+        if assistant_tools:
+            st.write("Текущие инструменты:")
+            for tool in assistant_tools:
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"- {tool.name} ({tool.tool_type})")
+                with col2:
+                    if st.button(
+                        "🗑️", key=f"remove_tool_{tool.id}", help="Удалить инструмент"
+                    ):
+                        with st.spinner("Удаляем инструмент..."):
+                            run_async(
+                                rest_client.remove_tool_from_assistant(
+                                    assistant.id, tool.id
+                                )
+                            )
+                            st.success(f"Инструмент {tool.name} удален")
+                            st.rerun()
+        else:
+            st.info("У ассистента пока нет инструментов")
+
+        # Форма добавления нового инструмента
+        with st.form("add_tool_form"):
+            # Фильтруем инструменты, которые еще не назначены ассистенту
+            available_tools = [
+                t for t in all_tools if t.id not in [at.id for at in assistant_tools]
+            ]
+
+            if available_tools:
+                selected_tool = st.selectbox(
+                    "Выберите инструмент для добавления",
+                    options=available_tools,
+                    format_func=lambda x: f"{x.name} ({x.tool_type})",
+                )
+
+                submit_button = st.form_submit_button("Добавить инструмент")
+
+                if submit_button:
+                    with st.spinner("Добавляем инструмент..."):
+                        run_async(
+                            rest_client.add_tool_to_assistant(
+                                assistant.id, selected_tool.id
+                            )
+                        )
+                        st.success(f"Инструмент {selected_tool.name} добавлен")
+                        st.rerun()
+            else:
+                st.info("Нет доступных инструментов для добавления")
+
+        # Кнопка возврата
+        if st.button("Назад"):
+            del st.session_state["managing_tools"]
+            st.rerun()
 
     # Секция создания нового ассистента
     with st.expander("➕ Создать нового ассистента", expanded=False):
