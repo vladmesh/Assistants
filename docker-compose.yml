@@ -106,8 +106,8 @@ services:
 
   cron_service:
     build:
-      context: ./cron_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: cron_service/Dockerfile
     container_name: cron-service
     environment:
       - TELEGRAM_ID=${TELEGRAM_ID}
