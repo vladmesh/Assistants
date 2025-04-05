@@ -1,0 +1,50 @@
+[tool.poetry]
+name = "rest-service"
+version = "0.1.0"
+description = "REST API service for Smart Assistant"
+authors = ["Your Name <your.email@example.com>"]
+packages = [{ include = "rest_service/src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.2"
+uvicorn = "^0.27.1"
+sqlmodel = "^0.0.23"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+python-multipart = "^0.0.9"
+pydantic-settings = "^2.1.0"
+psycopg2-binary = "^2.9.9"
+asyncpg = "^0.29.0"
+python-dateutil = "^2.8.2"
+croniter = "^2.0.1"
+openai = "^1.12.0"
+python-dotenv = "^1.0.1"
+httpx = "^0.26.0"
+starlette = ">=0.36.3,<0.37.0"
+structlog = ">=24.1.0"
+pydantic = "^2.6.1"
+trio = "^0.24.0"
+alembic = "^1.13.1"
+shared-models = {path = "../shared_models"}
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.10.1"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+flake8-pyproject = "^1.2.3"
+mypy = "^1.6.1"
+pylint = "^3.0.2"
+autoflake = "^2.3.1"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.5"
+pytest-cov = "^4.1.0"
+pytest-env = "^1.1.3"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=src --cov-report=term-missing"
+asyncio_mode = "auto" 
