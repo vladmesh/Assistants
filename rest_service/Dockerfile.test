@@ -7,7 +7,7 @@ WORKDIR /
 RUN pip install poetry
 
 # Copy dependency files
-COPY rest_service/pyproject.toml rest_service/poetry.lock ./rest_service/
+COPY rest_service/pyproject.toml rest_service/poetry.lock* ./rest_service/
 COPY shared_models ./shared_models
 
 # Configure poetry and install dependencies

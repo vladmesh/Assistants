@@ -13,30 +13,40 @@ WORKDIR /
 RUN pip install poetry
 
 # Copy dependency files
-COPY pyproject.toml poetry.lock ./
+COPY service_name/pyproject.toml service_name/poetry.lock* ./service_name/
 COPY shared_models ./shared_models
 
 # Configure poetry and install dependencies
 RUN poetry config virtualenvs.create false && \
-    poetry install --only main --no-interaction --no-ansi
+    cd service_name && \
+    poetry install --only main --no-interaction --no-ansi --no-root
 
 # Production stage
 FROM python:3.11-slim
 
 WORKDIR /
 
-ENV PYTHONUNBUFFERED=1 \
+ENV PYTHONPATH=/src \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# Install system dependencies (if needed)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code
-COPY src/ /src/
+COPY service_name/src/ /src/
 
 # Копирование дополнительных файлов (если есть)
-COPY alembic/ ./alembic/  # если есть миграции
-COPY manage.py .          # если есть manage.py
+# COPY service_name/alembic/ ./alembic/  # если есть миграции
+# COPY service_name/manage.py ./manage.py  # если есть manage.py
+# COPY service_name/alembic.ini ./alembic.ini  # если есть alembic.ini
 
 CMD ["python", "src/main.py"]
 ```
@@ -52,28 +62,37 @@ WORKDIR /
 RUN pip install poetry
 
 # Copy dependency files
-COPY pyproject.toml poetry.lock ./
+COPY service_name/pyproject.toml service_name/poetry.lock* ./service_name/
 COPY shared_models ./shared_models
 
 # Configure poetry and install dependencies
 RUN poetry config virtualenvs.create false && \
-    poetry install --only main,test --no-interaction --no-ansi
+    cd service_name && \
+    poetry install --only main,test --no-interaction --no-ansi --no-root
 
 # Test stage
 FROM python:3.11-slim
 
 WORKDIR /
 
-ENV PYTHONUNBUFFERED=1 \
+ENV PYTHONPATH=/src \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     TESTING=1
 
+# Install system dependencies (if needed)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code and tests
-COPY src/ /src/
-COPY tests/ /tests/
+COPY service_name/src/ /src/
+COPY service_name/tests/ /tests/
 
 CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"]
 ```
@@ -82,8 +101,8 @@ CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"]
 ```yaml
 service_name:
   build:
-    context: ./service_name
-    dockerfile: Dockerfile
+    context: .
+    dockerfile: service_name/Dockerfile
   container_name: service-name
   environment:
     - SERVICE_VAR1=${SERVICE_VAR1}
@@ -113,8 +132,8 @@ service_name:
 services:
   test:
     build:
-      context: .
-      dockerfile: Dockerfile.test
+      context: ..
+      dockerfile: service_name/Dockerfile.test
     environment:
       - TESTING=1
       - PYTHONPATH=/src
@@ -137,8 +156,6 @@ services:
       - POSTGRES_USER=test_user
       - POSTGRES_PASSWORD=test_password
       - POSTGRES_DB=test_db
-    ports:
-      - "5433:5432"
     volumes:
       - test_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -149,8 +166,6 @@ services:
 
   redis:
     image: redis:7.2-alpine
-    ports:
-      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -170,26 +185,26 @@ volumes:
 - [x] docker-compose.test.yml соответствует шаблону
 
 ### rest_service
-- [ ] Dockerfile соответствует шаблону
-- [ ] Dockerfile.test соответствует шаблону
+- [x] Dockerfile соответствует шаблону
+- [x] Dockerfile.test соответствует шаблону
 - [x] Блок в общем docker-compose.yml соответствует шаблону
 - [x] docker-compose.test.yml соответствует шаблону
 
 ### google_calendar_service
-- [ ] Dockerfile соответствует шаблону
-- [ ] Dockerfile.test соответствует шаблону
+- [x] Dockerfile соответствует шаблону
+- [x] Dockerfile.test соответствует шаблону
 - [x] Блок в общем docker-compose.yml соответствует шаблону
 - [x] docker-compose.test.yml соответствует шаблону
 
 ### cron_service
-- [ ] Dockerfile соответствует шаблону
-- [ ] Dockerfile.test соответствует шаблону
+- [x] Dockerfile соответствует шаблону
+- [x] Dockerfile.test соответствует шаблону
 - [x] Блок в общем docker-compose.yml соответствует шаблону
 - [x] docker-compose.test.yml соответствует шаблону
 
 ### telegram_bot_service
-- [ ] Dockerfile соответствует шаблону
-- [ ] Dockerfile.test соответствует шаблону
+- [x] Dockerfile соответствует шаблону
+- [x] Dockerfile.test соответствует шаблону
 - [x] Блок в общем docker-compose.yml соответствует шаблону
 - [x] docker-compose.test.yml соответствует шаблону
 

@@ -8,10 +8,8 @@ services:
       - PYTHONPATH=/src
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      - REST_SERVICE_URL=http://mock:8000
-      - TELEGRAM_BOT_USERNAME=test_bot
-      - TELEGRAM_TOKEN=test_token
-      - TELEGRAM_ID=123456789
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-test_token}
+      - REST_SERVICE_URL=${REST_SERVICE_URL:-http://mock:8000}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     env_file:
@@ -22,8 +20,6 @@ services:
 
   redis:
     image: redis:7.2-alpine
-    ports:
-      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

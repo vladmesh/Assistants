@@ -15,7 +15,7 @@ RUN poetry config virtualenvs.create false && \
     cd telegram_bot_service && \
     poetry install --only main --no-interaction --no-ansi --no-root
 
-# Final stage
+# Production stage
 FROM python:3.11-slim
 
 WORKDIR /

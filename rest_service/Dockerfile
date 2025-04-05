@@ -7,7 +7,7 @@ WORKDIR /
 RUN pip install poetry
 
 # Copy dependency files
-COPY rest_service/pyproject.toml rest_service/poetry.lock ./rest_service/
+COPY rest_service/pyproject.toml rest_service/poetry.lock* ./rest_service/
 COPY shared_models ./shared_models
 
 # Configure poetry and install dependencies
@@ -31,7 +31,8 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code
 COPY rest_service/src/ /src/
