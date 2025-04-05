@@ -1,14 +1,15 @@
-import json
+"""REST client for the admin panel"""
+
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import httpx
-from config import settings
+from config.settings import settings
 from pydantic import BaseModel
 
 
 class User(BaseModel):
-    """User model from REST service"""
+    """User model."""
 
     id: int
     telegram_id: int
@@ -16,7 +17,7 @@ class User(BaseModel):
 
 
 class Assistant(BaseModel):
-    """Assistant model from REST service"""
+    """Assistant model."""
 
     id: UUID
     name: str
@@ -52,39 +53,31 @@ class AssistantUpdate(BaseModel):
 
 
 class RestServiceClient:
-    """Client for interacting with the REST service"""
+    """Client for interacting with the REST service."""
 
     def __init__(self, base_url: Optional[str] = None):
-        """Initialize the client
+        """Initialize the client.
 
         Args:
-            base_url: Optional base URL of the REST service.
-                If not provided, uses settings.
+            base_url: Optional base URL for the REST service.
+                     If not provided, uses settings.REST_SERVICE_URL
         """
         self.base_url = (base_url or settings.REST_SERVICE_URL).rstrip("/")
         self._client = httpx.AsyncClient()
         self._cache: Dict[str, Any] = {}
 
     async def close(self):
-        """Close the HTTP client"""
+        """Close the HTTP client."""
         await self._client.aclose()
 
     async def get_users(self) -> List[User]:
-        """Get list of all users
-
-        Returns:
-            List of User objects
-        """
+        """Get list of all users."""
         response = await self._client.get(f"{self.base_url}/api/users/all/")
         response.raise_for_status()
         return [User(**user) for user in response.json()]
 
     async def get_assistants(self) -> List[Assistant]:
-        """Get list of all assistants
-
-        Returns:
-            List of Assistant objects
-        """
+        """Get list of all assistants."""
         response = await self._client.get(f"{self.base_url}/api/assistants/")
         response.raise_for_status()
         return [Assistant(**assistant) for assistant in response.json()]
@@ -150,14 +143,29 @@ class RestServiceClient:
         )
         response.raise_for_status()
 
-    async def set_user_secretary(self, user_id: int, secretary_id: UUID) -> None:
-        """Set secretary for a user
+    async def set_user_secretary(
+        self, user_id: int, secretary_id: Optional[UUID]
+    ) -> None:
+        """Set secretary for a user.
 
         Args:
-            user_id: ID of the user
-            secretary_id: ID of the secretary assistant
+            user_id: User ID
+            secretary_id: Secretary assistant ID or None to remove secretary
         """
-        response = await self._client.post(
-            f"{self.base_url}/api/users/{user_id}/secretary/{secretary_id}"
-        )
+        if secretary_id:
+            response = await self._client.post(
+                f"{self.base_url}/api/users/{user_id}/secretary/{secretary_id}",
+            )
+        else:
+            # Если secretary_id is None, удаляем связь
+            response = await self._client.delete(
+                f"{self.base_url}/api/users/{user_id}/secretary",
+            )
         response.raise_for_status()
+
+    async def get_users_and_secretaries(self):
+        """Get list of users and secretary assistants."""
+        users = await self.get_users()
+        assistants = await self.get_assistants()
+        secretary_assistants = [a for a in assistants if a.is_secretary and a.is_active]
+        return users, secretary_assistants
