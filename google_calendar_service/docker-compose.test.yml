@@ -1,8 +1,13 @@
 services:
   test:
     build:
-      context: .
-      dockerfile: Dockerfile.test
+      context: ..
+      dockerfile: google_calendar_service/Dockerfile.test
+    environment:
+      - TESTING=1
+      - PYTHONPATH=/src
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
     env_file:
       - ./tests/.env.test
     depends_on:
