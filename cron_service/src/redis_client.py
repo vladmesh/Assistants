@@ -3,7 +3,7 @@ import logging
 import os
 
 import redis
-from models import MessageContent, QueueMessage
+from models import CronMessage
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,9 @@ def send_notification(user_id: int, message: str, metadata: dict = None) -> None
         metadata: Дополнительные данные о напоминании
     """
     try:
-        queue_message = QueueMessage(
+        queue_message = CronMessage(
             user_id=user_id,
-            content=MessageContent(message=message, metadata=metadata or {}),
+            content={"message": message, "metadata": metadata or {}},
         )
 
         redis_client.rpush(OUTPUT_QUEUE, queue_message.model_dump_json())

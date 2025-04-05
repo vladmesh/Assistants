@@ -3,6 +3,13 @@ from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
+from shared_models.queue import (
+    QueueMessage,
+    QueueMessageContent,
+    QueueMessageSource,
+    QueueMessageType,
+)
+
 
 class MessageContent(BaseModel):
     """Content of the message with metadata."""
@@ -19,3 +26,11 @@ class QueueMessage(BaseModel):
     source: str = "cron"
     content: MessageContent
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class CronMessage(QueueMessage):
+    """Message from cron service."""
+
+    type: QueueMessageType = QueueMessageType.TOOL
+    source: QueueMessageSource = QueueMessageSource.CRON
+    tool_name: str = "cron"
