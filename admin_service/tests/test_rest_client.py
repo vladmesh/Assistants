@@ -1,9 +1,7 @@
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from pydantic import BaseModel
 
 from src.rest_client import RestServiceClient, User
 

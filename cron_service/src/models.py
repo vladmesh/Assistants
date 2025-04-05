@@ -1,14 +1,9 @@
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 from pydantic import BaseModel, Field
 
-from shared_models.queue import (
-    QueueMessage,
-    QueueMessageContent,
-    QueueMessageSource,
-    QueueMessageType,
-)
+from shared_models.queue import QueueMessage, QueueMessageSource, QueueMessageType
 
 
 class MessageContent(BaseModel):

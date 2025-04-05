@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  rag_service_test:
+    build:
+      context: ..
+      dockerfile: rag_service/Dockerfile.test
+    volumes:
+      - .:/app
+    environment:
+      - ENVIRONMENT=test
+      - LOG_LEVEL=DEBUG
+      - API_PORT=8002
+      - QDRANT_HOST=qdrant_test
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION=rag_data_test
+    depends_on:
+      - qdrant_test
+    networks:
+      - test_network
+
+  qdrant_test:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6334:6333"
+    volumes:
+      - qdrant_test_data:/qdrant/storage
+    networks:
+      - test_network
+
+volumes:
+  qdrant_test_data:
+
+networks:
+  test_network:
+    driver: bridge

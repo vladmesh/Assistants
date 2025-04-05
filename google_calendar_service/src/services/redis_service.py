@@ -1,4 +1,3 @@
-import json
 from typing import Awaitable
 
 import redis.asyncio as redis
