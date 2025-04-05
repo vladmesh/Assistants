@@ -11,6 +11,7 @@ smart-assistant/
 ├── google_calendar_service/   # Google Calendar integration
 ├── cron_service/             # Task scheduler service
 ├── telegram_bot_service/     # Telegram bot interface
+├── rag_service/             # RAG service
 ├── scripts/                  # Utility scripts
 ├── manage.py                # Project management script
 ├── run_tests.sh            # Test execution script
@@ -61,6 +62,13 @@ The project is divided into several independent microservices:
 - **telegram_bot_service**  
   - A Telegram Bot interface for end-user interaction.
   - Receives user messages, identifies users via REST API, and sends formatted responses.
+  
+- **rag_service**  
+  - Retrieval-Augmented Generation service for context-aware responses.
+  - Integrates with Qdrant vector database for storing and retrieving text embeddings.
+  - Provides API endpoints for adding and searching vector data.
+  - Supports filtering by data type, user, and assistant.
+  - Enhances assistant responses with relevant context from the vector database.
 
 ## Project Management
 
@@ -91,6 +99,8 @@ The project uses Docker Compose for container orchestration. Each service runs i
   - `assistant_service`: Core assistant service
   - `telegram_bot_service`: Telegram bot interface
   - `cron_service`: Task scheduler service
+  - `rag_service`: RAG service (port 8002)
+  - `qdrant`: Vector database for embeddings storage
 
 - **Container Management:**
   ```bash
@@ -120,6 +130,7 @@ The project uses environment variables for configuration:
   - `POSTGRES_*`: Database configuration
   - `REDIS_*`: Redis connection settings
   - `ASYNC_DATABASE_URL`: Async database connection string
+  - `QDRANT_*`: Qdrant vector database configuration
 
 - **API Keys & Secrets:**
   - `OPENAI_API_KEY`: OpenAI API key
@@ -185,6 +196,7 @@ Tests are executed using Docker containers for isolation and consistency:
 # - telegram_bot_service
 # - assistant_service
 # - google_calendar_service
+# - rag_service
 ```
 
 ### Test Environment
@@ -301,6 +313,7 @@ Code formatting script:
 - **Alembic**: Database migrations
 - **SQLAlchemy**: ORM and database toolkit
 - **psycopg2**: PostgreSQL adapter
+- **Qdrant**: Vector database for embeddings
 
 #### Container Management
 - **Docker**: Containerization
@@ -369,6 +382,7 @@ This high-level summary encapsulates the primary components, deployment strategy
 - Linter implementation
 - Basic dependency management
 - Initial documentation updates
+- RAG service implementation
 
 🔄 In Progress:
 - Dependency updates
