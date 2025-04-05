@@ -221,10 +221,11 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 30s
 
 networks:
   app_network:

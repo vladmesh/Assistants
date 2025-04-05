@@ -11,7 +11,7 @@ print_colored() {
 print_help() {
     echo "Usage: $0 [service1 service2 ...]"
     echo "If no services specified, runs tests for all services"
-    echo "Available services: rest_service, cron_service, telegram_bot_service, assistant_service, google_calendar_service, admin_service"
+    echo "Available services: rest_service, cron_service, telegram_bot_service, assistant_service, google_calendar_service, admin_service, rag_service"
     exit 1
 }
 
@@ -45,7 +45,7 @@ run_service_tests() {
 failed_services=()
 
 # Список всех доступных сервисов
-all_services=("rest_service" "cron_service" "telegram_bot_service" "assistant_service" "google_calendar_service" "admin_service")
+all_services=("rest_service" "cron_service" "telegram_bot_service" "assistant_service" "google_calendar_service" "admin_service" "rag_service")
 
 # Проверяем, есть ли аргументы командной строки
 if [ $# -eq 0 ]; then

@@ -32,6 +32,11 @@ A comprehensive intelligent assistant system built on OpenAI Assistants API, des
   - System management
   - Configuration control
   - Monitoring capabilities
+- **rag_service** - Retrieval-Augmented Generation service
+  - Vector database integration with Qdrant
+  - Storage and retrieval of text embeddings
+  - Context-aware search functionality
+  - Integration with assistant service
 
 ### Technology Stack
 - Python 3.11+
@@ -42,6 +47,7 @@ A comprehensive intelligent assistant system built on OpenAI Assistants API, des
 - OpenAI Assistants API
 - Telegram Bot API
 - Google Calendar API
+- Qdrant Vector Database
 - Poetry for dependency management
 - Black & isort for code formatting
 - Pytest for testing
@@ -66,6 +72,9 @@ ASYNC_DATABASE_URL=postgresql+asyncpg://user:password@db:5432/dbname
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=your_google_redirect_uri
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+QDRANT_COLLECTION=rag_data
 ```
 
 3. Start services using Docker Compose:
@@ -97,6 +106,7 @@ Run tests for specific services:
 ./run_tests.sh cron_service
 ./run_tests.sh assistant_service
 ./run_tests.sh telegram_bot_service
+./run_tests.sh rag_service
 ```
 
 ### Project Structure
@@ -108,6 +118,7 @@ Run tests for specific services:
 ├── cron_service/        # Task scheduler
 ├── telegram_bot_service/ # Telegram bot
 ├── admin_service/       # Admin interface
+├── rag_service/         # RAG service
 ├── shared_models/       # Shared data models
 ├── scripts/            # Utility scripts
 ├── manage.py          # Project management
@@ -140,6 +151,10 @@ Run tests for specific services:
   - Assistant configurations
   - Interaction history
   - Task scheduling
+- Qdrant used for:
+  - Vector embeddings storage
+  - Semantic search functionality
+  - Context retrieval
 
 ## Monitoring
 
