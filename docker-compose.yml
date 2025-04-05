@@ -82,8 +82,8 @@ services:
 
   rest_service:
       build:
-        context: ./rest_service
-        dockerfile: Dockerfile
+        context: .
+        dockerfile: rest_service/Dockerfile
       container_name: rest-service
       environment:
         - ASYNC_DATABASE_URL=${ASYNC_DATABASE_URL}

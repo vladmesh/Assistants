@@ -3,8 +3,8 @@ version: '3.8'
 services:
   test:
     build:
-      context: .
-      dockerfile: Dockerfile.test
+      context: ..
+      dockerfile: rest_service/Dockerfile.test
     environment:
       - TESTING=1
       - PYTHONPATH=/src
