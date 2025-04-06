@@ -15,6 +15,7 @@ python-dotenv = "^1.0.1"
 redis = "^5.0.1"
 pytz = "^2024.1"
 shared_models = {path = "../shared_models"}
+python-dateutil = "^2.8.2"
 
 [tool.poetry.group.test.dependencies]
 shared_models = {path = "../shared_models"}

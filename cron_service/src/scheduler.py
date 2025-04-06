@@ -1,11 +1,16 @@
 import logging
-import os
 import time
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
+from dateutil.parser import isoparse  # For parsing ISO 8601 datetime strings
 from pytz import utc
-from redis_client import send_notification
-from rest_client import fetch_scheduled_jobs
+
+# Change back to relative imports
+from .redis_client import send_reminder_trigger
+from .rest_client import fetch_active_reminders
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,149 +22,205 @@ logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # секунды
+JOB_ID_PREFIX = "reminder_"
 
 # Создаем планировщик с явным указанием UTC
 scheduler = BackgroundScheduler(timezone=utc)
 
 
-def start_scheduler():
-    """Запускает планировщик задач."""
+def _job_func(reminder_data):
+    """Function executed by the scheduler when a reminder triggers."""
     try:
-        # Периодически обновляет задачи из REST-сервиса
-        scheduler.add_job(
-            update_jobs_from_rest,
-            "interval",
-            minutes=1,
-            id="update_jobs_from_rest",
-            name="update_jobs_from_rest",
-        )
-        scheduler.start()
-        logger.info("Планировщик успешно запущен")
+        logger.info(f"Executing job for reminder ID: {reminder_data['id']}")
+        send_reminder_trigger(reminder_data)
+        logger.info(f"Successfully sent trigger for reminder ID: {reminder_data['id']}")
 
-        # Держим процесс активным
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            scheduler.shutdown()
-            logger.info("Планировщик остановлен")
+        # If it was a one-time reminder, we might want to update its status via REST API,
+        # but let's keep it simple for now and just send the trigger.
+        # The assistant receiving the trigger can handle the status update.
 
     except Exception as e:
-        logger.error(f"Ошибка при запуске планировщика: {e}")
-        scheduler.shutdown()
-        raise
+        logger.error(
+            f"Error executing job for reminder ID {reminder_data.get('id', 'unknown')}: {e}"
+        )
+        # Consider adding retry logic here if needed
+
+
+def schedule_job(reminder):
+    """Schedules or updates a single reminder job in APScheduler."""
+    job_id = f"{JOB_ID_PREFIX}{reminder['id']}"
+    existing_job = scheduler.get_job(job_id)
+
+    # Remove job if status is not active (completed, cancelled, paused)
+    if reminder.get("status") != "active":
+        if existing_job:
+            scheduler.remove_job(job_id)
+            logger.info(
+                f"Removed job {job_id} due to inactive status: {reminder.get('status')}"
+            )
+        return  # Don't schedule inactive reminders
+
+    trigger = None
+    trigger_args = {
+        "timezone": utc,
+        "args": [reminder],  # Pass the full reminder data to the job function
+    }
+
+    try:
+        if reminder["type"] == "one_time" and reminder.get("trigger_at"):
+            run_date = isoparse(reminder["trigger_at"])
+            # Ensure the datetime is timezone-aware (assuming UTC from API)
+            if run_date.tzinfo is None:
+                run_date = utc.localize(run_date)
+            else:
+                run_date = run_date.astimezone(utc)
+
+            # Don't schedule jobs in the past unless misfire_grace_time allows it
+            if run_date < datetime.now(utc):
+                logger.warning(
+                    f"Skipping past one-time reminder {job_id} scheduled for {run_date}"
+                )
+                return
+
+            trigger = DateTrigger(run_date=run_date)
+            trigger_args["trigger"] = trigger
+            trigger_args["name"] = f"One-time reminder {reminder['id']}"
+            trigger_args["misfire_grace_time"] = 60 * 5  # Allow 5 minutes grace period
+
+        elif reminder["type"] == "recurring" and reminder.get("cron_expression"):
+            cron_parts = reminder["cron_expression"].split()
+            if len(cron_parts) != 5:
+                raise ValueError(
+                    f"Invalid CRON expression for {job_id}: {reminder['cron_expression']}"
+                )
+
+            trigger = CronTrigger(
+                minute=cron_parts[0],
+                hour=cron_parts[1],
+                day=cron_parts[2],
+                month=cron_parts[3],
+                day_of_week=cron_parts[4],
+                timezone=utc,
+            )
+            trigger_args["trigger"] = trigger
+            trigger_args["name"] = f"Recurring reminder {reminder['id']}"
+            trigger_args["misfire_grace_time"] = 60  # Allow 1 minute grace period
+
+        else:
+            logger.warning(
+                f"Invalid type or missing trigger info for reminder {reminder['id']}, skipping."
+            )
+            return
+
+    except Exception as e:
+        logger.error(f"Error creating trigger for reminder {reminder['id']}: {e}")
+        return  # Skip scheduling if trigger creation fails
+
+    # Add or modify the job
+    if existing_job:
+        # Check if trigger needs update (simple check, might need refinement)
+        # For simplicity, we'll just reschedule. APScheduler handles updates.
+        try:
+            scheduler.reschedule_job(
+                job_id, trigger=trigger_args["trigger"], **trigger_args
+            )
+            logger.info(f"Rescheduled job {job_id}.")
+        except Exception as e:
+            logger.error(f"Error rescheduling job {job_id}: {e}")
+    else:
+        try:
+            scheduler.add_job(_job_func, id=job_id, **trigger_args)
+            logger.info(f"Added job {job_id} ({trigger_args['name']}).")
+        except Exception as e:
+            logger.error(f"Error adding job {job_id}: {e}")
 
 
 def update_jobs_from_rest():
-    """Обновляет задачи в планировщике, запрашивая их у REST-сервиса."""
+    """Updates jobs in the scheduler by fetching active reminders from the REST service."""
     retries = 0
     while retries < MAX_RETRIES:
         try:
-            logger.info("Начинаем обновление списка задач из REST-сервиса...")
-            logger.info(
-                "REST_SERVICE_URL: "
-                f"{os.getenv('REST_SERVICE_URL', 'http://rest_service:8000')}"
-            )
-            jobs = fetch_scheduled_jobs()
-            logger.info(f"Получено {len(jobs)} задач из REST-сервиса")
+            logger.info("Starting update of reminders from REST service...")
+            # Use the updated function name
+            reminders = fetch_active_reminders()
+            logger.info(f"Fetched {len(reminders)} active reminders from REST service.")
 
-            # Получаем текущие задачи в планировщике
+            if (
+                reminders is None
+            ):  # Handle case where fetch failed and returned None (or check for empty list if appropriate)
+                raise ConnectionError("Failed to fetch reminders from REST service.")
+
+            active_reminder_ids = {f"{JOB_ID_PREFIX}{r['id']}" for r in reminders}
             current_scheduler_jobs = scheduler.get_jobs()
-            logger.info(
-                f"Текущее количество задач в планировщике: "
-                f"{len(current_scheduler_jobs)}"
-            )
 
-            # Удаляем задачи, которых больше нет в REST-сервисе
-            current_jobs = {f"job_{job['id']}" for job in jobs}
-            logger.info(f"ID задач из REST-сервиса: {current_jobs}")
-
+            # Remove jobs that are no longer active or present in the fetched list
             for job in current_scheduler_jobs:
-                logger.info(f"Проверяем задачу планировщика: {job.id} ({job.name})")
                 if (
-                    job.id not in current_jobs and job.id != "update_jobs_from_rest"
-                ):  # Проверяем точное совпадение ID
-                    scheduler.remove_job(job.id)
-                    logger.info(f"Задача {job.name} удалена из планировщика")
-
-            # Добавляем или обновляем задачи
-            for job in jobs:
-                job_id = f"job_{job['id']}"
-                logger.info(f"Обрабатываем задачу из REST: {job_id} ({job['name']})")
-                if not scheduler.get_job(job_id):
+                    job.id.startswith(JOB_ID_PREFIX)
+                    and job.id not in active_reminder_ids
+                ):
                     try:
-                        cron_args = parse_cron_expression(job["cron_expression"])
-                        logger.info(f"CRON аргументы для {job['name']}: {cron_args}")
-                        scheduler.add_job(
-                            execute_job,
-                            trigger="cron",
-                            id=job_id,
-                            name=job["name"],
-                            args=[job],
-                            **cron_args,
-                        )
+                        scheduler.remove_job(job.id)
                         logger.info(
-                            f"Задача {job['name']} успешно добавлена в планировщик"
+                            f"Removed job {job.id} as it's no longer active or present."
                         )
                     except Exception as e:
-                        logger.error(
-                            f"Ошибка при добавлении задачи {job['name']}: {str(e)}"
-                        )
-                else:
-                    logger.info(f"Задача {job['name']} уже существует в планировщике")
+                        logger.error(f"Error removing job {job.id}: {e}")
 
-            logger.info("Обновление списка задач успешно завершено")
-            break
+            # Add or update jobs based on the fetched reminders
+            for reminder in reminders:
+                schedule_job(reminder)
+
+            logger.info("Finished updating reminders from REST service.")
+            break  # Exit loop on success
 
         except Exception as e:
             retries += 1
             logger.error(
-                f"Ошибка при обновлении задач (попытка {retries}/{MAX_RETRIES}): "
-                f"{str(e)}"
+                f"Error updating reminders (attempt {retries}/{MAX_RETRIES}): {e}"
             )
             if retries < MAX_RETRIES:
                 time.sleep(RETRY_DELAY)
             else:
                 logger.error(
-                    "Превышено максимальное количество попыток обновления задач"
+                    "Max retries reached for updating reminders. Service might be unstable."
                 )
-                raise  # Пробрасываем исключение дальше
+                # Decide if we should raise or continue trying later
+                break  # Stop retrying for now
 
 
-def parse_cron_expression(cron_expression: str) -> dict:
-    """
-    Парсит строку CRON-выражения и преобразует её в аргументы для APScheduler.
-    Все времена интерпретируются как UTC.
-    """
-    parts = cron_expression.split()
-    if len(parts) != 5:
-        raise ValueError(f"Неверный формат CRON-выражения: {cron_expression}")
-
-    return {
-        "minute": parts[0],
-        "hour": parts[1],
-        "day": parts[2],
-        "month": parts[3],
-        "day_of_week": parts[4],
-        "timezone": utc,  # Явно указываем UTC для каждой задачи
-    }
-
-
-def execute_job(job):
-    """Выполняет задачу."""
+def start_scheduler():
+    """Starts the background scheduler."""
     try:
-        logger.info(f"Выполняем задачу: {job['name']}")
-        metadata = {
-            "job_id": job["id"],
-            "job_name": job["name"],
-            "cron_expression": job["cron_expression"],
-        }
-        send_notification(
-            user_id=job["user_id"],
-            message=f"Запланированная задача: {job['name']}",
-            metadata=metadata,
+        # Add the job to periodically update reminders from the REST service
+        scheduler.add_job(
+            update_jobs_from_rest,
+            "interval",
+            minutes=1,  # Check for updates every minute
+            id="update_reminders_from_rest",
+            name="Update Reminders",
+            misfire_grace_time=30,  # Allow 30 seconds grace period if update job misses schedule
         )
-        logger.info(f"Задача {job['name']} успешно выполнена")
+        # Perform an initial update immediately on start
+        update_jobs_from_rest()
+
+        scheduler.start()
+        logger.info("Scheduler started successfully.")
+
+        # Keep the main thread alive
+        while True:
+            time.sleep(2)
+
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Scheduler shutting down...")
+        scheduler.shutdown()
+        logger.info("Scheduler shut down gracefully.")
     except Exception as e:
-        logger.error(f"Ошибка при выполнении задачи {job['name']}: {e}")
+        logger.critical(f"Failed to start scheduler: {e}", exc_info=True)
+        scheduler.shutdown()  # Attempt graceful shutdown on error
         raise
+
+
+# Remove the old unused functions if they exist
+# del parse_cron_expression
+# del execute_job
