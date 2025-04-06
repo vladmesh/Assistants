@@ -5,7 +5,6 @@ from sqlmodel import Field, Relationship
 
 from .base import BaseModel
 from .calendar import CalendarCredentials
-from .cron import CronJob
 from .reminder import Reminder
 
 
@@ -15,7 +14,6 @@ class TelegramUser(BaseModel, table=True):
     username: Optional[str]
 
     # Relationships
-    cronjobs: List[CronJob] = Relationship(back_populates="user")
     calendar_credentials: Optional[CalendarCredentials] = Relationship(
         back_populates="user"
     )
