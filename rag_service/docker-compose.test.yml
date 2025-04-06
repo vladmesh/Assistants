@@ -21,8 +21,6 @@ services:
 
   qdrant_test:
     image: qdrant/qdrant:latest
-    ports:
-      - "6334:6333"
     volumes:
       - qdrant_test_data:/qdrant/storage
     networks:

@@ -94,6 +94,8 @@ services:
         - "8000:8000"
       volumes:
         - ./rest_service/src:/src
+        - ./rest_service/alembic:/alembic
+        - ./rest_service/alembic.ini:/alembic.ini
       depends_on:
         db:
           condition: service_healthy
