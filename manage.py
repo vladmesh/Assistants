@@ -34,7 +34,7 @@ def create_migration(message: str):
 
     # Create migration in the container
     result = subprocess.run(
-        f'docker exec {container_id} python /app/manage.py migrate "{message}"',
+        f'docker exec {container_id} python manage.py migrate "{message}"',
         shell=True,
         capture_output=True,
         text=True,
@@ -47,7 +47,7 @@ def create_migration(message: str):
     result = subprocess.run(
         (
             f"docker exec {container_id} bash -c "
-            '"ls -t /app/alembic/versions/*.py | head -1"'
+            '"ls -t /alembic/versions/*.py | head -1"'
         ),
         shell=True,
         capture_output=True,

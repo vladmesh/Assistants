@@ -25,6 +25,7 @@ typing-extensions = "^4.9.0"
 tavily-python = "^0.5.4"
 asyncpg = "^0.29.0"
 psycopg = {extras = ["binary"], version = "^3.1.18"}
+alembic = "^1.15.2"
 
 [tool.poetry.group.dev.dependencies]
 shared-models = { path = "../shared_models" }
