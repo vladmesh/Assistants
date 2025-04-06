@@ -39,4 +39,5 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY cron_service/src/ /src/
 COPY cron_service/tests/ /tests/
 
+# Run pytest from the root directory - revert to standard CMD
 CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"] 
