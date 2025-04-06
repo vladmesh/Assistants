@@ -37,8 +37,8 @@ assistant_service/src/
 ├── tools/               # Tool implementations
 │   ├── base.py         # Base tool class
 │   ├── calendar.py     # Calendar operations
-│   ├── reminder.py     # Reminder management
-│   ├── rest.py         # REST service interface
+│   ├── reminder.py     # Reminder creation tool (create_reminder)
+│   ├── rest.py         # REST service interface (UNUSED? Verify)
 │   ├── sub_assistant.py # Sub-assistant wrapper
 │   ├── time.py         # Time operations
 │   └── web_search.py   # Web search using Tavily
@@ -68,14 +68,19 @@ class BaseLLMChat(BaseAssistant):
 
 #### Tool Integration
 ```python
-def _initialize_tools(self):
-    tools = [
-        TimeToolWrapper(),
-        CalendarCreateTool(settings=self.settings),
-        CalendarListTool(settings=self.settings),
-        SubAssistantTool(settings=self.settings),
-        WebSearchTool(settings=self.settings)
-    ]
+def initialize_tools(self, secretary_id: str):
+    secretary_tools = await self.rest_client.get_assistant_tools(secretary_id)
+    tools = []
+    for tool_data in secretary_tools:
+        rest_tool = RestServiceTool(**tool_data.dict(), settings=self.settings)
+        tool = rest_tool.to_tool(secretary_id=secretary_id)
+        tools.append(tool)
+    return tools
+
+# Example tool: create_reminder (tools/reminder_tool.py)
+# - Args: type ('one_time'/'recurring'), payload (JSON string), 
+#         trigger_at+timezone (for one_time), cron_expression (for recurring)
+# - Action: Calls POST /api/reminders/ in rest_service
 ```
 
 ### 3.2 OpenAI Implementation
@@ -115,7 +120,7 @@ tools = [
 ### 4.1 Message Types
 - HumanMessage: User messages
 - SecretaryMessage: Secretary responses
-- ToolMessage: Tool execution results
+- ToolMessage: Tool execution results **and incoming reminder trigger events**
 - SystemMessage: System notifications
 
 ### 4.2 Context Management
@@ -126,9 +131,10 @@ tools = [
 ## 5. External Integration
 
 ### 5.1 Redis
-- Message queues
-- Context storage
-- State management
+- Input Queue (`REDIS_QUEUE_TO_SECRETARY` env var): Receives `HumanMessage` (from Telegram) and `reminder_triggered` events (from `cron_service`).
+- Output Queue (`REDIS_QUEUE_TO_TELEGRAM` env var): Sends assistant responses to `telegram_bot_service`.
+- Context storage (potentially, if implemented).
+- State management (potentially, if implemented).
 
 ### 5.2 External Services
 - REST API service
@@ -181,4 +187,27 @@ class Settings(BaseSettings):
 - Use type hints
 - Follow naming conventions
 - Document changes
-- Maintain test coverage 
+- Maintain test coverage
+
+## Orchestrator (`orchestrator.py`)
+- Listens to the input Redis queue (`listen_for_messages`).
+- **Handles Incoming Messages:**
+  - If message is a `reminder_triggered` event:
+    - Calls `handle_reminder_trigger`.
+    - Extracts `user_id`.
+    - Retrieves the user's current secretary using `factory.get_user_secretary(user_id)`.
+    - Constructs a `ToolMessage` with `tool_name="reminder_trigger"` and event details.
+    - Calls `secretary.process_message` with the `ToolMessage`.
+    - Sends the secretary's response to the output Redis queue.
+  - If message is a standard `QueueMessage` (`HUMAN` or `TOOL` type):
+    - Calls `process_message`.
+    - Parses `QueueMessage`.
+    - Retrieves or creates the user's secretary using `factory.get_user_secretary(user_id)`.
+    - Converts `QueueMessage` to `HumanMessage` or `ToolMessage`.
+    - Calls `secretary.process_message`.
+    - Sends the secretary's response to the output Redis queue.
+
+## Assistant Factory (`assistants/factory.py`)
+- `get_user_secretary(user_id)`: Retrieves/caches the secretary assistant for a given user.
+- `get_assistant_by_id(uuid)`: Retrieves an assistant instance by its UUID (used internally, e.g., for sub-assistants).
+- `initialize_tools(secretary_id)`: Fetches tool configurations from `rest_service` and initializes tool instances, **passing `secretary_id` to the tool constructors (e.g., for `ReminderTool`)**. 

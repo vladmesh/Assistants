@@ -13,9 +13,7 @@ REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 # OUTPUT_QUEUE = os.getenv("REDIS_QUEUE_TO_SECRETARY", "queue:to_secretary") # Old queue
-OUTPUT_QUEUE = os.getenv(
-    "REDIS_QUEUE_TO_ASSISTANT", "queue:to_assistant"
-)  # New queue name
+OUTPUT_QUEUE = os.getenv("REDIS_QUEUE_TO_SECRETARY")  # Use Secretary queue
 
 redis_client = redis.Redis(
     host=REDIS_HOST,
