@@ -21,7 +21,6 @@ class ReminderType(str, enum.Enum):
 
 
 class ReminderStatus(str, enum.Enum):
-    PENDING = "pending"
     ACTIVE = "active"
     PAUSED = "paused"
     COMPLETED = "completed"
@@ -40,7 +39,7 @@ class Reminder(BaseModel, table=True):
     cron_expression: Optional[str] = Field(default=None)  # для периодических
     payload: str  # JSON строка с валидацией
     status: ReminderStatus = Field(
-        sa_column=Column(String, default=ReminderStatus.PENDING.value),
+        sa_column=Column(String, default=ReminderStatus.ACTIVE.value),
     )
     last_triggered_at: Optional[datetime] = Field(default=None)  # для повторяющихся
 
@@ -66,14 +65,13 @@ class Reminder(BaseModel, table=True):
     @validator("status")
     def validate_status(cls, v):
         if v not in [
-            ReminderStatus.PENDING.value,
             ReminderStatus.ACTIVE.value,
             ReminderStatus.PAUSED.value,
             ReminderStatus.COMPLETED.value,
             ReminderStatus.CANCELLED.value,
         ]:
             raise ValueError(
-                f"status должен быть одним из: {', '.join([s.value for s in ReminderStatus])}"
+                f"status должен быть одним из: {', '.join([s.value for s in ReminderStatus if s != ReminderStatus.PENDING])}"
             )
         return v
 

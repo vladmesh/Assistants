@@ -15,7 +15,7 @@ class ReminderBase(BaseSchema):
     trigger_at: Optional[datetime] = None
     cron_expression: Optional[str] = None
     payload: str
-    status: str = "pending"
+    status: str = "active"
 
     @validator("payload")
     def validate_payload(cls, v):
@@ -34,9 +34,9 @@ class ReminderBase(BaseSchema):
 
     @validator("status")
     def validate_status(cls, v):
-        if v not in ["pending", "active", "paused", "completed", "cancelled"]:
+        if v not in ["active", "paused", "completed", "cancelled"]:
             raise ValueError(
-                'status должен быть "pending", "active", "paused", "completed" или "cancelled"'
+                'status должен быть "active", "paused", "completed" или "cancelled"'
             )
         return v
 
@@ -51,14 +51,13 @@ class ReminderUpdate(BaseSchema):
     @validator("status")
     def validate_status(cls, v):
         if v is not None and v not in [
-            "pending",
             "active",
             "paused",
             "completed",
             "cancelled",
         ]:
             raise ValueError(
-                'status должен быть "pending", "active", "paused", "completed" или "cancelled"'
+                'status должен быть "active", "paused", "completed" или "cancelled"'
             )
         return v
 

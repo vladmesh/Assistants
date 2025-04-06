@@ -8,9 +8,9 @@ from apscheduler.triggers.date import DateTrigger
 from dateutil.parser import isoparse  # For parsing ISO 8601 datetime strings
 from pytz import utc
 
-# Change back to relative imports
-from .redis_client import send_reminder_trigger
-from .rest_client import fetch_active_reminders
+# Change back to absolute imports (without src.)
+from redis_client import send_reminder_trigger
+from rest_client import fetch_active_reminders, mark_reminder_completed
 
 # Настройка логирования
 logging.basicConfig(
@@ -30,20 +30,40 @@ scheduler = BackgroundScheduler(timezone=utc)
 
 def _job_func(reminder_data):
     """Function executed by the scheduler when a reminder triggers."""
+    logger.info("--- ENTERING _job_func ---")
+    reminder_id = reminder_data.get("id", "unknown")
+    reminder_type = reminder_data.get("type")
+    logger.info(f"_job_func started for reminder ID: {reminder_id}")
     try:
-        logger.info(f"Executing job for reminder ID: {reminder_data['id']}")
+        logger.info(f"Executing job for reminder ID: {reminder_id}")
+        logger.info(
+            f"--- BEFORE Calling send_reminder_trigger for ID: {reminder_id} ---"
+        )
         send_reminder_trigger(reminder_data)
-        logger.info(f"Successfully sent trigger for reminder ID: {reminder_data['id']}")
+        logger.info(f"Successfully sent trigger for reminder ID: {reminder_id}")
 
-        # If it was a one-time reminder, we might want to update its status via REST API,
-        # but let's keep it simple for now and just send the trigger.
-        # The assistant receiving the trigger can handle the status update.
+        # Mark one-time reminders as completed after sending trigger
+        if reminder_type == "one_time" and reminder_id != "unknown":
+            logger.info(
+                f"Attempting to mark one-time reminder {reminder_id} as completed."
+            )
+            try:
+                success = mark_reminder_completed(reminder_id)
+                if not success:
+                    logger.warning(
+                        f"Call to mark_reminder_completed for {reminder_id} returned False."
+                    )
+            except Exception as api_exc:
+                logger.error(
+                    f"Exception calling mark_reminder_completed for {reminder_id}: {api_exc}"
+                )
 
     except Exception as e:
         logger.error(
-            f"Error executing job for reminder ID {reminder_data.get('id', 'unknown')}: {e}"
+            f"Error executing job for reminder ID {reminder_id}: {e}", exc_info=True
         )
         # Consider adding retry logic here if needed
+    logger.info(f"_job_func finished for reminder ID: {reminder_id}")
 
 
 def schedule_job(reminder):
@@ -121,9 +141,7 @@ def schedule_job(reminder):
         # Check if trigger needs update (simple check, might need refinement)
         # For simplicity, we'll just reschedule. APScheduler handles updates.
         try:
-            scheduler.reschedule_job(
-                job_id, trigger=trigger_args["trigger"], **trigger_args
-            )
+            scheduler.reschedule_job(job_id, **trigger_args)
             logger.info(f"Rescheduled job {job_id}.")
         except Exception as e:
             logger.error(f"Error rescheduling job {job_id}: {e}")

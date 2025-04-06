@@ -24,6 +24,20 @@ async def list_reminders(
     return result.scalars().all()
 
 
+@router.get("/reminders/scheduled", response_model=List[ReminderRead])
+async def list_scheduled_reminders(
+    session: AsyncSession = Depends(get_session),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Получить список активных напоминаний для планировщика."""
+    query = (
+        select(Reminder).where(Reminder.status == "active").offset(skip).limit(limit)
+    )
+    result = await session.execute(query)
+    return result.scalars().all()
+
+
 @router.get("/reminders/{reminder_id}", response_model=ReminderRead)
 async def get_reminder(reminder_id: UUID, session: AsyncSession = Depends(get_session)):
     """Получить напоминание по ID."""
@@ -61,20 +75,6 @@ async def list_user_reminders(
     query = query.offset(skip).limit(limit)
 
     # Выполняем запрос
-    result = await session.execute(query)
-    return result.scalars().all()
-
-
-@router.get("/reminders/scheduled", response_model=List[ReminderRead])
-async def list_scheduled_reminders(
-    session: AsyncSession = Depends(get_session),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-):
-    """Получить список активных напоминаний для планировщика."""
-    query = (
-        select(Reminder).where(Reminder.status == "active").offset(skip).limit(limit)
-    )
     result = await session.execute(query)
     return result.scalars().all()
 
