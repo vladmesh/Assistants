@@ -7,6 +7,7 @@ from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship
 
 from .base import BaseModel
+from .reminder import Reminder
 
 
 class AssistantType(str, enum.Enum):
@@ -67,6 +68,18 @@ class Assistant(BaseModel, table=True):
     )
     user_links: List["UserSecretaryLink"] = Relationship(  # noqa: F821
         back_populates="secretary", sa_relationship_kwargs={"lazy": "selectin"}
+    )
+    reminders: List[Reminder] = Relationship(
+        back_populates="assistant",
+        sa_relationship_kwargs={
+            "foreign_keys": "Reminder.assistant_id",
+        },
+    )
+    created_reminders: List[Reminder] = Relationship(
+        back_populates="created_by_assistant",
+        sa_relationship_kwargs={
+            "foreign_keys": "Reminder.created_by_assistant_id",
+        },
     )
 
     def validate_type(self) -> None:

@@ -50,3 +50,6 @@ yarn-error.log
 build/
 dist/
 *.egg-info/
+
+.repomix-output.txt
+qdrant_data/
