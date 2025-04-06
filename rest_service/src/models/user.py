@@ -6,6 +6,7 @@ from sqlmodel import Field, Relationship
 from .base import BaseModel
 from .calendar import CalendarCredentials
 from .cron import CronJob
+from .reminder import Reminder
 
 
 class TelegramUser(BaseModel, table=True):
@@ -21,3 +22,4 @@ class TelegramUser(BaseModel, table=True):
     secretary_links: List["UserSecretaryLink"] = Relationship(  # noqa: F821
         back_populates="user", sa_relationship_kwargs={"lazy": "selectin"}
     )
+    reminders: List[Reminder] = Relationship(back_populates="user")
