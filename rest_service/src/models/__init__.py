@@ -15,6 +15,7 @@ from .cron import (
     CronJobStatus,
     CronJobType,
 )
+from .reminder import Reminder, ReminderStatus, ReminderType
 from .user import TelegramUser
 from .user_secretary import UserSecretaryLink
 
@@ -34,4 +35,7 @@ __all__ = [
     "CronJobNotification",
     "CronJobRecord",
     "UserSecretaryLink",
+    "Reminder",
+    "ReminderType",
+    "ReminderStatus",
 ]

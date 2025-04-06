@@ -1,18 +1,22 @@
+import sys
+
+# Assume the source code is mounted at /src in the container
+# Explicitly add /src to the Python path
+if "/src" not in sys.path:
+    sys.path.insert(0, "/src")
+
 import logging
 import os
-import sys
 from logging.config import fileConfig
 
+# from sqlmodel import SQLModel # Assuming models uses Base now
+import models  # Use direct import since /src is in sys.path
 from alembic import context
 from sqlalchemy import engine_from_config, pool
-from sqlmodel import SQLModel
 
 # Настраиваем логирование
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Добавляем корневую директорию проекта в PYTHONPATH
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -27,7 +31,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-target_metadata = SQLModel.metadata
+target_metadata = models.BaseModel.metadata
 
 # Логируем все таблицы, которые видит SQLAlchemy
 logger.info("Available tables:")
@@ -42,12 +46,14 @@ for table in target_metadata.tables:
 
 def get_url():
     """Get database URL from environment variable."""
+    # Read ASYNC_DATABASE_URL to match docker-compose.yml environment
     url = os.getenv("ASYNC_DATABASE_URL")
     if not url:
+        # Update error message as well
         raise ValueError("ASYNC_DATABASE_URL environment variable is not set")
-    # Заменяем asyncpg на psycopg2 для синхронных миграций
+    # Заменяем asyncpg на psycopg2 для синхронных миграций Alembic
     sync_url = url.replace("+asyncpg", "")
-    logger.info(f"Using database URL: {sync_url}")
+    logger.info(f"Using database URL for Alembic: {sync_url}")
     return sync_url
 
 
@@ -82,7 +88,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    configuration = config.get_section(config.config_ini_section)
+    configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = get_url()
 
     connectable = engine_from_config(

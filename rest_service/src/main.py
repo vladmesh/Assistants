@@ -10,6 +10,7 @@ from routers import (
     assistants,
     calendar,
     cron_jobs,
+    reminders,
     secretaries,
     tools,
     users,
@@ -49,6 +50,7 @@ app.include_router(assistants.router, prefix="/api", tags=["Assistants"])
 app.include_router(tools.router, prefix="/api", tags=["Tools"])
 app.include_router(assistant_tools.router, prefix="/api", tags=["Assistant Tools"])
 app.include_router(secretaries.router, prefix="/api", tags=["Secretaries"])
+app.include_router(reminders.router, prefix="/api", tags=["Reminders"])
 
 
 @app.get("/health")
