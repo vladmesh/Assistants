@@ -20,6 +20,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      rest_service:
+        condition: service_healthy
     networks:
       - app_network
 

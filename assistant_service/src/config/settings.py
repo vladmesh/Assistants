@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     REST_SERVICE_BASE_URL: str = f"http://{REST_SERVICE_HOST}:{REST_SERVICE_PORT}"
 
     # Queue names
-    INPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_SECRETARY", "queue:to_secretary")
-    OUTPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram")
+    INPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_SECRETARY")
+    OUTPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM")
 
     # Google Calendar settings
     GOOGLE_CALENDAR_CREDENTIALS: Optional[str] = None

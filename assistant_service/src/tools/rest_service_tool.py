@@ -21,7 +21,7 @@ class RestServiceTool(BaseModel):
     is_active: bool = True
     settings: Optional[Settings] = None
 
-    def to_tool(self):
+    def to_tool(self, secretary_id: Optional[str] = None):
         """Convert REST service tool to actual tool instance"""
         from .calendar_tool import CalendarCreateTool, CalendarListTool
         from .reminder_tool import ReminderTool
@@ -61,8 +61,8 @@ class RestServiceTool(BaseModel):
             )
             return tool
         elif self.tool_type == "reminder":
-            logger.info("Creating ReminderTool")
-            return ReminderTool()
+            logger.info("Creating ReminderTool", assistant_id=secretary_id)
+            return ReminderTool(assistant_id=secretary_id)
         elif self.tool_type == "calendar":
             if not self.settings:
                 raise ValueError("settings is required for calendar tools")

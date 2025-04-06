@@ -1,4 +1,5 @@
 from typing import Dict, List, Optional
+from uuid import UUID
 
 from config.logger import get_logger
 from config.settings import Settings
@@ -86,6 +87,70 @@ class AssistantFactory:
 
         return assistant
 
+    async def get_assistant_by_id(self, assistant_uuid: UUID) -> BaseAssistant:
+        """Get or create assistant instance by its UUID.
+
+        Args:
+            assistant_uuid: The UUID of the assistant.
+
+        Returns:
+            Assistant instance.
+
+        Raises:
+            ValueError: If assistant not found or type is unknown.
+        """
+        # TODO: Add caching for assistants by UUID?
+        logger.info("Getting assistant by UUID", assistant_uuid=assistant_uuid)
+
+        try:
+            assistant_data = await self.rest_client.get_assistant(str(assistant_uuid))
+        except Exception as e:
+            logger.error(
+                "Failed to get assistant by UUID",
+                assistant_uuid=assistant_uuid,
+                error=str(e),
+                exc_info=True,
+            )
+            raise ValueError(f"Assistant with UUID {assistant_uuid} not found.") from e
+
+        # Initialize tools
+        # TODO: Should tools be initialized every time? Maybe cache them?
+        tools = await self.initialize_tools(str(assistant_data.id))
+
+        # Create assistant instance
+        if assistant_data.assistant_type == "openai_api":
+            assistant_instance = OpenAIAssistant(
+                assistant_id=assistant_data.openai_assistant_id,
+                name=assistant_data.name,
+                instructions=assistant_data.instructions,
+                model=assistant_data.model,
+                # Assuming tools have openai_schema attribute
+                tools=[
+                    tool.openai_schema
+                    for tool in tools
+                    if hasattr(tool, "openai_schema")
+                ],
+                tool_instances=tools,
+            )
+        elif assistant_data.assistant_type == "llm":
+            assistant_instance = BaseLLMChat(
+                llm=ChatOpenAI(model=assistant_data.model),
+                name=assistant_data.name,
+                instructions=assistant_data.instructions,
+                tools=tools,
+                is_secretary=assistant_data.is_secretary,  # Pass is_secretary flag
+                assistant_id=str(assistant_data.id),
+            )
+        else:
+            raise ValueError(f"Unknown assistant type: {assistant_data.assistant_type}")
+
+        logger.info(
+            "Assistant instance created/retrieved by UUID",
+            assistant_uuid=assistant_uuid,
+            name=assistant_instance.name,
+        )
+        return assistant_instance
+
     async def get_secretary_assistant(self) -> dict:
         """Get secretary assistant from REST service.
 
@@ -139,7 +204,7 @@ class AssistantFactory:
             )
 
             # Convert to actual tool
-            tool = rest_tool.to_tool()
+            tool = rest_tool.to_tool(secretary_id=secretary_id)
             logger.info(
                 "Converted to actual tool",
                 name=tool.name,
