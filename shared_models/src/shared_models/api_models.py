@@ -123,3 +123,11 @@ class CreateReminderRequest(BaseModel):
             return v
         except json.JSONDecodeError:
             raise ValueError("payload must be a valid JSON string")
+
+
+class UserSecretaryAssignment(BaseModel):
+    """Pydantic model for User-Secretary assignment (API contract)"""
+
+    user_id: int
+    secretary_id: UUID
+    updated_at: datetime  # Timestamp of the UserSecretaryLink update
