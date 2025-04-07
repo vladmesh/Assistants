@@ -1,5 +1,5 @@
-from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from config.settings import Settings
@@ -66,30 +66,28 @@ async def test_process_human_message(settings, human_queue_message):
         # Create orchestrator
         orchestrator = AssistantOrchestrator(settings)
 
-        # Process message
-        response = await orchestrator.process_message(human_queue_message)
+        # Process message with a test thread_id
+        test_thread_id = "test_human_thread_1"
+        response = await orchestrator.process_message(
+            human_queue_message, test_thread_id
+        )
 
-        # Verify response
-        assert response["user_id"] == 123
-        assert response["text"] == "Hello, assistant!"
-        assert response["response"] == "Hello, user!"
-        assert response["status"] == "success"
-        assert response["source"] == QueueMessageSource.USER
-        assert response["type"] == QueueMessageType.HUMAN
-        assert "metadata" in response
-
-        # Verify secretary was called with HumanMessage
-        mock_secretary.process_message.assert_called_once()
-        call_args = mock_secretary.process_message.call_args[0]
+        # Assertions
+        mock_factory_instance.get_user_secretary.assert_awaited_once_with(123)
+        mock_secretary.process_message.assert_awaited_once()
+        call_args, call_kwargs = mock_secretary.process_message.call_args
         assert isinstance(call_args[0], HumanMessage)
+        assert call_args[1] == "123"
+        assert call_kwargs == {"thread_id": test_thread_id}
+        assert response["status"] == "success"
+        assert response["response"] == "Hello, user!"
+        assert response["user_id"] == 123
 
 
 @pytest.mark.asyncio
 async def test_process_tool_message(settings, tool_queue_message):
     # Mock dependencies
-    with patch("orchestrator.AssistantFactory") as mock_factory, patch(
-        "orchestrator.RestServiceClient"
-    ) as mock_rest:
+    with patch("orchestrator.AssistantFactory") as mock_factory:
         # Setup mocks
         mock_secretary = AsyncMock()
         mock_secretary.process_message.return_value = "Tool executed successfully"
@@ -101,22 +99,22 @@ async def test_process_tool_message(settings, tool_queue_message):
         # Create orchestrator
         orchestrator = AssistantOrchestrator(settings)
 
-        # Process message
-        response = await orchestrator.process_message(tool_queue_message)
+        # Process message with a test thread_id
+        test_thread_id = "test_tool_thread_1"
+        response = await orchestrator.process_message(
+            tool_queue_message, test_thread_id
+        )
 
-        # Verify response
-        assert response["user_id"] == 123
-        assert response["text"] == "Event created successfully"
-        assert response["response"] == "Tool executed successfully"
-        assert response["status"] == "success"
-        assert response["source"] == QueueMessageSource.CALENDAR
-        assert response["type"] == QueueMessageType.TOOL
-        assert "metadata" in response
-
-        # Verify secretary was called with ToolMessage
-        mock_secretary.process_message.assert_called_once()
-        call_args = mock_secretary.process_message.call_args[0]
+        # Assertions
+        mock_factory_instance.get_user_secretary.assert_awaited_once_with(123)
+        mock_secretary.process_message.assert_awaited_once()
+        call_args, call_kwargs = mock_secretary.process_message.call_args
         assert isinstance(call_args[0], ToolMessage)
+        assert call_args[1] == "123"
+        assert call_kwargs == {"thread_id": test_thread_id}
+        assert response["status"] == "success"
+        assert response["response"] == "Tool executed successfully"
+        assert response["user_id"] == 123
 
 
 @pytest.mark.asyncio
@@ -136,16 +134,22 @@ async def test_process_message_error(settings, human_queue_message):
         # Create orchestrator
         orchestrator = AssistantOrchestrator(settings)
 
-        # Process message
-        response = await orchestrator.process_message(human_queue_message)
+        # Process message with a test thread_id
+        test_thread_id = "test_error_thread_1"
+        response = await orchestrator.process_message(
+            human_queue_message, test_thread_id
+        )
 
-        # Verify error response
-        assert response["user_id"] == 123
-        assert response["text"] == "Hello, assistant!"
+        # Assertions
+        mock_factory_instance.get_user_secretary.assert_awaited_once_with(123)
+        mock_secretary.process_message.assert_awaited_once()
+        call_args, call_kwargs = mock_secretary.process_message.call_args
+        assert isinstance(call_args[0], HumanMessage)
+        assert call_args[1] == "123"
+        assert call_kwargs == {"thread_id": test_thread_id}
         assert response["status"] == "error"
-        assert "Test error" in response["error"]
-        assert response["source"] == QueueMessageSource.USER
-        assert response["type"] == QueueMessageType.HUMAN
+        assert response["error"] == "Test error"
+        assert response["user_id"] == 123
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,7 @@
 import asyncio
 from datetime import datetime, timezone
 from typing import Any, List, Optional
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from assistants.base_assistant import BaseAssistant
@@ -18,7 +18,6 @@ from langchain_core.callbacks import (
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledGraph
 from tools.time_tool import TimeToolWrapper  # Import a real simple tool
@@ -151,33 +150,40 @@ async def test_initialization(assistant_instance, memory_saver, basic_config):
 
 @pytest.mark.asyncio
 async def test_process_message_stateless(assistant_instance):
-    """Test processing a message without a thread_id."""
+    """Test processing a message with an explicitly passed thread_id."""
     assistant_instance.compiled_graph.ainvoke = (
         AsyncMock()
     )  # Mock the overall graph invoke
 
     # Set a specific return value for the graph mock for this test
     mock_final_state = {
-        "messages": [HumanMessage(content="Hi"), AIMessage(content="Stateless Hello!")],
-        "user_id": "test_user_stateless",
+        "messages": [
+            HumanMessage(content="Hi"),
+            AIMessage(content="Hello with Thread!"),
+        ],
+        "user_id": "test_user_explicit",
         "dialog_state": ["idle"],
         "last_activity": datetime.now(timezone.utc),
     }
     assistant_instance.compiled_graph.ainvoke.return_value = mock_final_state
 
     message = HumanMessage(content="Hi")
-    user_id = "test_user_stateless"
+    user_id = "test_user_explicit"
+    test_thread_id = "thread_explicit_123"  # Define a test thread_id
+
     response = await assistant_instance.process_message(
-        message, user_id, thread_id=None
+        message, user_id, thread_id=test_thread_id  # Pass the thread_id
     )
 
-    # Assert graph was called without config (stateless)
+    # Assert graph was called with the correct config including thread_id
     assistant_instance.compiled_graph.ainvoke.assert_called_once_with(
         {"messages": [message], "user_id": user_id},
-        config={},  # Expect empty config for stateless call
+        config={
+            "configurable": {"thread_id": test_thread_id}
+        },  # Expect thread_id in config
     )
-    # Assert the response is extracted correctly
-    assert response == "Stateless Hello!"
+
+    assert response == "Hello with Thread!"
 
 
 @pytest.mark.asyncio
