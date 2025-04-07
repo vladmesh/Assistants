@@ -10,6 +10,9 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from services.rest_service import RestServiceClient
 
+# Import ToolFactory
+from tools.factory import ToolFactory
+
 from .base_assistant import BaseAssistant
 from .langgraph_assistant import LangGraphAssistant
 
@@ -26,8 +29,11 @@ class AssistantFactory:
         self._secretary_cache: Dict[int, BaseAssistant] = {}
         self._assistant_cache: Dict[UUID, BaseAssistant] = {}
         self.checkpointer = checkpointer or MemorySaver()
+        # Initialize ToolFactory
+        self.tool_factory = ToolFactory(settings=self.settings)
         logger.info(
             f"AssistantFactory initialized with checkpointer: {type(self.checkpointer).__name__}"
+            f" and ToolFactory"
         )
 
     async def close(self):
@@ -66,18 +72,23 @@ class AssistantFactory:
             secretary = await self.get_secretary_assistant()
 
         # Create assistant instance
-        assistant_instance = await self.get_assistant_by_id(secretary.id)
+        assistant_instance = await self.get_assistant_by_id(
+            secretary.id, user_id=str(user_id)
+        )
 
         # Cache assistant
         self._secretary_cache[user_id] = assistant_instance
 
         return assistant_instance
 
-    async def get_assistant_by_id(self, assistant_uuid: UUID) -> BaseAssistant:
+    async def get_assistant_by_id(
+        self, assistant_uuid: UUID, user_id: Optional[str] = None
+    ) -> BaseAssistant:
         """Get or create assistant instance by its UUID.
 
         Args:
             assistant_uuid: The UUID of the assistant.
+            user_id: The string ID of the user requesting the assistant (needed for tool init).
 
         Returns:
             Assistant instance.
@@ -102,6 +113,17 @@ class AssistantFactory:
             )
             raise ValueError(f"Assistant with UUID {assistant_uuid} not found.") from e
 
+        # Ensure user_id is provided if needed
+        if user_id is None:
+            # This case should ideally be handled by the caller (e.g., get_user_secretary)
+            # but add a safeguard here.
+            logger.error(
+                "user_id is None when calling get_assistant_by_id, tool initialization might fail",
+                assistant_uuid=assistant_uuid,
+            )
+            # Depending on strictness, could raise: raise ValueError("user_id cannot be None")
+            # For now, allow it but expect potential downstream errors from tools.
+
         # Prepare config dicts for BaseAssistant
         # The config fields (temperature, timeout, api_key etc.) are stored in the nested assistant_data.config dict.
         # Need to safely access this dict and its keys.
@@ -120,13 +142,22 @@ class AssistantFactory:
         tool_definitions = assistant_data.tools or []
         kwargs = {"is_secretary": assistant_data.is_secretary}
 
+        # Create tools using the ToolFactory
+        # Pass user_id and assistant_id (as string)
+        created_tools = self.tool_factory.create_langchain_tools(
+            tool_definitions=tool_definitions,
+            user_id=user_id,  # Pass the required user_id
+            assistant_id=str(assistant_data.id),
+        )
+
         # Create assistant instance
         if assistant_data.assistant_type == "llm":
             assistant_instance = LangGraphAssistant(
                 assistant_id=str(assistant_data.id),
                 name=assistant_data.name,
                 config=config,
-                tool_definitions=tool_definitions,
+                tools=created_tools,  # Pass the initialized tools
+                user_id=user_id,  # Pass user_id to assistant constructor
                 checkpointer=self.checkpointer,
                 **kwargs,
             )
@@ -169,7 +200,15 @@ class AssistantFactory:
             "create_main_assistant called. Consider using get_user_secretary for user-specific instances."
         )
         secretary_data = await self.get_secretary_assistant()
-        return await self.get_assistant_by_id(secretary_data.id)
+        # We need a user_id here. What should it be? Using a placeholder for now.
+        # This method might need rethinking if tools require a real user context.
+        logger.warning(
+            "Using placeholder user_id 'main_assistant_user' for create_main_assistant"
+        )
+        placeholder_user_id = "main_assistant_user"
+        return await self.get_assistant_by_id(
+            secretary_data.id, user_id=placeholder_user_id
+        )
 
     def clear_caches(self):
         self._secretary_cache.clear()

@@ -77,18 +77,23 @@ class LangGraphAssistant(BaseAssistant):
 
     compiled_graph: CompiledGraph
     agent_runnable: Any  # The agent created by create_react_agent
+    # Define tools attribute directly
+    tools: List[Tool]
 
     def __init__(
         self,
         assistant_id: str,
         name: str,
         config: Dict,
-        tool_definitions: List[Dict],
+        # tool_definitions: List[Dict], -> Replaced by tools
+        tools: List[Tool],  # Receive initialized tools
+        user_id: str,  # Receive user_id
         checkpointer: BaseCheckpointSaver,  # Require checkpointer
+        # tool_factory: ToolFactory, -> Removed
         **kwargs,
     ):
         """
-        Initializes the LangGraphAssistant with custom graph and checkpointing.
+        Initializes the LangGraphAssistant with pre-initialized tools and checkpointing.
 
         Args:
             assistant_id: Unique identifier for the assistant instance.
@@ -96,13 +101,23 @@ class LangGraphAssistant(BaseAssistant):
             config: Dictionary containing configuration parameters.
                     Expected keys: 'model_name', 'temperature', 'api_key' (optional),
                                    'system_prompt', 'timeout' (optional, default 60).
-            tool_definitions: List of raw tool definitions from the database.
+            tools: List of initialized Langchain Tool instances.
+            user_id: The ID of the user associated with this assistant instance.
             checkpointer: Checkpointer instance for state persistence.
             **kwargs: Additional keyword arguments.
         """
         # Initialize BaseAssistant first
-        # Note: BaseAssistant saves config, tool_definitions in self.config, self.tool_definitions
-        super().__init__(assistant_id, name, config, tool_definitions, **kwargs)
+        # Note: BaseAssistant still saves raw tool_definitions if the base init is kept unchanged
+        # We might want to adjust BaseAssistant later if needed.
+        # For now, pass an empty list or config['tools'] to BaseAssistant
+        raw_tool_definitions = config.get(
+            "tools", []
+        )  # Get raw defs if they exist in config, else empty
+        super().__init__(assistant_id, name, config, raw_tool_definitions, **kwargs)
+
+        # Store pre-initialized tools and user_id
+        self.tools = tools
+        self.user_id = user_id  # Store user_id if needed by other methods
         self.checkpointer = checkpointer
         self.timeout = self.config.get("timeout", 60)  # Default timeout 60 seconds
         self.system_prompt = self.config.get(
@@ -113,13 +128,18 @@ class LangGraphAssistant(BaseAssistant):
             # 1. Initialize LLM
             self.llm = self._initialize_llm()
 
-            # 2. Initialize Langchain Tools
-            self.tools = self._initialize_langchain_tools(
-                self.tool_definitions,
-                self.assistant_id,
-            )
+            # 2. Initialize Langchain Tools -> REMOVED (Tools are passed in)
+            # self.tools = self._initialize_langchain_tools(
+            #     self.tool_definitions,
+            #     self.assistant_id,
+            # )
+            if not self.tools:
+                logger.warning(
+                    "LangGraphAssistant initialized with no tools.",
+                    extra={"assistant_id": self.assistant_id, "user_id": self.user_id},
+                )
 
-            # 3. Create the core agent runnable (without checkpointer)
+            # 3. Create the core agent runnable (using self.tools)
             self.agent_runnable = self._create_agent_runnable()
 
             # 4. Build and compile the custom StateGraph (with checkpointer)
@@ -130,6 +150,7 @@ class LangGraphAssistant(BaseAssistant):
                 extra={
                     "assistant_id": self.assistant_id,
                     "assistant_name": self.name,
+                    "user_id": self.user_id,
                     "tools_count": len(self.tools),
                     "timeout": self.timeout,
                 },
@@ -138,7 +159,11 @@ class LangGraphAssistant(BaseAssistant):
         except Exception as e:
             logger.exception(
                 "Failed to initialize LangGraphAssistant",
-                extra={"assistant_id": self.assistant_id, "assistant_name": self.name},
+                extra={
+                    "assistant_id": self.assistant_id,
+                    "assistant_name": self.name,
+                    "user_id": self.user_id,
+                },
                 exc_info=True,
             )
             raise AssistantError(
@@ -170,68 +195,6 @@ class LangGraphAssistant(BaseAssistant):
             api_key=api_key,
         )
 
-    def _initialize_langchain_tools(
-        self, tool_definitions: List[Dict], assistant_id_for_tools: str
-    ) -> List[Tool]:
-        """
-        Initializes Langchain Tool instances from raw definitions.
-        Currently skips 'sub_assistant' type.
-        TODO: Refactor this logic into a dedicated ToolFactory.
-        """
-        # (Logic copied from previous version - skipping sub_assistant)
-        initialized_tools = []
-        for tool_def in tool_definitions:
-            tool_type = tool_def.get("tool_type")
-            tool_name = tool_def.get("name")
-            log_extra = {
-                "assistant_id": self.assistant_id,
-                "tool_name": tool_name,
-                "tool_type": tool_type,
-            }
-            tool_instance: Optional[Tool] = None
-            try:
-                if tool_type == "time":
-                    tool_instance = TimeToolWrapper()
-                elif tool_type == "web_search":
-                    tavily_api_key = settings.TAVILY_API_KEY
-                    if tavily_api_key:
-                        tool_instance = WebSearchTool(tavily_api_key=tavily_api_key)
-                    else:
-                        logger.warning(
-                            "TAVILY_API_KEY not set, skipping WebSearchTool.",
-                            extra=log_extra,
-                        )
-                elif tool_type == "calendar":
-                    if tool_name == "calendar_create":
-                        tool_instance = CalendarCreateTool()
-                    elif tool_name == "calendar_list":
-                        tool_instance = CalendarListTool()
-                    else:
-                        logger.warning(
-                            f"Unknown calendar tool name: {tool_name}", extra=log_extra
-                        )
-                elif tool_type == "reminder":
-                    tool_instance = ReminderTool(assistant_id=assistant_id_for_tools)
-                elif tool_type == "sub_assistant":
-                    logger.warning(
-                        "Skipping sub_assistant tool initialization for now.",
-                        extra=log_extra,
-                    )
-                else:
-                    logger.warning(
-                        f"Unknown tool type '{tool_type}'. Cannot initialize.",
-                        extra=log_extra,
-                    )
-
-                if tool_instance:
-                    initialized_tools.append(tool_instance)
-                    logger.info("Initialized tool", extra=log_extra)
-            except Exception:
-                logger.error(
-                    "Failed to initialize tool", extra=log_extra, exc_info=True
-                )
-        return initialized_tools
-
     def _create_agent_runnable(self) -> Any:
         """Creates the core agent runnable (e.g., using create_react_agent)."""
         try:
@@ -245,6 +208,7 @@ class LangGraphAssistant(BaseAssistant):
             # Correct way is often to pass messages including system to invoke,
             # but create_react_agent itself sets up the prompt internally based on messages.
             # Let's rely on create_react_agent for now. System message will be added to state.
+            # Use self.tools which are now passed during initialization
             return create_react_agent(
                 self.llm,
                 self.tools,
