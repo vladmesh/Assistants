@@ -1,6 +1,5 @@
-import asyncio
 import json
-from typing import Dict
+from typing import Dict, Optional
 from uuid import UUID
 
 import redis.asyncio as redis
@@ -9,6 +8,7 @@ from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
 from langchain_core.messages import HumanMessage, ToolMessage
+from langgraph.checkpoint.memory import MemorySaver
 from messages.queue_models import QueueMessage, QueueMessageType
 from services.rest_service import RestServiceClient
 
@@ -28,10 +28,17 @@ class AssistantOrchestrator:
 
         self.settings = settings
         self.rest_client = RestServiceClient()
-        self.factory = AssistantFactory(settings)
+        # Create a checkpointer instance (using MemorySaver for now)
+        self.checkpointer = MemorySaver()
+        # Pass checkpointer to the factory
+        self.factory = AssistantFactory(settings, checkpointer=self.checkpointer)
+        # Restore the orchestrator-level secretary cache
         self.secretaries: Dict[int, BaseAssistant] = {}
 
-        logger.info("Assistant service initialized")
+        logger.info(
+            "Assistant service initialized",
+            checkpointer=type(self.checkpointer).__name__,
+        )
 
     def _create_message(
         self, queue_message: QueueMessage
@@ -66,107 +73,151 @@ class AssistantOrchestrator:
             logger.error("Unsupported message type", type=queue_message.type)
             raise ValueError(f"Unsupported message type: {queue_message.type}")
 
-    async def process_message(self, queue_message: QueueMessage) -> dict:
-        """Process an incoming message from queue."""
+    async def process_message(
+        self, queue_message: QueueMessage, thread_id: str
+    ) -> Optional[dict]:
+        """Process an incoming message from queue using the correct thread_id."""
         try:
             user_id = queue_message.user_id
             text = queue_message.content.message
 
-            logger.info(
-                "Processing message",
-                user_id=user_id,
-                message_length=len(text),
-                source=queue_message.source,
-                type=queue_message.type,
-                content=queue_message.content,
-                timestamp=queue_message.timestamp,
-            )
+            log_extra = {
+                "user_id": user_id,
+                "thread_id": thread_id,
+                "source": queue_message.source,
+                "type": queue_message.type,
+                "timestamp": queue_message.timestamp,
+            }
+            logger.info("Processing message", extra=log_extra)
 
-            # Get user's secretary
+            # Get user's secretary using the orchestrator cache
             if user_id in self.secretaries:
                 secretary: BaseAssistant = self.secretaries[user_id]
-                logger.info("Using existing secretary", user_id=user_id)
+                logger.debug(
+                    "Using existing secretary from orchestrator cache", extra=log_extra
+                )
             else:
-                logger.info("Creating new secretary", user_id=user_id)
+                logger.info(
+                    "Secretary not in cache, getting from factory", extra=log_extra
+                )
                 secretary: BaseAssistant = await self.factory.get_user_secretary(
                     user_id
                 )
                 self.secretaries[user_id] = secretary
-                logger.info("Secretary created", user_id=user_id)
+                logger.info(
+                    "Retrieved secretary via factory and cached",
+                    assistant_name=secretary.name,
+                    extra=log_extra,
+                )
 
             # Create appropriate message type
             message = self._create_message(queue_message)
-            logger.info("Message created", message=str(message))
+            logger.debug(
+                "Langchain message created",
+                message_type=type(message).__name__,
+                extra=log_extra,
+            )
 
-            # Process message with user's secretary
-            logger.info("Processing message with secretary", user_id=user_id)
-            response = await secretary.process_message(message, str(user_id))
-            logger.info("Secretary response received", response=response)
+            # Process message with user's secretary, passing thread_id
+            logger.debug("Invoking secretary.process_message", extra=log_extra)
+            response = await secretary.process_message(
+                message, str(user_id), thread_id=thread_id
+            )
+            logger.info(
+                "Secretary response received",
+                response_preview=str(response)[:100],
+                extra=log_extra,
+            )
 
             result = {
                 "user_id": user_id,
                 "text": text,
                 "response": response,
                 "status": "success",
-                "source": queue_message.source,
-                "type": queue_message.type,
-                "metadata": queue_message.content.metadata,
+                "source": queue_message.source.value,
+                "type": queue_message.type.value,
+                "metadata": queue_message.content.metadata or {},
             }
-            logger.info("Message processing completed", result=result)
+            logger.info("Message processing completed successfully", extra=log_extra)
             return result
 
         except Exception as e:
-            logger.error(
+            log_extra = {
+                "user_id": getattr(queue_message, "user_id", "unknown"),
+                "thread_id": thread_id,
+                "source": getattr(queue_message, "source", "unknown"),
+                "type": getattr(queue_message, "type", "unknown"),
+            }
+            logger.exception(
                 "Message processing failed",
                 error=str(e),
-                user_id=queue_message.user_id,
-                content=queue_message.content,
                 exc_info=True,
+                extra=log_extra,
             )
             return {
-                "user_id": queue_message.user_id,
-                "text": queue_message.content.message,
+                "user_id": getattr(queue_message, "user_id", "unknown"),
+                "text": getattr(
+                    getattr(queue_message, "content", None), "message", "unknown"
+                ),
                 "status": "error",
                 "error": str(e),
-                "source": queue_message.source,
-                "type": queue_message.type,
+                "source": getattr(queue_message, "source", "unknown").value
+                if hasattr(getattr(queue_message, "source", None), "value")
+                else "unknown",
+                "type": getattr(queue_message, "type", "unknown").value
+                if hasattr(getattr(queue_message, "type", None), "value")
+                else "unknown",
+                "metadata": getattr(
+                    getattr(queue_message, "content", None), "metadata", None
+                )
+                or {},
             }
 
-    async def handle_reminder_trigger(self, reminder_event_data: dict):
-        """Handles the 'reminder_triggered' event from Redis by treating it as a ToolMessage."""
-        logger.info("Handling reminder trigger event", data=reminder_event_data)
+    async def handle_reminder_trigger(
+        self, reminder_event_data: dict, thread_id: str
+    ) -> Optional[dict]:
+        """Handles the 'reminder_triggered' event from Redis."""
+        log_extra = {"thread_id": thread_id, "event_type": "reminder_triggered"}
+        logger.info(
+            "Handling reminder trigger event",
+            data_preview=str(reminder_event_data)[:100],
+            extra=log_extra,
+        )
+        user_id = None
+        reminder_id = None
         try:
-            # 1. Extract data
+            # 1. Extract data safely
             event_payload = reminder_event_data.get("payload", {})
             assistant_uuid_str = reminder_event_data.get("assistant_id")
             user_id = event_payload.get("user_id")
             reminder_id = event_payload.get("reminder_id")
-            reminder_payload = event_payload.get(
-                "payload", {}
-            )  # The actual inner payload
+            reminder_payload = event_payload.get("payload", {})
+
+            log_extra["user_id"] = user_id
+            log_extra["reminder_id"] = reminder_id
+            log_extra["assistant_id"] = assistant_uuid_str
 
             if not all([assistant_uuid_str, user_id, reminder_id]):
                 logger.error(
                     "Missing required fields in reminder event",
                     data=reminder_event_data,
+                    extra=log_extra,
                 )
-                return  # Or raise an error?
+                return None
 
             # Convert assistant_id to UUID
             try:
                 assistant_uuid = UUID(assistant_uuid_str)
+                log_extra["assistant_uuid"] = str(assistant_uuid)
             except ValueError:
                 logger.error(
-                    "Invalid Assistant UUID format", assistant_id=assistant_uuid_str
+                    "Invalid Assistant UUID format",
+                    assistant_id=assistant_uuid_str,
+                    extra=log_extra,
                 )
-                return
+                return None
 
-            logger.info(
-                "Extracted reminder data",
-                assistant_id=assistant_uuid,
-                user_id=user_id,
-                reminder_id=reminder_id,
-            )
+            logger.debug("Extracted reminder data", extra=log_extra)
 
             # 2. Get assistant instance
             try:
@@ -214,123 +265,168 @@ class AssistantOrchestrator:
                 content=content_str,
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
-                metadata=metadata,
             )
-            logger.info("Constructed ToolMessage", message=str(tool_message))
+            logger.debug(
+                "Constructed ToolMessage",
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                extra=log_extra,
+            )
 
-            # 4. Call assistant.process_message (use the retrieved secretary)
-            response_text = await secretary.process_message(tool_message, str(user_id))
-            logger.info("Secretary processed reminder trigger", response=response_text)
+            # 4. Call secretary.process_message, passing thread_id
+            response_text = await secretary.process_message(
+                tool_message, str(user_id), thread_id=thread_id
+            )
+            logger.info(
+                "Secretary processed reminder trigger",
+                response_preview=str(response_text)[:100],
+                extra=log_extra,
+            )
 
-            # 5. Send the response to the output queue (e.g., to Telegram)
-            if response_text:  # Only send if assistant generated a response
+            # 5. Prepare response payload for the output queue
+            if response_text:
                 response_payload = {
-                    "user_id": user_id,  # Use the user_id from the event
+                    "user_id": user_id,
                     "response": response_text,
                     "status": "success",
-                    "source": "reminder_trigger",  # Indicate source
-                    "type": "assistant",  # Or a new type?
-                    "metadata": {  # Include reminder info in metadata if needed
-                        "reminder_id": reminder_id
-                    },
+                    "source": "reminder_trigger",
+                    "type": "assistant",
+                    "metadata": {"reminder_id": reminder_id},
                 }
-                await self.redis.rpush(
-                    self.settings.OUTPUT_QUEUE, json.dumps(response_payload)
+                logger.debug(
+                    "Reminder response payload prepared",
+                    payload=response_payload,
+                    extra=log_extra,
                 )
-                logger.info(
-                    "Sent reminder response to output queue", response=response_payload
-                )
+                return response_payload
             else:
                 logger.info(
-                    "Assistant did not generate a response for reminder trigger"
+                    "Assistant did not generate a response for reminder trigger",
+                    extra=log_extra,
                 )
+                return None
 
         except Exception as e:
-            logger.error(
-                "Failed to handle reminder trigger",
+            log_extra["user_id"] = user_id
+            logger.exception(
+                "Failed to process reminder trigger",
                 error=str(e),
-                data=reminder_event_data,
                 exc_info=True,
+                extra=log_extra,
             )
-            # Optionally send an error message somewhere?
+            return {
+                "user_id": user_id if user_id else "unknown",
+                "status": "error",
+                "error": f"Failed to process reminder {reminder_id}: {str(e)}",
+                "source": "reminder_trigger",
+                "type": "system_error",
+                "metadata": {"reminder_id": reminder_id} if reminder_id else {},
+            }
 
     async def listen_for_messages(self, max_messages: int | None = None):
-        """Listen for messages from Redis queue."""
-        try:
-            logger.info(
-                "Starting message listener",
-                input_queue=self.settings.INPUT_QUEUE,
-                output_queue=self.settings.OUTPUT_QUEUE,
-                max_messages=max_messages,
-            )
+        """Listen for incoming messages from Redis queue and dispatch processing."""
+        logger.info(
+            "Starting message listener",
+            input_queue=self.settings.INPUT_QUEUE,
+            output_queue=self.settings.OUTPUT_QUEUE,
+            max_messages=max_messages if max_messages else "unlimited",
+        )
+        processed_count = 0
+        while max_messages is None or processed_count < max_messages:
+            raw_message = None
+            try:
+                logger.debug(
+                    "Waiting for message in queue", queue=self.settings.INPUT_QUEUE
+                )
+                message_data = await self.redis.blpop(
+                    self.settings.INPUT_QUEUE, timeout=5
+                )
 
-            messages_processed = 0
-            while True:
-                try:
-                    # Get message from input queue
-                    logger.debug(
-                        "Waiting for message in queue", queue=self.settings.INPUT_QUEUE
-                    )
-                    message = await self.redis.blpop(self.settings.INPUT_QUEUE)
-                    if not message:
-                        continue
-
-                    # Parse and validate message
-                    message_data = json.loads(message[1])
-                    logger.info("Received message from queue", message=message_data)
-
-                    # Check for reminder trigger event
-                    if message_data.get("event") == "reminder_triggered":
-                        logger.info(
-                            "Handling reminder trigger event", message=message_data
-                        )
-                        # Placeholder for actual handling logic
-                        await self.handle_reminder_trigger(message_data)
-                        # Decide if we need to send a response or not for reminders
-                        # For now, we assume handle_reminder_trigger sends necessary responses
-                        messages_processed += 1  # Count as processed
-
-                    # Handle regular messages (Human/Tool)
-                    else:
-                        try:
-                            queue_message = QueueMessage.from_dict(message_data)
-                            logger.info("Parsed queue message", message=queue_message)
-                            response = await self.process_message(queue_message)
-                            logger.info("Message processed", response=response)
-                            await self.redis.rpush(
-                                self.settings.OUTPUT_QUEUE, json.dumps(response)
-                            )
-                            logger.info(
-                                "Response sent to output queue", response=response
-                            )
-                            messages_processed += 1
-                        except ValueError as val_err:
-                            logger.error(
-                                "Invalid message format, skipping",
-                                error=str(val_err),
-                                message=message_data,
-                            )
-                            # Do not count as processed if format is invalid
-                            continue
-
-                    if max_messages and messages_processed >= max_messages:
-                        logger.info(
-                            f"Processed {max_messages} messages, stopping listener"
-                        )
-                        break
-
-                except Exception as e:
-                    logger.error(
-                        "Error processing message",
-                        error=str(e),
-                        message=message[1] if message else None,
-                        exc_info=True,
-                    )
+                if not message_data:
                     continue
 
-        except Exception as e:
-            logger.error("Message listener failed", error=str(e), exc_info=True)
-            raise
+                _, raw_message = message_data
+                logger.debug(
+                    "Raw message received", message_json_preview=raw_message[:100]
+                )
+                message_dict = json.loads(raw_message)
+
+                response_payload = None
+
+                # Determine message type and generate thread_id
+                if message_dict.get("event_type") == "reminder_triggered":
+                    user_id = message_dict.get("payload", {}).get("user_id")
+                    if user_id:
+                        thread_id = f"reminder_user_{user_id}"
+                        logger.info(
+                            f"Reminder trigger event received for user {user_id}",
+                            thread_id=thread_id,
+                        )
+                        response_payload = await self.handle_reminder_trigger(
+                            message_dict, thread_id
+                        )
+                    else:
+                        logger.error(
+                            "User ID missing in reminder event payload",
+                            data=message_dict,
+                        )
+
+                else:
+                    # Assume standard QueueMessage
+                    try:
+                        queue_message = QueueMessage(**message_dict)
+                        thread_id = f"user_{queue_message.user_id}"
+                        logger.info(
+                            f"Standard queue message received for user {queue_message.user_id}",
+                            thread_id=thread_id,
+                        )
+                        response_payload = await self.process_message(
+                            queue_message, thread_id
+                        )
+                    except Exception as parse_exc:
+                        logger.error(
+                            f"Failed to parse standard message: {parse_exc}",
+                            raw_message=raw_message,
+                            exc_info=True,
+                        )
+
+                # Send response if generated
+                if response_payload:
+                    try:
+                        await self.redis.rpush(
+                            self.settings.OUTPUT_QUEUE, json.dumps(response_payload)
+                        )
+                        logger.info(
+                            "Response sent to output queue",
+                            queue=self.settings.OUTPUT_QUEUE,
+                            user_id=response_payload.get("user_id"),
+                            status=response_payload.get("status"),
+                        )
+                    except redis.RedisError as push_e:
+                        logger.error(
+                            f"Failed to push response to Redis queue {self.settings.OUTPUT_QUEUE}: {push_e}",
+                            payload=response_payload,
+                            exc_info=True,
+                        )
+
+                processed_count += 1
+                if max_messages:
+                    logger.debug(
+                        f"Processed {processed_count}/{max_messages} messages."
+                    )
+
+            except redis.RedisError as e:
+                logger.error(f"Redis error during blpop or rpush: {e}", exc_info=True)
+            except json.JSONDecodeError as e:
+                logger.error(
+                    f"Failed to decode JSON message: {e}", raw_message=raw_message
+                )
+            except Exception as e:
+                logger.exception(
+                    f"Unexpected error processing message loop: {e}", exc_info=True
+                )
+
+        logger.info("Message listener finished.")
 
     async def close(self):
         """Close connections"""

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 # Import BaseMessage for type hinting
 from langchain_core.messages import BaseMessage
@@ -50,7 +50,6 @@ class BaseAssistant(ABC):
         Returns:
             A string containing the assistant's response.
         """
-        pass
 
     # Optional: Add other common abstract methods if needed in the future
     # e.g., async def close(self): pass
