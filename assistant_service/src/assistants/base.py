@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from messages.base import BaseMessage
+from langchain_core.messages import BaseMessage
 
 
 class BaseAssistant(ABC):

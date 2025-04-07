@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from config.settings import Settings
-from messages.base import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from messages.queue_models import (
     QueueMessage,
     QueueMessageContent,

@@ -29,7 +29,7 @@ service_name/
 ├── Dockerfile             # Main Dockerfile
 ├── Dockerfile.test        # Test environment Dockerfile
 ├── docker-compose.test.yml # Test environment configuration
-├── requirements.txt       # Service dependencies
+├── pyproject.toml     # Service dependencies
 ├── llm_context_*.md      # Service documentation
 └── __init__.py           # Package initialization
 ```

@@ -9,7 +9,6 @@ from uuid import UUID
 from assistants.base import BaseAssistant
 from config.logger import get_logger
 from langchain_core.messages import BaseMessage
-from messages.base import BaseMessage as CustomBaseMessage
 from openai import OpenAI
 from services.rest_service import RestServiceClient
 from tools.base import BaseTool
@@ -130,7 +129,7 @@ class OpenAIAssistant(BaseAssistant):
         logger.info(f"Message content: {message.content}")
         logger.info(f"Message additional_kwargs: {message.additional_kwargs}")
 
-        if isinstance(message, CustomBaseMessage):
+        if isinstance(message, BaseMessage):
             logger.info(f"Message source: {message.source}")
             logger.info(f"Message timestamp: {message.timestamp}")
             logger.info(f"Message metadata: {message.metadata}")
@@ -143,9 +142,7 @@ class OpenAIAssistant(BaseAssistant):
         return {
             "role": "user",  # All messages are sent as user messages
             "content": (
-                str(message)
-                if isinstance(message, CustomBaseMessage)
-                else message.content
+                str(message) if isinstance(message, BaseMessage) else message.content
             ),
         }
 

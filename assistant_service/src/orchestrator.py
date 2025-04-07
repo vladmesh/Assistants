@@ -8,7 +8,7 @@ from assistants.base import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
-from messages.base import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from messages.queue_models import QueueMessage, QueueMessageType
 from services.rest_service import RestServiceClient
 

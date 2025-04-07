@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from assistants.factory import AssistantFactory
-from messages.base import HumanMessage
+from langchain_core.messages import HumanMessage
 
 
 @pytest.mark.external_api

@@ -3,8 +3,8 @@ from typing import Optional
 import pytest
 from assistants.llm_chat import BaseLLMChat
 from langchain.tools import BaseTool
+from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
-from messages.base import HumanMessage
 from tools.base import MessageInput, ToolAssistant
 
 
