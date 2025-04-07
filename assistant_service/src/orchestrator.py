@@ -3,7 +3,7 @@ from typing import Dict, Optional
 from uuid import UUID
 
 import redis.asyncio as redis
-from assistants.base import BaseAssistant
+from assistants.base_assistant import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings

@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Optional
 
-from assistants.base import BaseAssistant
+from assistants.base_assistant import BaseAssistant
 from langchain_core.tools import BaseTool as LangBaseTool
 from pydantic import BaseModel, Field, ValidationError
 from utils.error_handler import InvalidInputError, ToolError, ToolExecutionError
