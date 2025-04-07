@@ -1,45 +1,82 @@
 # assistant_service/src/assistants/langgraph_assistant.py
 
 import logging
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone  # Import timezone
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
-# Base classes and core types
-from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.tools import Tool
-from langchain_openai import ChatOpenAI
-from langgraph.graph.state import CompiledGraph  # For type hinting
-
-# LangGraph components
-# from langgraph.checkpoint import BaseCheckpointSaver # Not used yet
-from langgraph.prebuilt import create_react_agent
-
-# --- End Tool Imports ---
-from ..config import settings  # To get API keys if not in assistant config
-from ..tools.calendar_tool import CalendarCreateTool, CalendarListTool
-from ..tools.reminder_tool import ReminderTool
+# Project specific imports
+from assistants.base_assistant import BaseAssistant
 
 # --- Tool Imports ---
 # Import specific tool implementation classes directly for now
 # TODO: Refactor using a ToolFactory later
-from ..tools.time_tool import TimeToolWrapper
-from ..tools.web_search_tool import WebSearchTool
-from ..utils.error_handler import AssistantError
+from config import settings  # To get API keys if not in assistant config
 
-# Project specific imports
-from .base_assistant import BaseAssistant
+# Base classes and core types
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.tools import Tool
+from langchain_openai import ChatOpenAI
+
+# LangGraph components
+from langgraph.checkpoint.base import (  # Import needed for checkpointer
+    BaseCheckpointSaver,
+)
+from langgraph.graph import START, StateGraph
+from langgraph.graph.message import AnyMessage, add_messages
+from langgraph.graph.state import CompiledGraph
+from langgraph.prebuilt import create_react_agent  # Import create_react_agent
+from langgraph.prebuilt import ToolNode, tools_condition
+from tools.calendar_tool import CalendarCreateTool, CalendarListTool
+from tools.reminder_tool import ReminderTool
+from tools.time_tool import TimeToolWrapper
+from tools.web_search_tool import WebSearchTool
+from typing_extensions import TypedDict
+
+# --- End Tool Imports ---
+from utils.error_handler import handle_assistant_error  # Import error handlers
+from utils.error_handler import AssistantError, MessageProcessingError
 
 logger = logging.getLogger(__name__)
+
+# --- State Definition (copied and adapted from llm_chat.py) ---
+
+
+def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
+    """Push or pop the state."""
+    if right is None:
+        return left
+    if right == "pop":
+        # Ensure we don't pop from an empty list or the initial 'idle'
+        if len(left) > 1:
+            return left[:-1]
+        return left  # Return as is if only 'idle' or empty
+    return left + [right]
+
+
+class AssistantState(TypedDict):
+    """State for the assistant, including messages and dialog tracking."""
+
+    messages: Annotated[list[AnyMessage], add_messages]
+    user_id: Optional[str]  # Keep track of the user ID
+    dialog_state: Annotated[
+        # Add more states if needed, keep simple for now
+        list[Literal["idle", "processing", "waiting_for_tool", "error", "timeout"]],
+        update_dialog_stack,
+    ]
+    last_activity: datetime  # Track last activity for timeout purposes
+
+
+# --- End State Definition ---
 
 
 class LangGraphAssistant(BaseAssistant):
     """
-    Assistant implementation using LangGraph.
-    Leverages a React agent created via LangGraph prebuilt functions.
-    Handles optional thread_id for stateless/stateful invocation context.
-    Does NOT use persistent checkpointing yet.
+    Assistant implementation using LangGraph with a custom graph structure
+    similar to the old BaseLLMChat, supporting checkpointing for memory.
     """
 
-    compiled_graph: CompiledGraph  # Add type hint for the compiled graph
+    compiled_graph: CompiledGraph
+    agent_runnable: Any  # The agent created by create_react_agent
 
     def __init__(
         self,
@@ -47,50 +84,61 @@ class LangGraphAssistant(BaseAssistant):
         name: str,
         config: Dict,
         tool_definitions: List[Dict],
+        checkpointer: BaseCheckpointSaver,  # Require checkpointer
         **kwargs,
     ):
         """
-        Initializes the LangGraphAssistant.
+        Initializes the LangGraphAssistant with custom graph and checkpointing.
 
         Args:
             assistant_id: Unique identifier for the assistant instance.
             name: Name of the assistant.
-            config: Dictionary containing all configuration parameters.
+            config: Dictionary containing configuration parameters.
                     Expected keys: 'model_name', 'temperature', 'api_key' (optional),
-                                   'system_prompt', etc.
+                                   'system_prompt', 'timeout' (optional, default 60).
             tool_definitions: List of raw tool definitions from the database.
+            checkpointer: Checkpointer instance for state persistence.
             **kwargs: Additional keyword arguments.
         """
+        # Initialize BaseAssistant first
+        # Note: BaseAssistant saves config, tool_definitions in self.config, self.tool_definitions
         super().__init__(assistant_id, name, config, tool_definitions, **kwargs)
+        self.checkpointer = checkpointer
+        self.timeout = self.config.get("timeout", 60)  # Default timeout 60 seconds
+        self.system_prompt = self.config.get(
+            "system_prompt", "You are a helpful assistant."
+        )  # Default prompt
 
         try:
             # 1. Initialize LLM
             self.llm = self._initialize_llm()
 
-            # 2. Initialize Langchain Tools (excluding sub-assistants for now)
+            # 2. Initialize Langchain Tools
             self.tools = self._initialize_langchain_tools(
                 self.tool_definitions,
-                self.assistant_id,  # Pass assistant_id in case tools need it (like ReminderTool)
+                self.assistant_id,
             )
 
-            # 3. Create and compile the LangGraph agent (React agent for now)
-            # No checkpointer is passed, making it non-persistent across restarts,
-            # but stateful within a single invocation if thread_id is provided.
-            self.compiled_graph = create_react_agent(self.llm, self.tools)
+            # 3. Create the core agent runnable (without checkpointer)
+            self.agent_runnable = self._create_agent_runnable()
+
+            # 4. Build and compile the custom StateGraph (with checkpointer)
+            self.compiled_graph = self._build_graph(checkpointer)
 
             logger.info(
-                "LangGraphAssistant initialized (stateless persistence)",
+                "LangGraphAssistant initialized (Custom Graph with Checkpointing)",
                 extra={
                     "assistant_id": self.assistant_id,
-                    "name": self.name,
+                    "assistant_name": self.name,
                     "tools_count": len(self.tools),
+                    "timeout": self.timeout,
                 },
             )
 
         except Exception as e:
             logger.exception(
                 "Failed to initialize LangGraphAssistant",
-                extra={"assistant_id": self.assistant_id, "name": self.name},
+                extra={"assistant_id": self.assistant_id, "assistant_name": self.name},
                 exc_info=True,
             )
             raise AssistantError(
@@ -116,12 +164,10 @@ class LangGraphAssistant(BaseAssistant):
                 "temperature": temperature,
             },
         )
-        # TODO: Add handling for other LLM providers if needed based on config
         return ChatOpenAI(
             model=model_name,
             temperature=temperature,
             api_key=api_key,
-            # streaming=True, # Consider adding if streaming is needed
         )
 
     def _initialize_langchain_tools(
@@ -132,29 +178,21 @@ class LangGraphAssistant(BaseAssistant):
         Currently skips 'sub_assistant' type.
         TODO: Refactor this logic into a dedicated ToolFactory.
         """
+        # (Logic copied from previous version - skipping sub_assistant)
         initialized_tools = []
         for tool_def in tool_definitions:
             tool_type = tool_def.get("tool_type")
             tool_name = tool_def.get("name")
-            tool_description = tool_def.get("description")
-            input_schema_str = tool_def.get(
-                "input_schema"
-            )  # Assuming schema is stored as JSON string
-
-            tool_instance: Optional[Tool] = None
             log_extra = {
                 "assistant_id": self.assistant_id,
                 "tool_name": tool_name,
                 "tool_type": tool_type,
             }
-
+            tool_instance: Optional[Tool] = None
             try:
                 if tool_type == "time":
-                    tool_instance = (
-                        TimeToolWrapper()
-                    )  # Assumes TimeToolWrapper creates a valid Langchain Tool
+                    tool_instance = TimeToolWrapper()
                 elif tool_type == "web_search":
-                    # Pass Tavily key from global settings or potentially from config
                     tavily_api_key = settings.tavily_api_key
                     if tavily_api_key:
                         tool_instance = WebSearchTool(tavily_api_key=tavily_api_key)
@@ -164,7 +202,6 @@ class LangGraphAssistant(BaseAssistant):
                             extra=log_extra,
                         )
                 elif tool_type == "calendar":
-                    # Differentiate based on name for calendar tools
                     if tool_name == "calendar_create":
                         tool_instance = CalendarCreateTool()
                     elif tool_name == "calendar_list":
@@ -174,8 +211,6 @@ class LangGraphAssistant(BaseAssistant):
                             f"Unknown calendar tool name: {tool_name}", extra=log_extra
                         )
                 elif tool_type == "reminder":
-                    # ReminderTool might need assistant_id or user_id context later
-                    # Pass assistant_id for now, user_id is handled in process_message context if needed by the tool internally
                     tool_instance = ReminderTool(assistant_id=assistant_id_for_tools)
                 elif tool_type == "sub_assistant":
                     logger.warning(
@@ -191,63 +226,244 @@ class LangGraphAssistant(BaseAssistant):
                 if tool_instance:
                     initialized_tools.append(tool_instance)
                     logger.info("Initialized tool", extra=log_extra)
-
             except Exception as e:
                 logger.error(
                     "Failed to initialize tool", extra=log_extra, exc_info=True
                 )
-                # Decide whether to skip or raise: raise AssistantError(f"Failed to init tool {tool_name}: {e}") from e
-
         return initialized_tools
+
+    def _create_agent_runnable(self) -> Any:
+        """Creates the core agent runnable (e.g., using create_react_agent)."""
+        try:
+            # Pass system prompt here if the agent creation supports it
+            # Note: create_react_agent in newer versions might take messages including system prompt directly
+            # For now, assuming it uses a prompt argument or infers from LLM binding
+            # Let's use a simple approach: bind the system message to the LLM if possible,
+            # or rely on create_react_agent's default prompt creation which uses system messages.
+            # We need to ensure the system message IS part of the history passed to the agent runnable.
+
+            # Correct way is often to pass messages including system to invoke,
+            # but create_react_agent itself sets up the prompt internally based on messages.
+            # Let's rely on create_react_agent for now. System message will be added to state.
+            return create_react_agent(
+                self.llm,
+                self.tools,
+                # messages_modifier=... # Optional: If specific prompt engineering needed
+            )
+        except Exception as e:
+            raise AssistantError(
+                f"Failed to create agent runnable: {str(e)}", self.name
+            ) from e
+
+    def _build_graph(self, checkpointer: BaseCheckpointSaver) -> CompiledGraph:
+        """Builds the custom StateGraph."""
+        builder = StateGraph(AssistantState)
+
+        # Add nodes
+        builder.add_node("assistant", self._run_assistant_node)
+        builder.add_node("tools", ToolNode(tools=self.tools))
+
+        # Add edges
+        builder.add_edge(START, "assistant")  # Start with the assistant node
+        builder.add_edge("tools", "assistant")  # After tools, return to assistant
+
+        # Add conditional edges
+        builder.add_conditional_edges(
+            "assistant",  # Node where decision is made
+            tools_condition,  # Function to check if tools should be called
+            # Mapping: "tools" -> call tools, END -> finish
+        )
+        # The tools_condition function routes to "__end__" or the tools node name
+
+        # Compile the graph with the checkpointer
+        return builder.compile(checkpointer=checkpointer)
+
+    async def _run_assistant_node(self, state: AssistantState) -> dict:
+        """The node that runs the core agent logic, including timeout and state updates."""
+        log_extra = {
+            "assistant_id": self.assistant_id,
+            "user_id": state.get("user_id"),
+            "thread_id": state.get(
+                "thread_id"
+            ),  # Assuming thread_id is part of state if checkpointing
+            "current_dialog_state": (state.get("dialog_state") or ["unknown"])[-1],
+        }
+        logger.debug("Running assistant node", extra=log_extra)
+
+        try:
+            # 1. Update last activity time
+            now = datetime.now(timezone.utc)  # Use timezone-aware datetime
+            last_activity_update = {"last_activity": now}
+
+            # 2. Check for timeout (only if last_activity is present)
+            last_activity = state.get("last_activity")
+            if last_activity and (now - last_activity).seconds > self.timeout:
+                logger.warning("Assistant timeout detected", extra=log_extra)
+                return {
+                    **last_activity_update,
+                    "dialog_state": "timeout",
+                    "messages": [
+                        SystemMessage(content="Conversation timed out.")
+                    ],  # Use add_messages by returning list
+                }
+
+            # 3. Update dialog state to processing
+            dialog_state_update = {"dialog_state": "processing"}
+
+            # 4. Prepare messages for the agent runnable
+            # Ensure System Prompt is included if not implicitly handled by create_react_agent
+            current_messages = state["messages"]
+            messages_for_agent = current_messages
+            # Check if system message is already the first message
+            if not current_messages or not isinstance(
+                current_messages[0], SystemMessage
+            ):
+                messages_for_agent = [
+                    SystemMessage(content=self.system_prompt)
+                ] + current_messages
+                logger.debug("Prepended system prompt", extra=log_extra)
+
+            # 5. Invoke the core agent runnable
+            logger.debug("Invoking agent runnable", extra=log_extra)
+            agent_input = {"messages": messages_for_agent}
+            # How to pass user_id? Option 1: Include in state (done). Option 2: Config?
+            # create_react_agent doesn't directly support passing arbitrary args like user_id via invoke.
+            # Tools need to be aware of how to get context if needed (e.g., from state via a wrapper, or passed during init if static).
+            # For now, rely on tools accessing context through other means if necessary.
+            response = await self.agent_runnable.ainvoke(agent_input)
+            logger.debug(
+                "Agent runnable response received",
+                extra={**log_extra, "response": response},
+            )
+
+            # 6. Process response and prepare state update
+            # The response contains the new messages generated by the agent.
+            # We need to combine the input messages with the response messages
+            # to correctly update the state using add_messages.
+            if not response or "messages" not in response:
+                raise MessageProcessingError(
+                    "Agent runnable returned invalid response (missing 'messages')",
+                    self.name,
+                )
+
+            # Get the newly generated messages from the agent response
+            new_messages = response["messages"]
+
+            # IMPORTANT: To make add_messages work correctly via the checkpointer,
+            # the node should return *only* the messages to be *added* to the state.
+            # The checkpointer mechanism combined with add_messages will handle merging.
+            response_update = {"messages": new_messages}
+
+            # 7. Update dialog state back to idle
+            # Use "pop" to remove "processing", then add "idle"
+            # LangGraph manages the state stack based on the updater function (update_dialog_stack)
+            # Returning 'idle' should push 'idle' onto the stack
+            final_dialog_state_update = {"dialog_state": "idle"}
+
+            # Combine updates: activity time, response message, final dialog state
+            # The state merger should handle combining these dicts.
+            return {
+                **last_activity_update,
+                **response_update,
+                **final_dialog_state_update,
+            }
+
+        except Exception as e:
+            logger.exception("Error in assistant node", extra=log_extra, exc_info=True)
+            error_msg = handle_assistant_error(e, self.name)
+            # Return state updates indicating error
+            return {
+                "last_activity": datetime.now(
+                    timezone.utc
+                ),  # Update time even on error
+                "dialog_state": "error",
+                "messages": [SystemMessage(content=error_msg)],  # Add error message
+            }
 
     async def process_message(
         self, message: BaseMessage, user_id: str, thread_id: Optional[str] = None
     ) -> str:
         """
-        Processes an incoming message using the LangGraph agent.
-        Handles thread_id context for stateless/stateful invocation.
+        Processes an incoming message using the compiled LangGraph with checkpointing.
 
         Args:
             message: The input message (standard Langchain BaseMessage).
             user_id: The identifier of the user initiating the request.
-            thread_id: Optional identifier for the conversation thread.
+            thread_id: Unique identifier for the conversation thread for persistence.
 
         Returns:
             A string containing the assistant's response.
         """
+        if not thread_id:
+            # If no thread_id, we cannot use checkpointing effectively.
+            # For now, raise error or use a default non-persistent thread_id?
+            # Let's log a warning and proceed without guaranteed persistence for this call.
+            # A truly stateless call would ideally use a different, non-compiled graph/runnable.
+            logger.warning(
+                "Processing message without thread_id - persistence disabled for this call."
+            )
+            # Fallback to using user_id or a random ID for configuration?
+            # Using a temporary ID allows the graph to run but state won't persist correctly across calls.
+            # Consider raising error if persistence is strictly required:
+            # raise ValueError("thread_id is required for assistants with memory.")
+            invoke_config = {}
+
+        else:
+            invoke_config = {
+                "configurable": {"thread_id": str(thread_id)}
+            }  # Ensure string
+
         log_extra = {
             "assistant_id": self.assistant_id,
             "user_id": user_id,
             "thread_id": thread_id,
             "message_type": type(message).__name__,
         }
-        logger.debug("Processing message with LangGraphAssistant", extra=log_extra)
-
-        # Prepare input for the graph
-        graph_input = {"messages": [message]}
-
-        # Config for invocation - LangGraph uses thread_id if provided
-        invoke_config = {"configurable": {"thread_id": thread_id}}
+        logger.debug("Processing message via compiled graph", extra=log_extra)
 
         try:
-            # Invoke the graph. Use ainvoke for standard request/response.
-            # Use astream or astream_events for streaming responses later.
-            final_state = await self.compiled_graph.ainvoke(
-                graph_input, config=invoke_config
+            # Prepare initial input state for ainvoke
+            # The checkpointer will load existing state based on thread_id in invoke_config
+            # We only need to provide the new message and potentially update user_id if it can change.
+            graph_input: Dict[str, Any] = {"messages": [message], "user_id": user_id}
+            # Ensure initial dialog_state and last_activity are set if starting fresh?
+            # The checkpointer should handle loading, but what if it's the *very first* message?
+            # LangGraph's compile/ainvoke should handle initial state creation based on the State definition.
+            # We might need default values or factories in AssistantState if needed.
+            # Let's assume LangGraph handles initialization for now.
+
+            # Invoke the graph
+            # Note: If the graph expects the initial state differently, adjust graph_input
+            final_state_dict = await self.compiled_graph.ainvoke(
+                graph_input,
+                config=invoke_config,
             )
 
-            # Extract the last response (usually an AIMessage)
-            if final_state and "messages" in final_state and final_state["messages"]:
+            # Cast to AssistantState type for safety, though it's a dict
+            # final_state = AssistantState(**final_state_dict) # This might fail if state keys missing
+            final_state = final_state_dict
+
+            # Extract the last response message
+            if final_state and final_state.get("messages"):
                 last_message = final_state["messages"][-1]
+                # Check if the last message is from the AI
                 if isinstance(last_message, AIMessage):
-                    response_content = str(
-                        last_message.content
-                    )  # Ensure string conversion
+                    response_content = str(last_message.content)
                     logger.info(
-                        "LangGraphAssistant processed message successfully",
+                        "Message processed successfully (via graph)",
                         extra={**log_extra, "response_length": len(response_content)},
                     )
                     return response_content
+                # Handle cases where the last message might be a system error message
+                elif (
+                    isinstance(last_message, SystemMessage)
+                    and final_state.get("dialog_state", ["idle"])[-1] == "error"
+                ):
+                    logger.error(
+                        "Graph processing finished with an error state.",
+                        extra=log_extra,
+                    )
+                    return f"Assistant Error: {last_message.content}"
                 else:
                     logger.warning(
                         "Last message in graph state is not an AIMessage",
@@ -256,7 +472,6 @@ class LangGraphAssistant(BaseAssistant):
                             "last_message_type": type(last_message).__name__,
                         },
                     )
-                    # Fallback response if the structure is unexpected
                     return "Assistant processed the request but the final output wasn't standard text."
             else:
                 logger.error(
@@ -267,9 +482,11 @@ class LangGraphAssistant(BaseAssistant):
 
         except Exception as e:
             logger.exception(
-                "Error processing message with LangGraphAssistant",
-                extra=log_extra,
-                exc_info=True,
+                "Error during graph invocation", extra=log_extra, exc_info=True
             )
-            # Return a user-friendly error message
-            return f"Sorry, an error occurred while processing your request in assistant '{self.name}'."
+            return f"Sorry, a critical error occurred while processing your request in assistant '{self.name}'."
+
+    # Optional: Add a close method if needed (e.g., for resource cleanup)
+    # async def close(self):
+    #     logger.info(f"Closing assistant {self.name}")
+    # Add cleanup logic here if necessary
