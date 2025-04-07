@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import List, Optional
 from uuid import UUID
 
 from database import get_session
@@ -6,6 +8,9 @@ from models.assistant import Assistant
 from models.user_secretary import UserSecretaryLink
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+# Shared models import
+from shared_models.api_models import UserSecretaryAssignment
 
 router = APIRouter()
 
@@ -69,3 +74,24 @@ async def set_user_secretary(
     await session.refresh(new_link)
 
     return new_link
+
+
+@router.get(
+    "/user-secretaries/assignments", response_model=List[UserSecretaryAssignment]
+)
+async def list_active_user_secretary_assignments(
+    session: AsyncSession = Depends(get_session),
+):
+    """Получить список всех активных назначений секретарей пользователям."""
+    query = select(UserSecretaryLink).where(UserSecretaryLink.is_active.is_(True))
+    result = await session.execute(query)
+    active_links = result.scalars().all()
+    # Map to the response model
+    return [
+        UserSecretaryAssignment(
+            user_id=link.user_id,
+            secretary_id=link.secretary_id,
+            updated_at=link.updated_at,  # Assuming updated_at exists on UserSecretaryLink
+        )
+        for link in active_links
+    ]
