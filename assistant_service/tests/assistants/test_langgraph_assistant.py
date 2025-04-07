@@ -150,7 +150,7 @@ async def test_initialization(assistant_instance, memory_saver, basic_config):
 
 @pytest.mark.asyncio
 async def test_process_message_stateless(assistant_instance):
-    """Test processing a message with an explicitly passed thread_id."""
+    """Test processing a message. Thread ID is now generated internally."""
     assistant_instance.compiled_graph.ainvoke = (
         AsyncMock()
     )  # Mock the overall graph invoke
@@ -159,38 +159,45 @@ async def test_process_message_stateless(assistant_instance):
     mock_final_state = {
         "messages": [
             HumanMessage(content="Hi"),
-            AIMessage(content="Hello with Thread!"),
+            AIMessage(
+                content="Hello Stateless!"
+            ),  # Changed response slightly for clarity
         ],
-        "user_id": "test_user_explicit",
+        "user_id": "test_user_stateless",
         "dialog_state": ["idle"],
         "last_activity": datetime.now(timezone.utc),
     }
     assistant_instance.compiled_graph.ainvoke.return_value = mock_final_state
 
     message = HumanMessage(content="Hi")
-    user_id = "test_user_explicit"
-    test_thread_id = "thread_explicit_123"  # Define a test thread_id
+    user_id = "test_user_stateless"
+    # thread_id is no longer passed externally
+    # test_thread_id = "thread_explicit_123"
 
+    # Call process_message without thread_id
     response = await assistant_instance.process_message(
-        message, user_id, thread_id=test_thread_id  # Pass the thread_id
+        message, user_id  # Removed thread_id=test_thread_id
     )
 
-    # Assert graph was called with the correct config including thread_id
+    # Assert graph was called with the correct config including the internally generated thread_id
+    expected_thread_id = f"user_{user_id}"
     assistant_instance.compiled_graph.ainvoke.assert_called_once_with(
         {"messages": [message], "user_id": user_id},
         config={
-            "configurable": {"thread_id": test_thread_id}
-        },  # Expect thread_id in config
+            "configurable": {"thread_id": expected_thread_id}
+        },  # Expect internally generated thread_id
     )
 
-    assert response == "Hello with Thread!"
+    assert response == "Hello Stateless!"
 
 
 @pytest.mark.asyncio
 async def test_process_message_stateful_memory(assistant_instance, memory_saver):
-    """Test processing two messages with the same thread_id to check memory."""
+    """Test processing two messages with the same user_id to check memory
+    (thread_id generated internally based on user_id)."""
     user_id = "test_user_stateful"
-    thread_id = "conversation_123"
+    # thread_id is generated internally as f"user_{user_id}"
+    expected_thread_id = f"user_{user_id}"
 
     # --- First message ---
     message1 = HumanMessage(content="My name is Alice")
@@ -209,13 +216,16 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
 
     assistant_instance.agent_runnable.ainvoke.side_effect = first_call_mock
 
+    # Call process_message without thread_id
     response1 = await assistant_instance.process_message(
-        message1, user_id, thread_id=thread_id
+        message1, user_id  # Removed thread_id=thread_id
     )
 
-    # Checkpoint should contain the history now
+    # Checkpoint should contain the history now, using the expected thread_id
     checkpoint = await memory_saver.aget(
-        config={"configurable": {"thread_id": thread_id}}
+        config={
+            "configurable": {"thread_id": expected_thread_id}
+        }  # Use expected_thread_id
     )
     assert checkpoint is not None
     saved_state = AssistantState(**checkpoint["channel_values"])  # Reconstruct state
@@ -248,21 +258,26 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
         assert messages_received[1].content == "My name is Alice"
         assert isinstance(messages_received[2], AIMessage)
         assert messages_received[2].content == "Hi Alice!"
-        assert isinstance(messages_received[3], HumanMessage)
+        assert isinstance(messages_received[3], HumanMessage)  # The new message
         assert messages_received[3].content == "What is my name?"
-        # Simulate agent replying based on history
-        return {"messages": [AIMessage(content="Your name is Alice.")]}
+        return {
+            "messages": [AIMessage(content="Your name is Alice.")]
+        }  # Simulate agent adding its response
 
-    assistant_instance.agent_runnable.ainvoke.side_effect = (
-        second_call_mock  # Assign new mock for 2nd call
-    )
+    assistant_instance.agent_runnable.ainvoke.side_effect = second_call_mock
 
+    # Call process_message again for the same user_id (implicitly same thread_id)
     response2 = await assistant_instance.process_message(
-        message2, user_id, thread_id=thread_id
+        message2, user_id  # Removed thread_id=thread_id
     )
 
-    # Assert final response
     assert response2 == "Your name is Alice."
 
-    # Verify the agent_runnable was called twice total
-    assert assistant_instance.agent_runnable.ainvoke.call_count == 2
+    # Verify the final state in the checkpointer
+    final_checkpoint = await memory_saver.aget(
+        config={"configurable": {"thread_id": expected_thread_id}}
+    )
+    assert final_checkpoint is not None
+    final_state = AssistantState(**final_checkpoint["channel_values"])
+    assert len(final_state["messages"]) >= 4  # Should have Human, AI, Human, AI
+    assert final_state["messages"][-1].content == "Your name is Alice."

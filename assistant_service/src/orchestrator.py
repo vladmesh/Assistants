@@ -8,7 +8,6 @@ from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
 from langchain_core.messages import HumanMessage, ToolMessage
-from langgraph.checkpoint.memory import MemorySaver
 from messages.queue_models import QueueMessage, QueueMessageType
 from services.rest_service import RestServiceClient
 
@@ -28,16 +27,12 @@ class AssistantOrchestrator:
 
         self.settings = settings
         self.rest_client = RestServiceClient()
-        # Create a checkpointer instance (using MemorySaver for now)
-        self.checkpointer = MemorySaver()
-        # Pass checkpointer to the factory
-        self.factory = AssistantFactory(settings, checkpointer=self.checkpointer)
+        self.factory = AssistantFactory(settings)
         # Restore the orchestrator-level secretary cache
         self.secretaries: Dict[int, BaseAssistant] = {}
 
         logger.info(
             "Assistant service initialized",
-            checkpointer=type(self.checkpointer).__name__,
         )
 
     def _create_message(
@@ -73,17 +68,15 @@ class AssistantOrchestrator:
             logger.error("Unsupported message type", type=queue_message.type)
             raise ValueError(f"Unsupported message type: {queue_message.type}")
 
-    async def process_message(
-        self, queue_message: QueueMessage, thread_id: str
-    ) -> Optional[dict]:
+    async def process_message(self, queue_message: QueueMessage) -> Optional[dict]:
         """Process an incoming message from queue using the correct thread_id."""
+        user_id = None
         try:
             user_id = queue_message.user_id
             text = queue_message.content.message
 
             log_extra = {
                 "user_id": user_id,
-                "thread_id": thread_id,
                 "source": queue_message.source,
                 "type": queue_message.type,
                 "timestamp": queue_message.timestamp,
@@ -118,10 +111,10 @@ class AssistantOrchestrator:
                 extra=log_extra,
             )
 
-            # Process message with user's secretary, passing thread_id
+            # Process message with user's secretary
             logger.debug("Invoking secretary.process_message", extra=log_extra)
             response = await secretary.process_message(
-                message, str(user_id), thread_id=thread_id
+                message=message, user_id=str(user_id)
             )
             logger.info(
                 "Secretary response received",
@@ -143,8 +136,7 @@ class AssistantOrchestrator:
 
         except Exception as e:
             log_extra = {
-                "user_id": getattr(queue_message, "user_id", "unknown"),
-                "thread_id": thread_id,
+                "user_id": user_id if user_id is not None else "unknown",
                 "source": getattr(queue_message, "source", "unknown"),
                 "type": getattr(queue_message, "type", "unknown"),
             }
@@ -155,7 +147,7 @@ class AssistantOrchestrator:
                 extra=log_extra,
             )
             return {
-                "user_id": getattr(queue_message, "user_id", "unknown"),
+                "user_id": user_id if user_id is not None else "unknown",
                 "text": getattr(
                     getattr(queue_message, "content", None), "message", "unknown"
                 ),
@@ -174,10 +166,10 @@ class AssistantOrchestrator:
             }
 
     async def handle_reminder_trigger(
-        self, reminder_event_data: dict, thread_id: str
+        self, reminder_event_data: dict
     ) -> Optional[dict]:
         """Handles the 'reminder_triggered' event from Redis."""
-        log_extra = {"thread_id": thread_id, "event_type": "reminder_triggered"}
+        log_extra = {"event_type": "reminder_triggered"}
         logger.info(
             "Handling reminder trigger event",
             data_preview=str(reminder_event_data)[:100],
@@ -221,9 +213,6 @@ class AssistantOrchestrator:
 
             # 2. Get assistant instance
             try:
-                # Use the new factory method
-                # assistant = await self.factory.get_assistant_by_id(assistant_uuid)
-
                 # Get the user's current secretary instead
                 secretary: BaseAssistant = await self.factory.get_user_secretary(
                     user_id
@@ -275,7 +264,7 @@ class AssistantOrchestrator:
 
             # 4. Call secretary.process_message, passing thread_id
             response_text = await secretary.process_message(
-                tool_message, str(user_id), thread_id=thread_id
+                message=tool_message, user_id=str(user_id)
             )
             logger.info(
                 "Secretary processed reminder trigger",
@@ -357,13 +346,11 @@ class AssistantOrchestrator:
                 if message_dict.get("event_type") == "reminder_triggered":
                     user_id = message_dict.get("payload", {}).get("user_id")
                     if user_id:
-                        thread_id = f"reminder_user_{user_id}"
                         logger.info(
                             f"Reminder trigger event received for user {user_id}",
-                            thread_id=thread_id,
                         )
                         response_payload = await self.handle_reminder_trigger(
-                            message_dict, thread_id
+                            message_dict
                         )
                     else:
                         logger.error(
@@ -375,14 +362,11 @@ class AssistantOrchestrator:
                     # Assume standard QueueMessage
                     try:
                         queue_message = QueueMessage(**message_dict)
-                        thread_id = f"user_{queue_message.user_id}"
+                        user_id = queue_message.user_id
                         logger.info(
                             f"Standard queue message received for user {queue_message.user_id}",
-                            thread_id=thread_id,
                         )
-                        response_payload = await self.process_message(
-                            queue_message, thread_id
-                        )
+                        response_payload = await self.process_message(queue_message)
                     except Exception as parse_exc:
                         logger.error(
                             f"Failed to parse standard message: {parse_exc}",
