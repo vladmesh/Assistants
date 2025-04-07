@@ -84,11 +84,13 @@ class AssistantOrchestrator:
 
             # Get user's secretary
             if user_id in self.secretaries:
-                secretary = self.secretaries[user_id]
+                secretary: BaseAssistant = self.secretaries[user_id]
                 logger.info("Using existing secretary", user_id=user_id)
             else:
                 logger.info("Creating new secretary", user_id=user_id)
-                secretary = await self.factory.get_user_secretary(user_id)
+                secretary: BaseAssistant = await self.factory.get_user_secretary(
+                    user_id
+                )
                 self.secretaries[user_id] = secretary
                 logger.info("Secretary created", user_id=user_id)
 
@@ -172,7 +174,9 @@ class AssistantOrchestrator:
                 # assistant = await self.factory.get_assistant_by_id(assistant_uuid)
 
                 # Get the user's current secretary instead
-                secretary = await self.factory.get_user_secretary(user_id)
+                secretary: BaseAssistant = await self.factory.get_user_secretary(
+                    user_id
+                )
 
                 if not secretary:
                     # Should not happen if factory raises ValueError, but double-check
