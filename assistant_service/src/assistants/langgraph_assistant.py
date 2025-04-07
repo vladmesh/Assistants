@@ -376,32 +376,33 @@ class LangGraphAssistant(BaseAssistant):
                 "messages": [SystemMessage(content=error_msg)],  # Add error message
             }
 
-    async def process_message(
-        self, message: BaseMessage, user_id: str, thread_id: str
-    ) -> str:
+    async def process_message(self, message: BaseMessage, user_id: str) -> str:
         """
         Processes an incoming message using the compiled LangGraph with checkpointing.
-        Requires a thread_id for persistence.
+        The thread_id for persistence is generated internally based on user_id.
 
         Args:
             message: The input message (standard Langchain BaseMessage).
             user_id: The identifier of the user initiating the request.
-            thread_id: Unique identifier for the conversation thread for persistence.
 
         Returns:
             A string containing the assistant's response.
         """
+        # Generate thread_id based on user_id
+        thread_id = f"user_{user_id}"
         invoke_config = {"configurable": {"thread_id": str(thread_id)}}  # Ensure string
 
         log_extra = {
             "assistant_id": self.assistant_id,
             "user_id": user_id,
-            "thread_id": thread_id,
+            "thread_id": thread_id,  # Log the generated thread_id
             "message_type": type(message).__name__,
         }
         logger.debug("Processing message via compiled graph", extra=log_extra)
 
         try:
+            # Ensure user_id is passed in the initial graph state if needed by nodes/tools
+            # Our current AssistantState includes user_id, so this should be okay.
             graph_input: Dict[str, Any] = {"messages": [message], "user_id": user_id}
 
             # Invoke the graph
