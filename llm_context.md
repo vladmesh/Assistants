@@ -45,14 +45,14 @@ The project is divided into several independent microservices:
   - Utilizes the `create_reminder` tool to interact with `rest_service` for creating reminders.
   - Handles triggered reminders by processing them as `ToolMessage`.
   - Supports multiple secretary instances with user-specific configurations.
-  - Implements secretary selection and caching through `AssistantFactory`.
+  - Implements secretary selection and caching through `AssistantFactory`, which also manages tool creation via an internal `ToolFactory`.
   - Sends responses to `telegram_bot_service` via the output Redis queue (`REDIS_QUEUE_TO_TELEGRAM`).
   
 - **rest_service**  
-  - Provides a REST API for managing user data, assistant configurations, and related models.
-  - Handles CRUD operations for assistants, tools, **and reminders (`Reminder` model and `/api/reminders/` endpoints)**.
-  - Stores reminder data (one-time and recurring) in PostgreSQL.
-  - Manages user-secretary mapping and secretary configurations.
+  - Provides a REST API for managing core project models and configurations.
+  - Handles CRUD operations for Users, Assistants, Tools, Reminders, User-Secretary mappings, and potentially Calendar tokens.
+  - Stores data (assistants, tools, reminders, users, etc.) in PostgreSQL.
+  - Manages user-secretary mapping and assistant/tool configurations.
   - Uses PostgreSQL for data storage and Alembic for database migrations.
   
 - **google_calendar_service**  
@@ -60,10 +60,10 @@ The project is divided into several independent microservices:
   - Implements OAuth 2.0 authorization, token management, and calendar event retrieval/creation.
   
 - **cron_service**  
-  - A scheduler service using APScheduler **focused on executing scheduled reminders**.
-  - Periodically pulls **active reminder configurations** from `rest_service` (`GET /api/reminders/scheduled`).
-  - Schedules reminders using APScheduler (`DateTrigger` / `CronTrigger`).
-  - Sends **`reminder_triggered` events** via Redis (`REDIS_QUEUE_TO_SECRETARY`) when a reminder executes.
+  - A scheduler service using APScheduler for managing scheduled tasks, primarily reminders.
+  - Periodically pulls active reminder configurations from `rest_service` (`GET /api/reminders/scheduled`) to update its internal job list (`update_jobs_from_rest` task).
+  - Schedules individual reminder jobs using APScheduler (`DateTrigger` / `CronTrigger`).
+  - Sends `reminder_triggered` events via Redis (`REDIS_QUEUE_TO_SECRETARY`) when a reminder job executes.
   - Updates the status of completed one-time reminders in `rest_service` (`PATCH /api/reminders/{id}`).
   
 - **telegram_bot_service**  
@@ -140,10 +140,10 @@ The project uses environment variables for configuration:
   - `QDRANT_*`: Qdrant vector database configuration
 
 - **API Keys & Secrets:**
-  - `OPENAI_API_KEY`: OpenAI API key
-  - `OPEN_API_SECRETAR_ID`: OpenAI Assistant ID
-  - `TELEGRAM_TOKEN`: Telegram Bot token
-  - `GOOGLE_*`: Google Calendar API credentials
+  - `OPENAI_API_KEY`: OpenAI API key (used by LangGraphAssistant).
+  - `OPEN_API_SECRETAR_ID`: OpenAI Assistant ID (Note: Typo in name: 'SECRETAR'). Likely related to deprecated `OpenAIAssistant` implementation and test fixtures. Not used by the primary `LangGraphAssistant`.
+  - `TELEGRAM_TOKEN`: Telegram Bot token.
+  - `GOOGLE_*`: Google Calendar API credentials.
 
 - **Service Communication:**
   - `REDIS_QUEUE_TO_TELEGRAM`: Queue for messages from `assistant_service` to `telegram_bot_service`.
