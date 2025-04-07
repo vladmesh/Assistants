@@ -6,8 +6,8 @@ from typing import List, Optional
 from langchain_core.messages import BaseMessage
 
 
-class BaseAssistant(ABC):
-    """Base class for all assistants"""
+class OLDBaseAssistant(ABC):
+    # DEPRECATED
 
     def __init__(
         self,

@@ -43,7 +43,8 @@ class AssistantState(TypedDict):
     last_activity: datetime
 
 
-class BaseLLMChat(BaseAssistant, ABC):
+class OLDBaseLLMChat(BaseAssistant, ABC):
+    # DEPRECATED
     """Base class for LLM chat assistants"""
 
     def __init__(
