@@ -10,7 +10,6 @@ from tools.rest_service_tool import RestServiceTool
 
 from .base import BaseAssistant
 from .llm_chat import BaseLLMChat
-from .openai_assistant import OpenAIAssistant
 
 logger = get_logger(__name__)
 
@@ -61,16 +60,7 @@ class AssistantFactory:
         tools = await self.initialize_tools(str(secretary.id))
 
         # Create assistant instance
-        if secretary.assistant_type == "openai_api":
-            assistant = OpenAIAssistant(
-                assistant_id=secretary.openai_assistant_id,
-                name=secretary.name,
-                instructions=secretary.instructions,
-                model=secretary.model,
-                tools=[tool.openai_schema for tool in tools],
-                tool_instances=tools,
-            )
-        elif secretary.assistant_type == "llm":
+        if secretary.assistant_type == "llm":
             assistant = BaseLLMChat(
                 llm=ChatOpenAI(model=secretary.model),
                 name=secretary.name,
@@ -118,21 +108,7 @@ class AssistantFactory:
         tools = await self.initialize_tools(str(assistant_data.id))
 
         # Create assistant instance
-        if assistant_data.assistant_type == "openai_api":
-            assistant_instance = OpenAIAssistant(
-                assistant_id=assistant_data.openai_assistant_id,
-                name=assistant_data.name,
-                instructions=assistant_data.instructions,
-                model=assistant_data.model,
-                # Assuming tools have openai_schema attribute
-                tools=[
-                    tool.openai_schema
-                    for tool in tools
-                    if hasattr(tool, "openai_schema")
-                ],
-                tool_instances=tools,
-            )
-        elif assistant_data.assistant_type == "llm":
+        if assistant_data.assistant_type == "llm":
             assistant_instance = BaseLLMChat(
                 llm=ChatOpenAI(model=assistant_data.model),
                 name=assistant_data.name,
@@ -267,16 +243,7 @@ class AssistantFactory:
                 tool_names=[tool.name for tool in tools],
             )
 
-        if secretary.assistant_type == "openai_api":
-            return OpenAIAssistant(
-                assistant_id=secretary.openai_assistant_id,
-                name=secretary.name,
-                instructions=secretary.instructions,
-                model=secretary.model,
-                tools=[tool.openai_schema for tool in tools],
-                tool_instances=tools,
-            )
-        elif secretary.assistant_type == "llm":
+        if secretary.assistant_type == "llm":
             return BaseLLMChat(
                 llm=ChatOpenAI(model=secretary.model),
                 name=secretary.name,
@@ -296,16 +263,7 @@ class AssistantFactory:
             assistant_data: Assistant data from REST service
             tools: Optional list of tools for the assistant
         """
-        if assistant_data.assistant_type == "openai_api":
-            return OpenAIAssistant(
-                assistant_id=assistant_data.openai_assistant_id,
-                name=assistant_data.name,
-                instructions=assistant_data.instructions,
-                model=assistant_data.model,
-                tools=[tool.openai_schema for tool in (tools or [])],
-                tool_instances=tools or [],
-            )
-        elif assistant_data.assistant_type == "llm":
+        if assistant_data.assistant_type == "llm":
             return BaseLLMChat(
                 llm=ChatOpenAI(model=assistant_data.model),
                 name=assistant_data.name,
