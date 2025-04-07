@@ -1,6 +1,6 @@
 from typing import ClassVar, Optional
 
-from assistants.llm_chat import BaseLLMChat
+from assistants.base import BaseAssistant
 from config.logger import get_logger
 from langchain.schema import HumanMessage
 from tools.base import BaseTool, SubAssistantSchema
@@ -29,12 +29,12 @@ class SubAssistantTool(BaseTool):
     name: str = NAME
     description: str = DESCRIPTION
     tool_type: str = "sub_assistant"
-    sub_assistant: Optional[BaseLLMChat] = None
+    sub_assistant: Optional[BaseAssistant] = None
     assistant_id: Optional[str] = None
 
     def __init__(
         self,
-        sub_assistant: BaseLLMChat,
+        sub_assistant: BaseAssistant,
         assistant_id: Optional[str] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,

@@ -228,48 +228,69 @@ class AssistantFactory:
         return tools
 
     async def create_main_assistant(self) -> BaseAssistant:
-        """Create main assistant based on settings."""
-        # Get secretary assistant from REST service
-        secretary = await self.get_secretary_assistant()
+        """Creates the main assistant instance (secretary)."""
+        secretary_data = await self.get_secretary_assistant()
+        tools = await self.initialize_tools(str(secretary_data.id))
 
-        # Initialize tools
-        tools = await self.initialize_tools(str(secretary.id))
-
-        # Log tools before creating assistant
-        if tools:
-            logger.info(
-                "Creating assistant with tools",
-                tool_count=len(tools),
-                tool_names=[tool.name for tool in tools],
-            )
-
-        if secretary.assistant_type == "llm":
+        # Assuming the main assistant (secretary) is always type 'llm' now
+        if secretary_data.assistant_type == "llm":
             return BaseLLMChat(
-                llm=ChatOpenAI(model=secretary.model),
-                name=secretary.name,
-                instructions=secretary.instructions,
+                llm=ChatOpenAI(model=secretary_data.model),
+                name=secretary_data.name,
+                instructions=secretary_data.instructions,
                 tools=tools,
                 is_secretary=True,
+                assistant_id=str(secretary_data.id),
             )
         else:
-            raise ValueError(f"Unknown assistant type: {secretary.assistant_type}")
+            # Handle error or log warning if the type is unexpectedly different
+            logger.error(
+                "Main secretary assistant has unexpected type",
+                type=secretary_data.assistant_type,
+            )
+            # Fallback or raise error
+            # raise ValueError(f"Main secretary assistant has unexpected type: {secretary_data.assistant_type}")
+            return BaseLLMChat(
+                llm=ChatOpenAI(model=secretary_data.model),
+                name=secretary_data.name,
+                instructions=secretary_data.instructions,
+                tools=tools,
+                is_secretary=True,
+                assistant_id=str(secretary_data.id),
+            )
 
     async def create_sub_assistant(
         self, assistant_data: dict, tools: Optional[List[BaseTool]] = None
     ) -> BaseAssistant:
-        """Create sub-assistant based on assistant data.
+        """Creates a sub-assistant instance based on provided data."""
+        if tools is None:
+            # Initialize tools if not provided
+            tools = await self.initialize_tools(str(assistant_data.id))
 
-        Args:
-            assistant_data: Assistant data from REST service
-            tools: Optional list of tools for the assistant
-        """
+        # Assuming sub-assistants are also type 'llm' now
         if assistant_data.assistant_type == "llm":
             return BaseLLMChat(
                 llm=ChatOpenAI(model=assistant_data.model),
                 name=assistant_data.name,
                 instructions=assistant_data.instructions,
-                tools=tools or [],
-                is_secretary=False,
+                tools=tools,
+                is_secretary=assistant_data.is_secretary,  # Ensure this flag is passed
+                assistant_id=str(assistant_data.id),
             )
         else:
-            raise ValueError(f"Unknown assistant type: {assistant_data.assistant_type}")
+            # Handle error or log warning for unexpected type
+            logger.error(
+                "Sub-assistant has unexpected type",
+                type=assistant_data.assistant_type,
+                assistant_id=assistant_data.id,
+            )
+            # Fallback or raise error
+            # raise ValueError(f"Sub-assistant {assistant_data.id} has unexpected type: {assistant_data.assistant_type}")
+            return BaseLLMChat(
+                llm=ChatOpenAI(model=assistant_data.model),
+                name=assistant_data.name,
+                instructions=assistant_data.instructions,
+                tools=tools,
+                is_secretary=assistant_data.is_secretary,
+                assistant_id=str(assistant_data.id),
+            )
