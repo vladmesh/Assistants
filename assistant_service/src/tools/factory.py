@@ -1,9 +1,11 @@
 # assistant_service/src/tools/factory.py
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional, Type
 
 from config.settings import Settings
 from langchain_core.tools import Tool
+
+# Import shared models
 from tools.calendar_tool import CalendarCreateTool, CalendarListTool
 from tools.reminder_tool import ReminderTool
 
@@ -11,8 +13,11 @@ from tools.reminder_tool import ReminderTool
 from tools.time_tool import TimeToolWrapper
 from tools.web_search_tool import WebSearchTool
 
+from shared_models import ToolModel
+
 # Import other tools as needed
 # from tools.rest_service_tool import RestServiceTool # Example if needed
+
 
 logger = logging.getLogger(__name__)
 
@@ -23,127 +28,102 @@ class ToolFactory:
     def __init__(self, settings: Settings):
         """Initializes the factory with necessary settings."""
         self.settings = settings
-        # Potential place for caching initialized tools if needed later
-        # self.tool_cache = {}
+        # Client is now initialized within tools lazily or passed via BaseTool kwargs
+        # self.rest_client = RestServiceClient()
 
     def create_langchain_tools(
-        self,
-        tool_definitions: List[Dict],
-        user_id: str,  # user_id is now required
-        assistant_id: Optional[str] = None,  # assistant_id is optional
+        self, tool_definitions: List[ToolModel], user_id: str, assistant_id: str
     ) -> List[Tool]:
         """
-        Creates a list of Langchain Tool instances based on raw definitions.
-
-        Args:
-            tool_definitions: List of dictionaries representing raw tool definitions.
-            user_id: The ID of the user for whom the tools are being created.
-            assistant_id: The ID of the assistant instance, required by some tools.
-
-        Returns:
-            A list of initialized Langchain Tool instances.
+        Creates Langchain Tool instances from a list of ToolModel definitions.
+        Name and Description are now fetched from tool_definitions.
+        Args_schema is defined in the tool class.
         """
-        initialized_tools: List[Tool] = []
-        if not tool_definitions:
-            logger.debug("No tool definitions provided, returning empty list.")
-            return initialized_tools
-
+        tools = []
         for tool_def in tool_definitions:
-            tool_type = tool_def.get("tool_type")
-            tool_name = tool_def.get("name")
-            # Get tool-specific config if provided in the definition
-            tool_config = tool_def.get("config", {})
-            log_extra = {
-                "assistant_id": assistant_id,
-                "user_id": user_id,
-                "tool_name": tool_name,
-                "tool_type": tool_type,
-            }
-            tool_instance: Optional[Tool] = None
+            logger.debug(
+                f"Processing tool definition: {tool_def.name} (Type: {tool_def.tool_type})"
+            )
 
-            try:
-                if tool_type == "time":
-                    # Time tool doesn't need user_id or assistant_id
-                    # Pass config if TimeToolWrapper supports it
-                    tool_instance = TimeToolWrapper(**tool_config)
-                    logger.info("Initialized time tool", extra=log_extra)
+            tool_type = tool_def.tool_type
+            tool_name = tool_def.name  # Get name from DB model
+            tool_description = tool_def.description  # Get description from DB model
+            tool_id_str = str(tool_def.id)
+            # sub_assistant_id needed for sub_assistant type tools
+            sub_assistant_id = (
+                str(tool_def.assistant_id) if tool_def.assistant_id else None
+            )
 
-                elif tool_type == "web_search":
-                    # Web search might need API key from settings
-                    tavily_api_key = self.settings.TAVILY_API_KEY
-                    if tavily_api_key:
-                        # Pass config if WebSearchTool supports it
-                        tool_instance = WebSearchTool(
-                            tavily_api_key=tavily_api_key, **tool_config
-                        )
-                        logger.info("Initialized web_search tool", extra=log_extra)
-                    else:
-                        logger.warning(
-                            "TAVILY_API_KEY not set. Skipping WebSearchTool.",
-                            extra=log_extra,
-                        )
+            tool_instance = None
+            tool_class: Optional[Type[Tool]] = None
 
-                elif tool_type == "calendar":
-                    # Calendar tools likely need user_id
-                    # Pass user_id and config
-                    if tool_name == "calendar_create":
-                        tool_instance = CalendarCreateTool(
-                            user_id=user_id, **tool_config
-                        )
-                        logger.info("Initialized calendar_create tool", extra=log_extra)
-                    elif tool_name == "calendar_list":
-                        tool_instance = CalendarListTool(user_id=user_id, **tool_config)
-                        logger.info("Initialized calendar_list tool", extra=log_extra)
-                    else:
-                        logger.warning(
-                            f"Unknown calendar tool name: {tool_name}. Skipping.",
-                            extra=log_extra,
-                        )
-
-                elif tool_type == "reminder":
-                    # Reminder tool needs assistant_id and user_id
-                    if not assistant_id:
-                        logger.warning(
-                            "assistant_id is required for ReminderTool. Skipping.",
-                            extra=log_extra,
-                        )
-                    else:
-                        tool_instance = ReminderTool(
-                            user_id=user_id, assistant_id=assistant_id, **tool_config
-                        )
-                        logger.info("Initialized reminder tool", extra=log_extra)
-
-                elif tool_type == "sub_assistant":
-                    # Handling sub_assistants might require the AssistantFactory
-                    # Skipping initialization via ToolFactory for now.
-                    logger.warning(
-                        "sub_assistant tool type not supported by ToolFactory yet. Skipping.",
-                        extra=log_extra,
-                    )
-
-                # Add other tool types here as needed
-                # elif tool_type == "rest":
-                #     tool_instance = RestServiceToolImplementation(...)
-
+            # Map tool_type to class
+            if tool_type == "reminder":
+                tool_class = ReminderTool
+            elif tool_type == "time":
+                tool_class = TimeToolWrapper
+            elif tool_type == "calendar":
+                # Calendar tools are differentiated by name from the DB
+                if tool_name == "calendar_create":
+                    tool_class = CalendarCreateTool
+                elif tool_name == "calendar_list":
+                    tool_class = CalendarListTool
                 else:
                     logger.warning(
-                        f"Unknown tool type '{tool_type}'. Cannot initialize. Skipping.",
-                        extra=log_extra,
+                        f"Unknown calendar tool name: {tool_name} for type {tool_type}"
                     )
-
-                if tool_instance:
-                    initialized_tools.append(tool_instance)
-
-            except Exception as e:
-                # Log the error and continue with the next tool
-                logger.error(
-                    f"Failed to initialize tool '{tool_name}' of type '{tool_type}'. Error: {e}",
-                    extra=log_extra,
-                    exc_info=True,
+            elif tool_type == "web_search":
+                tool_class = WebSearchTool
+            # Example for sub_assistant (assuming a SubAssistantTool class exists)
+            # elif tool_type == "sub_assistant":
+            #     tool_class = SubAssistantTool
+            #     if not sub_assistant_id:
+            #         logger.error(f"Sub-assistant ID missing for sub_assistant tool: {tool_name}")
+            #         tool_class = None # Prevent instantiation
+            else:
+                logger.warning(
+                    f"Unknown or unsupported tool type: {tool_type} for tool: {tool_name}"
                 )
 
-        logger.info(f"Initialized {len(initialized_tools)} tools for user {user_id}")
-        return initialized_tools
+            if tool_class:
+                try:
+                    # Prepare arguments for BaseTool constructor
+                    base_tool_args = {
+                        "name": tool_name,
+                        "description": tool_description,
+                        "settings": self.settings,  # Pass settings
+                        "user_id": user_id,
+                        "assistant_id": assistant_id,
+                        "tool_id": tool_id_str,
+                        # args_schema is now typically set in the tool's class definition
+                        # or can be passed explicitly if needed:
+                        # "args_schema": tool_class.args_schema # Or fetch from tool_def if stored differently
+                    }
+
+                    # Add specific args only if needed by a tool (sub_assistant example)
+                    # if tool_type == "sub_assistant" and sub_assistant_id:
+                    #    base_tool_args["sub_assistant_id"] = sub_assistant_id
+
+                    # Instantiate the tool using the mapped class and BaseTool args
+                    tool_instance = tool_class(**base_tool_args)
+
+                    logger.info(
+                        f"Initialized tool: {tool_instance.name} (Type: {tool_type}) - Desc: {tool_instance.description}"
+                    )
+                    tools.append(tool_instance)
+
+                except Exception as e:
+                    logger.error(
+                        f"Failed to initialize tool '{tool_name}' (Type: {tool_type}): {e}",
+                        exc_info=True,
+                    )
+
+        return tools
+
+    # async def close(self):
+    #     # If RestServiceClient was used, close it here
+    #     # await self.rest_client.close()
+    #     pass # No client to close at factory level now
 
     # Future method placeholders if needed
     # def create_openai_functions(self, tool_definitions: List[Dict], ...) -> List[Dict]:

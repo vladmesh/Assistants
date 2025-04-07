@@ -1,11 +1,15 @@
 """Base classes for tools"""
 
-from typing import Any, Dict, Optional
+import logging
+from typing import Any, Dict, Optional, Type
 
 from assistants.base_assistant import BaseAssistant
+from config.settings import Settings
 from langchain_core.tools import BaseTool as LangBaseTool
 from pydantic import BaseModel, Field, ValidationError
 from utils.error_handler import InvalidInputError, ToolError, ToolExecutionError
+
+logger = logging.getLogger(__name__)
 
 
 class MessageInput(BaseModel):
@@ -17,44 +21,78 @@ class MessageInput(BaseModel):
 
 
 class BaseTool(LangBaseTool):
-    """Base class for assistant tools"""
+    """Custom base class for tools with settings and user context."""
+
+    # Add common fields expected by our framework
+    settings: Optional[Settings] = None
+    user_id: Optional[str] = None
+    assistant_id: Optional[str] = None
+    tool_id: Optional[str] = None
+
+    # Allow arbitrary types for flexibility, though specific tools might constrain this
+    args_schema: Optional[Type[BaseModel]] = None
+
+    class Config:
+        # Allow arbitrary types to be stored on the model
+        arbitrary_types_allowed = True
 
     def __init__(
         self,
         name: str,
         description: str,
-        args_schema: Optional[BaseModel] = None,
+        settings: Optional[Settings] = None,
         user_id: Optional[str] = None,
-        **kwargs,
+        assistant_id: Optional[str] = None,
+        tool_id: Optional[str] = None,
+        args_schema: Optional[
+            Type[BaseModel]
+        ] = None,  # Keep param for ToolFactory compatibility
+        **kwargs,  # Catch any other args passed by ToolFactory
     ):
         """Initialize the tool
 
         Args:
             name: The name of the tool
             description: A description of what the tool does
-            args_schema: Optional schema for the function arguments
+            settings: Optional settings for the tool
             user_id: Optional user identifier for tool context
+            assistant_id: Optional assistant identifier for tool context
+            tool_id: Optional tool identifier for tool context
+            args_schema: Optional schema for the function arguments (Ignored in super call)
 
         Raises:
             ToolError: If initialization fails
         """
         try:
-            super().__init__(
-                name=name, description=description, args_schema=args_schema, **kwargs
-            )
-            self._user_id = user_id
+            # Initialize the Langchain BaseTool first.
+            # Do NOT pass args_schema here; let Langchain find the class attribute.
+            super().__init__(name=name, description=description, **kwargs)
+
+            # Store our custom attributes
+            self.settings = settings
+            self.user_id = user_id
+            self.assistant_id = assistant_id
+            self.tool_id = tool_id
+            # We still store the args_schema passed from ToolFactory if any,
+            # but it's not directly used by Langchain BaseTool init anymore.
+            # Langchain should pick up the class attribute args_schema from the child tool class.
+            if args_schema:
+                self.args_schema = args_schema
+            # If not passed, rely on the class attribute defined in the child class
+            elif not hasattr(self, "args_schema") or self.args_schema is None:
+                # Attempt to get it from the class definition if it exists
+                if hasattr(self.__class__, "args_schema"):
+                    self.args_schema = getattr(self.__class__, "args_schema", None)
+                else:
+                    # If still no schema, maybe log a warning or set a default?
+                    logger.warning(f"Tool '{name}' initialized without an args_schema.")
+                    self.args_schema = None
+
         except Exception as e:
-            raise ToolError(f"Failed to initialize tool: {str(e)}", name)
-
-    @property
-    def user_id(self) -> Optional[str]:
-        """Get the user ID associated with this tool instance"""
-        return self._user_id
-
-    @user_id.setter
-    def user_id(self, value: str):
-        """Set the user ID for this tool instance"""
-        self._user_id = value
+            # Log the actual error during initialization
+            logger.error(f"Failed to initialize tool '{name}': {str(e)}", exc_info=True)
+            # Raise a more specific error
+            raise ToolError(f"Failed to initialize tool: {str(e)}", name) from e
 
     @property
     def openai_schema(self) -> Dict[str, Any]:
@@ -86,13 +124,13 @@ class BaseTool(LangBaseTool):
 
     async def _execute(self, *args: Any, **kwargs: Any) -> Any:
         """Actual tool execution logic to be implemented by subclasses"""
-        raise NotImplementedError("You need to implement _execute method")
+        raise NotImplementedError(
+            f"{self.name} tool must implement the async _execute method"
+        )
 
     def _run(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the tool synchronously - not supported"""
-        raise NotImplementedError(
-            "Synchronous execution is not supported, use _arun instead"
-        )
+        raise NotImplementedError(f"{self.name} tool does not support sync execution")
 
 
 class ToolAssistant(BaseTool):

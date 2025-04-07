@@ -1,15 +1,15 @@
 # assistant_service/tests/assistants/test_langgraph_assistant.py
 
 import asyncio
+import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from assistants.base_assistant import BaseAssistant
 
 # Imports specific to the class under test
-from assistants.langgraph_assistant import AssistantState, LangGraphAssistant
+from assistants.langgraph_assistant import LangGraphAssistant
 from config import settings
 from config.settings import Settings  # Import Settings
 from langchain_core.callbacks import (
@@ -17,13 +17,14 @@ from langchain_core.callbacks import (
     CallbackManagerForLLMRun,
 )
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import Tool
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph.state import CompiledGraph
 from tools.factory import ToolFactory  # Import ToolFactory
 from tools.time_tool import TimeToolWrapper  # Import a real simple tool
+
+from shared_models.api_models import ToolModel  # Added import
 
 
 # Mock LLM that inherits from BaseChatModel
@@ -130,9 +131,13 @@ def basic_config():
 def time_tool_def():
     """Provides a sample tool definition dictionary."""
     return {
+        "id": uuid.uuid4(),
         "name": "current_time",
         "description": "Get current time",
         "tool_type": "time",
+        "is_active": True,
+        "config": {},
+        "input_schema": None,
     }
 
 
@@ -150,11 +155,14 @@ def assistant_instance(
     # Define a fixture user_id
     fixture_user_id = "test_user_fixture"
 
+    # Create ToolModel instance from the dictionary definition
+    tool_model_instance = ToolModel(**time_tool_def)
+
     # Create tools using the factory
     # Pass user_id and assistant_id if required by any tool initialization logic within the factory
     # For the time tool, user_id/assistant_id might not be needed, but pass them for consistency.
     created_tools: List[Tool] = tool_factory.create_langchain_tools(
-        tool_definitions=[time_tool_def],
+        tool_definitions=[tool_model_instance],  # Pass the ToolModel instance
         user_id=fixture_user_id,
         assistant_id="test-asst-id",  # Pass the assistant ID being used
     )
@@ -187,8 +195,8 @@ async def test_initialization(assistant_instance):
         assistant_instance.tools[0], TimeToolWrapper
     )  # Check for correct tool type
     assert (
-        assistant_instance.tools[0].name == "time"
-    )  # Actual name used by TimeToolWrapper
+        assistant_instance.tools[0].name == "current_time"
+    )  # Check name from ToolModel used by factory
     assert assistant_instance.compiled_graph is not None  # Check if graph is compiled
     # Check default system prompt if not overridden
     assert assistant_instance.system_prompt == "You are a test assistant."

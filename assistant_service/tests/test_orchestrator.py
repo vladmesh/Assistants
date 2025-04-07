@@ -1,11 +1,10 @@
 # Import unittest.mock for ANY matcher
 import unittest.mock
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from config.settings import Settings
-from langchain_core.messages import HumanMessage, ToolMessage
 from messages.queue_models import (
     QueueMessage,
     QueueMessageContent,
