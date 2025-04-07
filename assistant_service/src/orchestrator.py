@@ -146,13 +146,25 @@ class AssistantOrchestrator:
                 exc_info=True,
                 extra=log_extra,
             )
+            # Remove the potentially faulty secretary instance from the cache
+            if user_id is not None:
+                removed_assistant = self.secretaries.pop(user_id, None)
+                if removed_assistant:
+                    logger.warning(
+                        f"Removed secretary instance for user {user_id} from cache due to processing error.",
+                        extra=log_extra,
+                    )
+
+            # Return an error payload
             return {
                 "user_id": user_id if user_id is not None else "unknown",
                 "text": getattr(
                     getattr(queue_message, "content", None), "message", "unknown"
                 ),
                 "status": "error",
-                "error": str(e),
+                # Provide a slightly more informative error message to the user
+                "response": f"Message processing failed due to an internal error: {type(e).__name__}",
+                "error": str(e),  # Keep detailed error for internal use/output queue
                 "source": getattr(queue_message, "source", "unknown").value
                 if hasattr(getattr(queue_message, "source", None), "value")
                 else "unknown",
@@ -324,9 +336,9 @@ class AssistantOrchestrator:
         while max_messages is None or processed_count < max_messages:
             raw_message = None
             try:
-                logger.debug(
-                    "Waiting for message in queue", queue=self.settings.INPUT_QUEUE
-                )
+                # logger.debug(
+                #     "Waiting for message in queue", queue=self.settings.INPUT_QUEUE
+                # )
                 message_data = await self.redis.blpop(
                     self.settings.INPUT_QUEUE, timeout=5
                 )

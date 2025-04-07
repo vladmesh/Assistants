@@ -29,8 +29,8 @@ class AssistantFactory:
         self._secretary_cache: Dict[int, BaseAssistant] = {}
         self._assistant_cache: Dict[UUID, BaseAssistant] = {}
         self.checkpointer = checkpointer or MemorySaver()
-        # Initialize ToolFactory
-        self.tool_factory = ToolFactory(settings=self.settings)
+        # Initialize ToolFactory, passing self (the AssistantFactory instance)
+        self.tool_factory = ToolFactory(settings=self.settings, assistant_factory=self)
         logger.info(
             f"AssistantFactory initialized with checkpointer: {type(self.checkpointer).__name__}"
             f" and ToolFactory"
@@ -117,7 +117,7 @@ class AssistantFactory:
         if user_id is None:
             # This case should ideally be handled by the caller (e.g., get_user_secretary)
             # but add a safeguard here.
-            logger.error(
+            logger.warning(
                 "user_id is None when calling get_assistant_by_id, tool initialization might fail",
                 assistant_uuid=assistant_uuid,
             )
@@ -155,13 +155,32 @@ class AssistantFactory:
             )
             tool_definitions = []  # Default to empty list on error
 
-        # Create tools using the ToolFactory
+        # Create tools using the ToolFactory (now async)
         # Pass user_id and assistant_id (as string)
-        created_tools = self.tool_factory.create_langchain_tools(
+        created_tools = await self.tool_factory.create_langchain_tools(
             tool_definitions=tool_definitions,
             user_id=user_id,  # Pass the required user_id
             assistant_id=str(assistant_data.id),
         )
+
+        # Log if not all tools were initialized successfully
+        if len(created_tools) != len(tool_definitions):
+            logger.warning(
+                f"Initialized assistant '{assistant_data.name}' ({assistant_uuid}) with "
+                f"{len(created_tools)} out of {len(tool_definitions)} defined tools due to initialization errors. "
+                f"Check previous logs for details.",
+                extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
+            )
+        elif not tool_definitions:
+            logger.info(
+                f"Assistant '{assistant_data.name}' ({assistant_uuid}) initialized with no tools defined.",
+                extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
+            )
+        else:
+            logger.info(
+                f"Successfully initialized all {len(created_tools)} defined tools for assistant '{assistant_data.name}' ({assistant_uuid}).",
+                extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
+            )
 
         # Create assistant instance
         if assistant_data.assistant_type == "llm":

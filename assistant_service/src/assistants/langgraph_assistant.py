@@ -378,7 +378,12 @@ class LangGraphAssistant(BaseAssistant):
             # Extract the last response message
             if final_state and final_state.get("messages"):
                 last_message = final_state["messages"][-1]
-                # Check if the last message is from the AI
+                dialog_state_history = final_state.get("dialog_state", [])
+                last_dialog_state = (
+                    dialog_state_history[-1] if dialog_state_history else "unknown"
+                )
+
+                # Check if the last message is from the AI (successful completion)
                 if isinstance(last_message, AIMessage):
                     response_content = str(last_message.content)
                     logger.info(
@@ -386,23 +391,44 @@ class LangGraphAssistant(BaseAssistant):
                         extra={**log_extra, "response_length": len(response_content)},
                     )
                     return response_content
-                # Handle cases where the last message might be a system error message
-                elif (
-                    isinstance(last_message, SystemMessage)
-                    and final_state.get("dialog_state")
-                    and final_state.get("dialog_state")[-1] == "error"
-                ):
-                    logger.error(
-                        "Graph processing finished with an error state.",
-                        extra=log_extra,
-                    )
-                    return f"Assistant Error: {last_message.content}"
+
+                # Handle specific error states based on dialog_state
+                elif isinstance(last_message, SystemMessage):
+                    if last_dialog_state == "error":
+                        logger.error(
+                            "Graph processing finished with an error state.",
+                            extra=log_extra,
+                        )
+                        return f"Assistant Error: {last_message.content}"
+                    elif last_dialog_state == "timeout":
+                        logger.warning(
+                            "Graph processing finished due to timeout.",
+                            extra=log_extra,
+                        )
+                        # Return a more specific timeout message to user
+                        return (
+                            "Sorry, the request took too long to process and timed out."
+                        )
+                    else:
+                        # Other SystemMessage, treat as unexpected final state
+                        logger.warning(
+                            "Graph finished with a SystemMessage in an unexpected state.",
+                            extra={
+                                **log_extra,
+                                "last_message_type": type(last_message).__name__,
+                                "last_dialog_state": last_dialog_state,
+                                "message_content": last_message.content,
+                            },
+                        )
+                        return "Assistant processed the request but the final output wasn't standard text."
                 else:
+                    # Last message is neither AIMessage nor SystemMessage (e.g., HumanMessage, ToolMessage)
                     logger.warning(
-                        "Last message in graph state is not an AIMessage",
+                        "Last message in graph state is not AIMessage or SystemMessage.",
                         extra={
                             **log_extra,
                             "last_message_type": type(last_message).__name__,
+                            "last_dialog_state": last_dialog_state,
                         },
                     )
                     return "Assistant processed the request but the final output wasn't standard text."
@@ -413,11 +439,13 @@ class LangGraphAssistant(BaseAssistant):
                 )
                 return "Error: Assistant finished processing but produced no response."
 
-        except Exception:
+        except Exception as e:  # Catch any exception during graph invocation
             logger.exception(
                 "Error during graph invocation", extra=log_extra, exc_info=True
             )
-            return f"Sorry, a critical error occurred while processing your request in assistant '{self.name}'."
+            # Re-raise the exception to be handled by the caller (orchestrator)
+            raise e
+            # return f"Sorry, a critical error occurred while processing your request in assistant '{self.name}'."
 
     # Optional: Add a close method if needed (e.g., for resource cleanup)
     # async def close(self):
