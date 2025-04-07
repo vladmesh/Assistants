@@ -44,9 +44,6 @@ class BaseTool(LangBaseTool):
         user_id: Optional[str] = None,
         assistant_id: Optional[str] = None,
         tool_id: Optional[str] = None,
-        args_schema: Optional[
-            Type[BaseModel]
-        ] = None,  # Keep param for ToolFactory compatibility
         **kwargs,  # Catch any other args passed by ToolFactory
     ):
         """Initialize the tool
@@ -58,14 +55,13 @@ class BaseTool(LangBaseTool):
             user_id: Optional user identifier for tool context
             assistant_id: Optional assistant identifier for tool context
             tool_id: Optional tool identifier for tool context
-            args_schema: Optional schema for the function arguments (Ignored in super call)
 
         Raises:
             ToolError: If initialization fails
         """
         try:
             # Initialize the Langchain BaseTool first.
-            # Do NOT pass args_schema here; let Langchain find the class attribute.
+            # args_schema is NOT passed here; Langchain uses the class attribute.
             super().__init__(name=name, description=description, **kwargs)
 
             # Store our custom attributes
@@ -73,20 +69,15 @@ class BaseTool(LangBaseTool):
             self.user_id = user_id
             self.assistant_id = assistant_id
             self.tool_id = tool_id
-            # We still store the args_schema passed from ToolFactory if any,
-            # but it's not directly used by Langchain BaseTool init anymore.
-            # Langchain should pick up the class attribute args_schema from the child tool class.
-            if args_schema:
-                self.args_schema = args_schema
-            # If not passed, rely on the class attribute defined in the child class
-            elif not hasattr(self, "args_schema") or self.args_schema is None:
-                # Attempt to get it from the class definition if it exists
-                if hasattr(self.__class__, "args_schema"):
-                    self.args_schema = getattr(self.__class__, "args_schema", None)
-                else:
-                    # If still no schema, maybe log a warning or set a default?
-                    logger.warning(f"Tool '{name}' initialized without an args_schema.")
-                    self.args_schema = None
+
+            # Check if the class itself has args_schema defined
+            if (
+                not hasattr(self.__class__, "args_schema")
+                or getattr(self.__class__, "args_schema", None) is None
+            ):
+                logger.warning(
+                    f"Tool class '{self.__class__.__name__}' (name='{name}') is defined without an args_schema class attribute."
+                )
 
         except Exception as e:
             # Log the actual error during initialization

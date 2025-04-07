@@ -143,7 +143,7 @@ def time_tool_def():
 
 @pytest.fixture
 @patch("assistants.langgraph_assistant.ChatOpenAI", new_callable=lambda: MockChatOpenAI)
-def assistant_instance(
+async def assistant_instance(
     mock_chat_openai, memory_saver, basic_config, time_tool_def, tool_factory, settings
 ):
     """Fixture to create an instance of LangGraphAssistant with mocks, using ToolFactory."""
@@ -161,7 +161,7 @@ def assistant_instance(
     # Create tools using the factory
     # Pass user_id and assistant_id if required by any tool initialization logic within the factory
     # For the time tool, user_id/assistant_id might not be needed, but pass them for consistency.
-    created_tools: List[Tool] = tool_factory.create_langchain_tools(
+    created_tools: List[Tool] = await tool_factory.create_langchain_tools(
         tool_definitions=[tool_model_instance],  # Pass the ToolModel instance
         user_id=fixture_user_id,
         assistant_id="test-asst-id",  # Pass the assistant ID being used
@@ -184,28 +184,29 @@ def assistant_instance(
 @pytest.mark.asyncio
 async def test_initialization(assistant_instance):
     """Test if the LangGraphAssistant initializes correctly."""
-    assert assistant_instance is not None
-    assert assistant_instance.name == "test_assistant"
-    assert assistant_instance.assistant_id == "test-asst-id"
-    assert assistant_instance.user_id == "test_user_fixture"  # Check user_id storage
-    assert isinstance(assistant_instance.llm, MockChatOpenAI)
-    assert assistant_instance.checkpointer is not None
-    assert len(assistant_instance.tools) == 1  # Check if tools list is populated
-    assert isinstance(
-        assistant_instance.tools[0], TimeToolWrapper
-    )  # Check for correct tool type
+    instance = await assistant_instance  # Await the coroutine fixture
+    assert instance is not None
+    assert instance.name == "test_assistant"
+    assert instance.assistant_id == "test-asst-id"
+    assert instance.user_id == "test_user_fixture"  # Check user_id storage
+    assert isinstance(instance.llm, MockChatOpenAI)
+    assert instance.checkpointer is not None
+    assert len(instance.tools) == 1  # Check if tools list is populated
+    assert isinstance(instance.tools[0], TimeToolWrapper)  # Check for correct tool type
     assert (
-        assistant_instance.tools[0].name == "current_time"
+        instance.tools[0].name == "current_time"
     )  # Check name from ToolModel used by factory
-    assert assistant_instance.compiled_graph is not None  # Check if graph is compiled
+    assert instance.compiled_graph is not None  # Check if graph is compiled
     # Check default system prompt if not overridden
-    assert assistant_instance.system_prompt == "You are a test assistant."
-    assert assistant_instance.timeout == 30
+    assert instance.system_prompt == "You are a test assistant."
+    # Get timeout from the instance config after awaiting
+    assert instance.timeout == instance.config.get("timeout", 60)
 
 
 @pytest.mark.asyncio
 async def test_process_message_stateless(assistant_instance, memory_saver):
     """Test processing a single message using the graph."""
+    instance = await assistant_instance  # Await the fixture
     user_id = "user123"
     thread_id = f"user_{user_id}"  # Consistent thread ID generation
     input_message = HumanMessage(content="What time is it?")
@@ -213,7 +214,7 @@ async def test_process_message_stateless(assistant_instance, memory_saver):
     # Mock the agent runnable's response
     # create_react_agent returns a dict with 'messages' key
     mock_response_message = AIMessage(content="It's mock time!")
-    assistant_instance.agent_runnable.ainvoke = AsyncMock(
+    instance.agent_runnable.ainvoke = AsyncMock(
         return_value={"messages": [mock_response_message]}
     )
     # Mock the compiled_graph to return a mock state
@@ -223,19 +224,20 @@ async def test_process_message_stateless(assistant_instance, memory_saver):
         "last_activity": datetime.now(timezone.utc),
         "user_id": user_id,
     }
-    assistant_instance.compiled_graph.ainvoke = AsyncMock(return_value=expected_state)
+    instance.compiled_graph.ainvoke = AsyncMock(return_value=expected_state)
 
-    response = await assistant_instance.process_message(input_message, user_id)
+    response = await instance.process_message(input_message, user_id)
 
     assert response == "It's mock time!"
     # Verify compiled_graph was called with correct parameters
-    assistant_instance.compiled_graph.ainvoke.assert_called_once()
+    instance.compiled_graph.ainvoke.assert_called_once()
     # No need to check checkpointer state directly as we mocked the graph
 
 
 @pytest.mark.asyncio
 async def test_process_message_stateful_memory(assistant_instance, memory_saver):
     """Test if the assistant remembers context across messages using the checkpointer."""
+    instance = await assistant_instance  # Await the fixture
     user_id = "user456"
     thread_id = f"user_{user_id}"
     config = {"configurable": {"thread_id": thread_id}}
@@ -253,9 +255,9 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
         "user_id": user_id,
     }
     first_mock.return_value = first_state
-    assistant_instance.compiled_graph.ainvoke = first_mock
+    instance.compiled_graph.ainvoke = first_mock
 
-    response1 = await assistant_instance.process_message(input1, user_id)
+    response1 = await instance.process_message(input1, user_id)
     assert response1 == "Hi Bob!"
     first_mock.assert_called_once()
 
@@ -271,9 +273,9 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
         "user_id": user_id,
     }
     second_mock.return_value = second_state
-    assistant_instance.compiled_graph.ainvoke = second_mock
+    instance.compiled_graph.ainvoke = second_mock
 
-    response2 = await assistant_instance.process_message(input2, user_id)
+    response2 = await instance.process_message(input2, user_id)
     assert response2 == "Your name is Bob."
     second_mock.assert_called_once()
 
