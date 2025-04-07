@@ -1,9 +1,8 @@
 """Web search tool using Tavily API"""
 
-from typing import Optional
+from typing import Optional, Type
 
 from config.logger import get_logger
-from config.settings import Settings
 from pydantic import BaseModel, Field
 from tavily import TavilyClient
 from tools.base import BaseTool
@@ -27,24 +26,28 @@ class WebSearchInput(BaseModel):
 class WebSearchTool(BaseTool):
     """Tool for searching the internet using Tavily API"""
 
-    settings: Settings = Field(default=None)
-    client: Optional[TavilyClient] = Field(default=None)
+    # Restore the Type annotation
+    args_schema: Type[WebSearchInput] = WebSearchInput
+    # Remove custom __init__ to inherit from BaseTool
 
-    def __init__(self, settings: Settings, user_id: Optional[str] = None):
-        """Initialize the web search tool
+    # Class attribute for the client, initialized lazily
+    _client: Optional[TavilyClient] = None
 
-        Args:
-            settings: Application settings
-            user_id: Optional user identifier for tool context
-        """
-        super().__init__(
-            name="web_search",
-            description="Search the internet for information on a specific topic",
-            args_schema=WebSearchInput,
-            user_id=user_id,
-        )
-        self.settings = settings
-        self.client = None
+    def _get_tavily_client(self) -> TavilyClient:
+        """Lazy initialization of the Tavily client."""
+        if self._client is None:
+            if not self.settings or not self.settings.TAVILY_API_KEY:
+                logger.error("Tavily API key not configured for WebSearchTool.")
+                raise ToolExecutionError("Tavily API key not configured", self.name)
+            try:
+                self._client = TavilyClient(api_key=self.settings.TAVILY_API_KEY)
+                logger.debug("TavilyClient initialized lazily for WebSearchTool.")
+            except Exception as e:
+                logger.error(f"Failed to initialize TavilyClient: {e}", exc_info=True)
+                raise ToolExecutionError(
+                    f"Failed to initialize Tavily client: {str(e)}", self.name
+                )
+        return self._client
 
     async def _execute(
         self, query: str, search_depth: str = "basic", max_results: int = 5
@@ -63,21 +66,16 @@ class WebSearchTool(BaseTool):
             ToolExecutionError: If search fails
         """
         try:
-            # Initialize client if not already done
-            if self.client is None:
-                if not self.settings or not self.settings.TAVILY_API_KEY:
-                    raise ToolExecutionError("Tavily API key not configured", self.name)
-                self.client = TavilyClient(api_key=self.settings.TAVILY_API_KEY)
+            # Get client lazily
+            client = self._get_tavily_client()
 
             # Validate search depth
             if search_depth not in ["basic", "deep"]:
+                logger.warning(f"Invalid search_depth '{search_depth}', using 'basic'.")
                 search_depth = "basic"
 
             # Validate max_results
-            if max_results < 1:
-                max_results = 1
-            elif max_results > 10:
-                max_results = 10
+            max_results = max(1, min(10, max_results))  # Clamp between 1 and 10
 
             logger.info(
                 "Executing web search",
@@ -87,7 +85,9 @@ class WebSearchTool(BaseTool):
             )
 
             # Perform search
-            search_result = self.client.search(
+            # Note: TavilyClient.search is synchronous, run in executor?
+            # For now, calling directly.
+            search_result = client.search(
                 query=query,
                 search_depth=search_depth,
                 max_results=max_results,
@@ -99,6 +99,7 @@ class WebSearchTool(BaseTool):
                 or "results" not in search_result
                 or not search_result["results"]
             ):
+                logger.info("No search results found for query.", query=query)
                 return "No search results found."
 
             results = search_result["results"]
@@ -113,8 +114,11 @@ class WebSearchTool(BaseTool):
                 formatted_results += f"   URL: {url}\n"
                 formatted_results += f"   {content}\n\n"
 
-            return formatted_results
+            logger.info(f"Web search successful, returning {len(results)} results.")
+            return formatted_results.strip()
 
+        except ToolExecutionError as e:  # Re-raise config errors
+            raise e
         except Exception as e:
-            logger.error("Web search failed", error=str(e))
-            raise ToolExecutionError(f"Web search failed: {str(e)}", self.name)
+            logger.error("Web search failed", query=query, error=str(e), exc_info=True)
+            raise ToolExecutionError(f"Web search failed: {str(e)}", self.name) from e

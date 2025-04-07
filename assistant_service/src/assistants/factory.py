@@ -139,8 +139,21 @@ class AssistantFactory:
             "timeout": assistant_config_dict.get("timeout", 60),
             **assistant_config_dict,
         }
-        tool_definitions = assistant_data.tools or []
         kwargs = {"is_secretary": assistant_data.is_secretary}
+
+        # Fetch tools using the dedicated endpoint
+        try:
+            tool_definitions = await self.rest_client.get_assistant_tools(
+                str(assistant_uuid)
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to get tools for assistant",
+                assistant_uuid=assistant_uuid,
+                error=str(e),
+                exc_info=True,
+            )
+            tool_definitions = []  # Default to empty list on error
 
         # Create tools using the ToolFactory
         # Pass user_id and assistant_id (as string)

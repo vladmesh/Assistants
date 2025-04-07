@@ -1,7 +1,6 @@
 import json
 from datetime import datetime, timezone
-from typing import ClassVar, Optional, Type
-from uuid import UUID
+from typing import Optional, Type
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -14,7 +13,7 @@ logger = get_logger(__name__)
 
 
 class ReminderSchema(BaseModel):
-    """Schema for reminder creation using the new API."""
+    """Schema for reminder creation input validation."""
 
     type: str = Field(..., description="Тип напоминания: 'one_time' или 'recurring'")
     payload: str = Field(
@@ -100,50 +99,21 @@ class ReminderSchema(BaseModel):
 
 
 class ReminderTool(BaseTool):
-    NAME: ClassVar[str] = "create_reminder"  # Changed name to be more descriptive
-    DESCRIPTION: ClassVar[
-        str
-    ] = """Инструмент для создания одноразовых или повторяющихся напоминаний.
-    Используйте его, когда пользователь просит напомнить о чем-то.
+    """Инструмент для создания напоминаний. Использует значения name и description из базы данных."""
 
-    Укажите тип напоминания ('one_time' или 'recurring').
-    - Для 'one_time': укажите 'trigger_at' (YYYY-MM-DD HH:MM) и 'timezone' (например, 'Europe/Moscow').
-    - Для 'recurring': укажите 'cron_expression' (например, '0 10 * * *' для "каждый день в 10:00").
-    - Всегда указывайте 'payload' - JSON-строку с деталями для напоминания (например, '{"text": "Позвонить маме"}').
+    # Restore the Type annotation
+    args_schema: Type[ReminderSchema] = ReminderSchema
 
-    Примеры использования:
-    - Создать напоминание: тип 'one_time', время '2024-07-15 15:30', зона 'Europe/Moscow', payload '{"text": "Встреча с командой"}'
-    - Создать ежедневное напоминание: тип 'recurring', cron '0 9 * * *', payload '{"action": "check_emails"}'
-    """
-
-    name: str = NAME
-    description: str = DESCRIPTION
+    # Keep specific attributes
     rest_service_url: str = "http://rest_service:8000"
-    client: Optional[httpx.AsyncClient] = None
-    args_schema: Type[BaseModel] = ReminderSchema
-    assistant_id: Optional[UUID] = None  # Add field to store assistant ID
+    _client: Optional[httpx.AsyncClient] = None  # For lazy init
 
-    def __init__(
-        self,
-        user_id: Optional[str] = None,
-        assistant_id: Optional[UUID] = None,  # Receive assistant_id
-        rest_service_url: str = "http://rest_service:8000",
-    ):
-        super().__init__(
-            name=self.NAME,
-            description=self.DESCRIPTION,
-            args_schema=ReminderSchema,
-            user_id=user_id,
-        )
-        self.assistant_id = assistant_id  # Store assistant_id
-        self.rest_service_url = rest_service_url
-        self.client = httpx.AsyncClient(timeout=30.0)
-
-    def _run(self, *args, **kwargs) -> str:
-        """Синхронный метод не используется"""
-        raise NotImplementedError(
-            "Этот инструмент поддерживает только асинхронные вызовы"
-        )
+    def get_client(self) -> httpx.AsyncClient:
+        """Lazily initialize and return the httpx client."""
+        if self._client is None:
+            # Consider adding timeout configuration from settings if available
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
 
     async def _execute(
         self,
@@ -153,22 +123,22 @@ class ReminderTool(BaseTool):
         timezone: Optional[str] = None,
         cron_expression: Optional[str] = None,
     ) -> str:
-        """Создает напоминание через новый REST API /reminders/"""
+        """Создает напоминание через REST API /reminders/"""
+        # Access attributes like user_id and assistant_id from self (set by BaseTool)
         if not self.user_id:
             raise ToolError(
-                message="User ID is required for creating reminders",
+                message="User ID is required",
                 tool_name=self.name,
                 error_code="USER_ID_REQUIRED",
             )
-
         if not self.assistant_id:
             raise ToolError(
-                message="Assistant ID is required for creating reminders",
+                message="Assistant ID is required",
                 tool_name=self.name,
                 error_code="ASSISTANT_ID_REQUIRED",
             )
 
-        # Создаем и валидируем схему
+        # Validate input using the schema
         try:
             reminder_input = ReminderSchema(
                 type=type,
@@ -184,152 +154,61 @@ class ReminderTool(BaseTool):
                 error_code="INVALID_INPUT",
             )
 
+        # Prepare data for the API call using the shared model structure
+        trigger_datetime_utc = reminder_input.get_trigger_datetime_utc()
+        api_data: dict = {
+            "user_id": int(self.user_id),  # API expects int
+            "assistant_id": str(self.assistant_id),  # API expects str UUID
+            "type": reminder_input.type,
+            "payload": reminder_input.payload,
+            "status": "active",
+        }
+        if reminder_input.type == "one_time" and trigger_datetime_utc:
+            api_data["trigger_at"] = trigger_datetime_utc.isoformat()
+        elif reminder_input.type == "recurring" and reminder_input.cron_expression:
+            api_data["cron_expression"] = reminder_input.cron_expression
+
+        logger.debug("Prepared data for /reminders API", data=api_data)
+        http_client = self.get_client()  # Use lazy getter
+
         try:
-            # Получаем UTC datetime для one_time напоминаний
-            trigger_datetime_utc = reminder_input.get_trigger_datetime_utc()
-
-            logger.info(
-                "Attempting to create reminder",
-                type=reminder_input.type,
-                trigger_at_utc=(
-                    trigger_datetime_utc.isoformat() if trigger_datetime_utc else None
-                ),
-                cron=reminder_input.cron_expression,
-                payload=reminder_input.payload,
-                user_id=self.user_id,  # This is telegram_id
-                assistant_id=self.assistant_id,
+            response = await http_client.post(
+                f"{self.rest_service_url}/api/reminders/", json=api_data
             )
-
-            # Получаем пользователя (database ID) по telegram_id - ЭТО БОЛЬШЕ НЕ НУЖНО!
-            # self.user_id УЖЕ является ID из базы данных
-            user_db_id = None
-            try:
-                # Convert self.user_id (assumed to be DB ID string) to int
-                user_db_id = int(self.user_id)
-                logger.info(f"Using provided user DB ID: {user_db_id}")
-                # Verify user exists? Maybe not necessary if ID comes from validated source
-
-            except (ValueError, TypeError):
+            if response.status_code not in [200, 201]:
                 logger.error(
-                    "Invalid user_id format (expected int convertible string)",
-                    user_id=self.user_id,
+                    "Reminder API request failed",
+                    status_code=response.status_code,
+                    response=response.text,
                 )
+                error_detail = response.text
+                try:
+                    detail_json = response.json()
+                    error_detail = detail_json.get("detail", error_detail)
+                except Exception:
+                    pass
                 raise ToolError(
-                    message="Неверный формат ID пользователя.",
-                    error_code="INVALID_USER_ID_FORMAT",
+                    message=f"Ошибка API ({response.status_code}): {error_detail}",
+                    tool_name=self.name,
+                    error_code="API_ERROR",
                 )
 
-            # Подготовка данных для API /reminders/
-            api_data = {
-                "user_id": user_db_id,  # Use database ID directly
-                "assistant_id": str(
-                    self.assistant_id
-                ),  # Ensure UUID is string for JSON
-                "type": reminder_input.type,
-                "payload": reminder_input.payload,
-                "status": "active",  # Default to active? Or should API handle this? Let's set it.
-            }
-            if reminder_input.type == "one_time" and trigger_datetime_utc:
-                # API expects ISO format string for datetime
-                api_data["trigger_at"] = trigger_datetime_utc.isoformat()
-            elif reminder_input.type == "recurring" and reminder_input.cron_expression:
-                api_data["cron_expression"] = reminder_input.cron_expression
+            logger.info("Reminder successfully created via API")
+            return "Напоминание успешно создано."
 
-            logger.debug("Prepared data for /reminders API", data=api_data)
-
-            try:
-                # Отправка запроса к REST API /reminders/
-                response = await self.client.post(
-                    f"{self.rest_service_url}/api/reminders/", json=api_data
-                )
-
-                if response.status_code not in [200, 201]:
-                    logger.error(
-                        "Reminder API request failed",
-                        status_code=response.status_code,
-                        response=response.text,
-                        request_data=api_data,
-                    )
-                    raise ToolError(
-                        message="Ошибка при создании напоминания через API.",
-                        error_code="REMINDER_API_ERROR",
-                        details={
-                            "status_code": response.status_code,
-                            "response": response.text,
-                        },
-                    )
-
-                reminder_response_data = response.json()
-                logger.info(
-                    "Reminder created successfully via API",
-                    reminder_id=reminder_response_data["id"],
-                    type=reminder_input.type,
-                )
-
-                # Формируем ответ пользователю
-                if reminder_input.type == "one_time":
-                    # Show local time back to user
-                    local_time_str = "не указано"
-                    if trigger_datetime_utc and reminder_input.timezone:
-                        try:
-                            local_tz = ZoneInfo(reminder_input.timezone)
-                            local_dt = trigger_datetime_utc.astimezone(local_tz)
-                            local_time_str = local_dt.strftime("%Y-%m-%d %H:%M %Z")
-                        except Exception:
-                            local_time_str = trigger_datetime_utc.strftime(
-                                "%Y-%m-%d %H:%M UTC"
-                            )  # Fallback to UTC
-
-                    return (
-                        f"Одноразовое напоминание создано на {local_time_str}. "
-                        f"Содержание: {reminder_input.payload}"  # Maybe summarize payload?
-                    )
-                else:  # recurring
-                    return (
-                        f"Повторяющееся напоминание создано с правилом '{reminder_input.cron_expression}'. "
-                        f"Содержание: {reminder_input.payload}"
-                    )
-
-            except ToolError:
-                raise  # Re-raise specific tool errors
-            except httpx.RequestError as e:
-                logger.error(
-                    "Reminder API request error", error=str(e), request_data=api_data
-                )
-                raise ToolError(
-                    message="Ошибка при обращении к сервису напоминаний (сетевая проблема).",
-                    error_code="REMINDER_API_NETWORK_ERROR",
-                    details={"error": str(e)},
-                )
-            except Exception as e:
-                logger.error(
-                    "Unknown error during reminder creation API call",
-                    error=str(e),
-                    exc_info=True,
-                )
-                raise ToolError(
-                    message="Неизвестная ошибка при создании напоминания.",
-                    error_code="REMINDER_API_UNKNOWN_ERROR",
-                    details={"error": str(e)},
-                )
-
-        except (
-            ValueError
-        ) as e:  # Catches validation errors from ReminderSchema or get_trigger_datetime_utc
-            logger.error("Input validation failed", error=str(e))
+        except httpx.RequestError as e:
+            logger.error(f"HTTP request failed: {e}", exc_info=True)
             raise ToolError(
-                message=f"Ошибка входных данных: {str(e)}",
+                message=f"Ошибка сети при создании напоминания: {str(e)}",
                 tool_name=self.name,
-                error_code="INVALID_INPUT",
+                error_code="NETWORK_ERROR",
             )
-        except ToolError:
-            raise  # Re-raise ToolErrors from user fetching etc.
         except Exception as e:
-            logger.error("Unexpected error in _execute", error=str(e), exc_info=True)
+            logger.exception("Unexpected error during reminder creation", exc_info=True)
             raise ToolError(
                 message=f"Непредвиденная ошибка: {str(e)}",
                 tool_name=self.name,
-                error_code="TOOL_UNEXPECTED_ERROR",
+                error_code="UNEXPECTED_ERROR",
             )
 
     # Remove the old _datetime_to_cron method as it's no longer needed here

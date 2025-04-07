@@ -1,32 +1,30 @@
 """Time-related tools"""
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Type
 from zoneinfo import ZoneInfo
 
+from config.logger import get_logger
 from pydantic import BaseModel, Field
 from tools.base import BaseTool
 from utils.error_handler import ToolExecutionError
 
+logger = get_logger(__name__)
+
 
 class TimezoneInput(BaseModel):
-    """Schema for timezone input"""
+    """Input schema for the time tool."""
 
-    timezone: str = Field(
-        description="Timezone like 'Europe/Paris' or 'America/New_York' or UTC"
-    )
+    timezone: Optional[str] = Field(None, description="Timezone, e.g., 'Europe/Moscow'")
 
 
 class TimeToolWrapper(BaseTool):
-    """Tool for getting current time in specified timezone"""
+    """Wrapper for getting current time with timezone support."""
 
-    def __init__(self, user_id: Optional[str] = None):
-        super().__init__(
-            name="time",
-            description="Get current time in specified timezone",
-            args_schema=TimezoneInput,
-            user_id=user_id,
-        )
+    # Restore the Type annotation for args_schema
+    args_schema: Type[TimezoneInput] = TimezoneInput
+
+    # Lazy initialization attribute
 
     async def _execute(self, timezone: str = "UTC") -> str:
         """Get current time in specified timezone

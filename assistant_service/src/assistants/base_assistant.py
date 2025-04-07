@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 # Import BaseMessage for type hinting
 from langchain_core.messages import BaseMessage
