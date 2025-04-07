@@ -13,17 +13,16 @@ The assistant service is the core engine of the Smart Assistant project. It hand
 
 ### 2.1 Core Components
 
-#### BaseLLMChat (LangGraph)
-- Primary implementation using LangGraph
-- Message processing graph
-- Built-in tool support
-- Complex interaction scenarios
+#### LangGraphAssistant (LangGraph)
+- The primary and currently active implementation using LangGraph.
+- Responsible for the main message processing graph.
+- Provides built-in support for tool integration and execution.
+- Handles complex conversational flows and state management via checkpoints.
 
-#### OpenAIAssistant (OpenAI Assistants API)
-- Secondary implementation using OpenAI API
-- Thread-based context
-- Tool orchestration
-- Asynchronous processing
+#### OpenAIAssistant (OpenAI Assistants API) - Deprecated/Experimental
+- Previous or experimental implementation using the OpenAI Assistants API.
+- Not actively used in the current primary workflow managed by `AssistantFactory`.
+- Code might still exist (`assistants/openai.py`) but is not the default choice.
 
 ### 2.2 Directory Structure
 
@@ -33,16 +32,16 @@ assistant_service/src/
 │   ├── base.py          # Base assistant class
 │   ├── factory.py       # Assistant factory
 │   ├── langgraph.py     # LangGraph implementation
-│   └── openai.py        # OpenAI implementation
+│   └── openai.py        # OpenAI implementation (Deprecated/Experimental)
 ├── tools/               # Tool implementations
-│   ├── base.py         # Base tool class
-│   ├── calendar.py     # Calendar operations
-│   ├── reminder.py     # Reminder creation tool (create_reminder)
-│   ├── rest.py         # REST service interface (UNUSED? Verify)
-│   ├── sub_assistant.py # Sub-assistant wrapper
-│   ├── time.py         # Time operations
-│   └── web_search.py   # Web search using Tavily
-├── messages/           # Message handling
+│   ├── base.py          # Base tool class
+│   ├── factory.py       # Tool factory (creates tool instances)
+│   ├── calendar.py      # Calendar operations
+│   ├── reminder_tool.py # Reminder creation tool (ReminderTool)
+│   ├── sub_assistant_tool.py # Sub-assistant wrapper (SubAssistantTool)
+│   ├── time.py          # Time operations
+│   └── web_search.py    # Web search using Tavily
+├── messages/            # Message handling
 │   ├── base.py        # Base message class
 │   └── types.py       # Message types
 ├── services/          # External service clients
@@ -77,10 +76,17 @@ def initialize_tools(self, secretary_id: str):
         tools.append(tool)
     return tools
 
-# Example tool: create_reminder (tools/reminder_tool.py)
-# - Args: type ('one_time'/'recurring'), payload (JSON string), 
-#         trigger_at+timezone (for one_time), cron_expression (for recurring)
-# - Action: Calls POST /api/reminders/ in rest_service
+# Example tool: ReminderTool (tools/reminder_tool.py, default name 'create_reminder')
+# - Args (Validated by ReminderSchema):
+#   - type: str ('one_time'/'recurring')
+#   - payload: str (JSON string with reminder content)
+#   - trigger_at: Optional[str] (ISO format 'YYYY-MM-DD HH:MM' for 'one_time')
+#   - timezone: Optional[str] (e.g., 'Europe/Moscow', required with trigger_at)
+#   - cron_expression: Optional[str] (CRON format for 'recurring')
+# - Context Args (set by ToolFactory):
+#   - user_id: str (required for API call)
+#   - assistant_id: str (required for API call)
+# - Action: Calls POST /api/reminders/ in rest_service using validated data and context args.
 ```
 
 ### 3.2 OpenAI Implementation
@@ -208,6 +214,14 @@ class Settings(BaseSettings):
     - Sends the secretary's response to the output Redis queue.
 
 ## Assistant Factory (`assistants/factory.py`)
-- `get_user_secretary(user_id)`: Retrieves/caches the secretary assistant for a given user.
-- `get_assistant_by_id(uuid)`: Retrieves an assistant instance by its UUID (used internally, e.g., for sub-assistants).
-- `initialize_tools(secretary_id)`: Fetches tool configurations from `rest_service` and initializes tool instances, **passing `secretary_id` to the tool constructors (e.g., for `ReminderTool`)**. 
+- Initializes and holds an instance of `ToolFactory` (`tools/factory.py`).
+- `get_user_secretary(user_id)`: Retrieves/caches the secretary assistant instance for a given user. Fetches configuration via REST and uses `get_assistant_by_id` to instantiate.
+- `get_assistant_by_id(assistant_uuid, user_id)`: Retrieves an assistant instance by its UUID.
+    - Fetches assistant configuration and tool *definitions* from `rest_service`.
+    - Requires `user_id` for context.
+    - Uses the internal `ToolFactory` instance (`tool_factory.create_langchain_tools`) to create actual tool instances from the definitions, passing `user_id` and `assistant_id` for context.
+    - Creates the `LangGraphAssistant` instance, providing it with the initialized tools.
+    - Also used internally by `ToolFactory` to instantiate sub-assistants required by `SubAssistantTool`.
+- `ToolFactory` (internal instance):
+    - Responsible for creating instances of specific tool classes (e.g., `ReminderTool`, `SubAssistantTool`) based on configuration from `rest_service`.
+    - Injects necessary context (like `user_id`, `assistant_id`) into tool instances during their creation. 
