@@ -16,6 +16,7 @@ from shared_models import CreateReminderRequest  # Renamed from ReminderCreate
 from shared_models import ReminderModel  # Renamed from Reminder
 from shared_models import ToolModel  # Renamed from Tool
 from shared_models import UserModel  # Renamed from TelegramUser
+from shared_models.api_models import UserSecretaryAssignment  # Import the new model
 
 logger = get_logger(__name__)
 
@@ -373,3 +374,20 @@ class RestServiceClient:
                 exc_info=True,
             )
             return None  # Return None on unexpected errors
+
+    async def list_active_user_secretary_assignments(
+        self,
+    ) -> List[UserSecretaryAssignment]:
+        """Fetch the list of active user-secretary assignments."""
+        # Add the /api prefix to the URL
+        response_data = await self._request("GET", "/api/user-secretaries/assignments")
+        # _request already returns decoded JSON (list in this case)
+        if isinstance(response_data, list):
+            return [
+                UserSecretaryAssignment(**assignment) for assignment in response_data
+            ]
+        else:
+            logger.error(
+                f"Expected list from /api/user-secretaries/assignments, got {type(response_data)}"
+            )
+            return []  # Return empty list on unexpected type

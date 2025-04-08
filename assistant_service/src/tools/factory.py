@@ -109,16 +109,18 @@ class ToolFactory:
                         f"Successfully fetched sub-assistant: {sub_assistant_instance.name}"
                     )
 
+                    # Prepare ALL args as kwargs
                     sub_assistant_tool_args = {
                         "name": tool_name,
                         "description": tool_description,
                         "settings": self.settings,
                         "user_id": user_id,
                         "sub_assistant": sub_assistant_instance,
-                        "sub_assistant_db_id": sub_assistant_id,  # Sub-assistant's DB ID
-                        "parent_assistant_id": assistant_id,  # Parent assistant's ID
-                        "tool_id": tool_id_str,  # Tool's own ID from DB
+                        "parent_assistant_id": assistant_id,  # Name expected by SubAssistantTool.__init__
+                        "sub_assistant_db_id": sub_assistant_id,
+                        "tool_id": tool_id_str,
                     }
+                    # Call constructor with all args as kwargs
                     tool_instance = SubAssistantTool(**sub_assistant_tool_args)
                     logger.info(f"Initialized SubAssistantTool: {tool_instance.name}")
 

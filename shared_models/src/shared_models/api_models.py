@@ -69,6 +69,7 @@ class AssistantModel(BaseModel):
     assistant_type: str  # Could use AssistantType enum if defined here
     openai_assistant_id: Optional[str] = None
     is_active: bool
+    updated_at: Optional[datetime] = None
     # Note: We fetch tools separately, so 'tools' field is removed from here
 
 

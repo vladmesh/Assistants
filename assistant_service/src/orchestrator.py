@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Optional
+from typing import Optional
 from uuid import UUID
 
 import redis.asyncio as redis
@@ -28,8 +28,8 @@ class AssistantOrchestrator:
         self.settings = settings
         self.rest_client = RestServiceClient()
         self.factory = AssistantFactory(settings)
-        # Restore the orchestrator-level secretary cache
-        self.secretaries: Dict[int, BaseAssistant] = {}
+        # Remove the orchestrator-level cache
+        # self.secretaries: Dict[int, BaseAssistant] = {}
 
         logger.info(
             "Assistant service initialized",
@@ -83,25 +83,21 @@ class AssistantOrchestrator:
             }
             logger.info("Processing message", extra=log_extra)
 
-            # Get user's secretary using the orchestrator cache
-            if user_id in self.secretaries:
-                secretary: BaseAssistant = self.secretaries[user_id]
-                logger.debug(
-                    "Using existing secretary from orchestrator cache", extra=log_extra
+            # Get user's secretary directly from the factory (which handles caching)
+            logger.debug("Getting secretary from factory", extra=log_extra)
+            secretary: BaseAssistant = await self.factory.get_user_secretary(user_id)
+            if not secretary:
+                # Should not happen if factory raises ValueError on failure, but handle defensively
+                logger.error(
+                    "Failed to get secretary instance from factory", extra=log_extra
                 )
-            else:
-                logger.info(
-                    "Secretary not in cache, getting from factory", extra=log_extra
-                )
-                secretary: BaseAssistant = await self.factory.get_user_secretary(
-                    user_id
-                )
-                self.secretaries[user_id] = secretary
-                logger.info(
-                    "Retrieved secretary via factory and cached",
-                    assistant_name=secretary.name,
-                    extra=log_extra,
-                )
+                raise ValueError(f"Could not retrieve secretary for user {user_id}")
+
+            logger.info(
+                "Retrieved secretary via factory",
+                assistant_name=secretary.name,
+                extra=log_extra,
+            )
 
             # Create appropriate message type
             message = self._create_message(queue_message)
@@ -146,14 +142,14 @@ class AssistantOrchestrator:
                 exc_info=True,
                 extra=log_extra,
             )
-            # Remove the potentially faulty secretary instance from the cache
-            if user_id is not None:
-                removed_assistant = self.secretaries.pop(user_id, None)
-                if removed_assistant:
-                    logger.warning(
-                        f"Removed secretary instance for user {user_id} from cache due to processing error.",
-                        extra=log_extra,
-                    )
+            # No need to remove from orchestrator cache
+            # if user_id is not None:
+            #     removed_assistant = self.secretaries.pop(user_id, None)
+            #     if removed_assistant:
+            #         logger.warning(
+            #             f"Removed secretary instance for user {user_id} from cache due to processing error.",
+            #             extra=log_extra,
+            #         )
 
             # Return an error payload
             return {
@@ -223,32 +219,30 @@ class AssistantOrchestrator:
 
             logger.debug("Extracted reminder data", extra=log_extra)
 
-            # 2. Get assistant instance
+            # 2. Get assistant instance (user's secretary) via factory
             try:
-                # Get the user's current secretary instead
                 secretary: BaseAssistant = await self.factory.get_user_secretary(
                     user_id
                 )
 
                 if not secretary:
                     # Should not happen if factory raises ValueError, but double-check
-                    logger.error("Secretary not found for user", user_id=user_id)
-                    return
+                    logger.error(
+                        "Secretary not found for user via factory", user_id=user_id
+                    )
+                    return None  # Indicate error or skip processing
+
                 logger.info(
-                    "Retrieved secretary instance for user",
+                    "Retrieved secretary instance via factory for reminder",
                     assistant_name=secretary.name,
                     user_id=user_id,
                 )
             except ValueError as e:
-                logger.error(f"Failed to get secretary instance: {e}", user_id=user_id)
-                return
-            except Exception as e:
                 logger.error(
-                    f"Unexpected error getting secretary: {e}",
+                    f"Failed to get secretary instance via factory: {e}",
                     user_id=user_id,
-                    exc_info=True,
                 )
-                return
+                return None  # Indicate error
 
             # 3. Construct ToolMessage
             tool_name = "reminder_trigger"
