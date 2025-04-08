@@ -5,6 +5,8 @@ from sqlmodel import Field, Relationship, SQLModel
 
 
 class CalendarCredentials(SQLModel, table=True):
+    """Represents Google Calendar API credentials stored for a user."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="telegramuser.id")
     access_token: str

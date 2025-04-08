@@ -9,6 +9,8 @@ from .reminder import Reminder
 
 
 class TelegramUser(BaseModel, table=True):
+    """Represents a Telegram user interacting with the assistant."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     telegram_id: int = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
     username: Optional[str]

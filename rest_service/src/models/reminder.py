@@ -1,6 +1,6 @@
 import enum
 import json
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
@@ -58,7 +58,8 @@ class Reminder(BaseModel, table=True):
     def validate_type(cls, v):
         if v not in [ReminderType.ONE_TIME.value, ReminderType.RECURRING.value]:
             raise ValueError(
-                f"type должен быть '{ReminderType.ONE_TIME.value}' или '{ReminderType.RECURRING.value}'"
+                f"type должен быть '{ReminderType.ONE_TIME.value}' или "
+                f"'{ReminderType.RECURRING.value}'"
             )
         return v
 
@@ -71,7 +72,8 @@ class Reminder(BaseModel, table=True):
             ReminderStatus.CANCELLED.value,
         ]:
             raise ValueError(
-                f"status должен быть одним из: {', '.join([s.value for s in ReminderStatus if s != ReminderStatus.PENDING])}"
+                f"status должен быть одним из: "
+                f"{', '.join([s.value for s in ReminderStatus if s != ReminderStatus.PENDING])}"
             )
         return v
 

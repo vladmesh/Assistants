@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -7,7 +6,6 @@ import pytest
 from dateutil.parser import isoparse
 from pytz import utc
 
-from src.redis_client import OUTPUT_QUEUE
 from src.scheduler import DateTrigger, _job_func, schedule_job
 
 logger = logging.getLogger(__name__)

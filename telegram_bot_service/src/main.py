@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 
+import aiohttp
 import structlog
 from client.rest import RestClient
 from client.telegram import TelegramClient
@@ -55,6 +56,8 @@ async def process_message(
             )
             logger.info("Message sent to assistant queue", message=message)
 
+    except (aiohttp.ClientError, json.JSONDecodeError, ValueError) as e:
+        logger.error("Error processing message (client/data related)", error=str(e))
     except Exception as e:
         logger.error("Error processing message", error=str(e), exc_info=True)
 
@@ -80,6 +83,10 @@ async def handle_telegram_update(
 
         await process_message(telegram, rest, message_data)
 
+    except (KeyError, TypeError) as e:
+        logger.warning(
+            f"Error parsing Telegram update: {e}", update_preview=str(update)[:100]
+        )
     except Exception as e:
         logger.error("Error handling update", error=str(e), exc_info=True)
 

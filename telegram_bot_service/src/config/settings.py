@@ -8,6 +8,8 @@ logger = structlog.get_logger()
 
 
 class Settings(BaseSettings):
+    """Configuration settings for the Telegram bot service."""
+
     # Telegram settings
     telegram_token: str
     telegram_rate_limit: int = 30  # requests per second

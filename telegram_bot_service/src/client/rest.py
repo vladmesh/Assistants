@@ -87,7 +87,9 @@ class RestClient:
 
         except aiohttp.ClientError as e:
             logger.error(
-                "Error in get_or_create_user", telegram_id=telegram_id, error=str(e)
+                "Error in get_or_create_user",
+                telegram_id=telegram_id,
+                error=str(e),
             )
             # Return basic user info in case of error
             return {"id": telegram_id, "telegram_id": telegram_id, "username": username}

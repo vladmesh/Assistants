@@ -133,7 +133,7 @@ async def test_process_message_error(settings, human_queue_message):
     # Mock dependencies
     with patch("orchestrator.AssistantFactory") as mock_factory, patch(
         "orchestrator.RestServiceClient"
-    ) as mock_rest:
+    ):
         # Setup mocks to raise error
         mock_secretary = AsyncMock()
         mock_secretary.process_message.side_effect = Exception("Test error")
@@ -173,7 +173,7 @@ async def test_listen_for_messages(settings, human_queue_message):
     # Mock dependencies
     with patch("orchestrator.AssistantFactory") as mock_factory, patch(
         "orchestrator.RestServiceClient"
-    ) as mock_rest:
+    ):
         # Setup secretary mock
         mock_secretary = AsyncMock()
         mock_secretary.process_message.return_value = "Hello, user!"

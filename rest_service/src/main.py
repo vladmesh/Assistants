@@ -19,6 +19,7 @@ from routers import (
 # Инициализация приложения
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Manages application lifespan events (startup/shutdown)."""
     # Startup
     await init_db()
     yield

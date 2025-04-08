@@ -4,7 +4,6 @@ import pytest
 from httpx import AsyncClient
 from models.assistant import Assistant
 from models.user_secretary import UserSecretaryLink
-from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Assuming you have fixtures for AsyncClient (client) and AsyncSession (db_session)

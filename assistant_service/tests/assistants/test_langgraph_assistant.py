@@ -11,7 +11,6 @@ import pytest
 # Imports specific to the class under test
 from assistants.langgraph_assistant import LangGraphAssistant
 from config import settings
-from config.settings import Settings  # Import Settings
 from langchain_core.callbacks import (
     AsyncCallbackManagerForLLMRun,
     CallbackManagerForLLMRun,
@@ -208,7 +207,6 @@ async def test_process_message_stateless(assistant_instance, memory_saver):
     """Test processing a single message using the graph."""
     instance = await assistant_instance  # Await the fixture
     user_id = "user123"
-    thread_id = f"user_{user_id}"  # Consistent thread ID generation
     input_message = HumanMessage(content="What time is it?")
 
     # Mock the agent runnable's response
@@ -239,8 +237,8 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
     """Test if the assistant remembers context across messages using the checkpointer."""
     instance = await assistant_instance  # Await the fixture
     user_id = "user456"
-    thread_id = f"user_{user_id}"
-    config = {"configurable": {"thread_id": thread_id}}
+    # thread_id = f"user_{user_id}" # Variable not used
+    # config = {"configurable": {"thread_id": thread_id}} # Variable not used
 
     # Первое сообщение
     input1 = HumanMessage(content="My name is Bob.")
