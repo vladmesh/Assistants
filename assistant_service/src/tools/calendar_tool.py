@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Optional, Type
 
@@ -119,7 +120,7 @@ class CalendarCreateTool(BaseTool):
                 try:
                     err_detail = e.response.json().get("detail")
                     err_msg += f": {err_detail}"
-                except:
+                except json.JSONDecodeError:
                     err_msg += f": {e.response.text}"
                 logger.error("HTTP error creating event", error=err_msg, exc_info=True)
                 return err_msg
@@ -261,7 +262,7 @@ class CalendarListTool(BaseTool):
                 try:
                     err_detail = e.response.json().get("detail")
                     err_msg += f": {err_detail}"
-                except:
+                except json.JSONDecodeError:
                     err_msg += f": {e.response.text}"
                 logger.error("HTTP error listing events", error=err_msg, exc_info=True)
                 return err_msg

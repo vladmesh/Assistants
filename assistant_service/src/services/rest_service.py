@@ -253,7 +253,7 @@ class RestServiceClient:
             ) from e  # Use full_url
         except json.JSONDecodeError as e:
             logger.error(
-                f"Failed to decode JSON response",
+                "Failed to decode JSON response",
                 method=method,
                 url=full_url,  # Log full_url
                 response_status=response.status_code

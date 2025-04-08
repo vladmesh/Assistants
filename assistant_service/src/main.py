@@ -67,6 +67,8 @@ async def main():
                 )
                 # Potentially re-raise or handle specific exceptions
 
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logger.info("Service interrupted. Shutting down...")
     except Exception as e:
         logger.exception(
             "Service encountered an unhandled error", error=str(e), exc_info=True

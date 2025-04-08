@@ -13,13 +13,17 @@ class RagData(BaseModel):
     embedding: List[float] = Field(..., description="Векторное представление текста")
     data_type: str = Field(
         ...,
-        description="Тип данных (например, 'shared_rule', 'user_history', 'assistant_note')",
+        description=(
+            "Тип данных (например, 'shared_rule', 'user_history', 'assistant_note')"
+        ),
     )
     user_id: Optional[int] = Field(
-        None, description="ID пользователя, если данные специфичны для пользователя"
+        None,
+        description="ID пользователя, если данные специфичны для пользователя",
     )
     assistant_id: Optional[UUID] = Field(
-        None, description="ID ассистента, если данные специфичны для ассистента"
+        None,
+        description="ID ассистента, если данные специфичны для ассистента",
     )
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 

@@ -270,7 +270,7 @@ class LangGraphAssistant(BaseAssistant):
                 }
 
             # 3. Update dialog state to processing
-            dialog_state_update = {"dialog_state": "processing"}
+            # dialog_state_update = {"dialog_state": "processing"} # Variable not used
 
             # 4. Prepare messages for the agent runnable
             # Ensure System Prompt is included if not implicitly handled by create_react_agent

@@ -64,9 +64,8 @@ class AssistantOrchestrator:
             )
             logger.info("Created tool message", message=str(message))
             return message
-        else:
-            logger.error("Unsupported message type", type=queue_message.type)
-            raise ValueError(f"Unsupported message type: {queue_message.type}")
+        logger.error("Unsupported message type", type=queue_message.type)
+        raise ValueError(f"Unsupported message type: {queue_message.type}")
 
     async def process_message(self, queue_message: QueueMessage) -> Optional[dict]:
         """Process an incoming message from queue using the correct thread_id."""
@@ -130,6 +129,39 @@ class AssistantOrchestrator:
             logger.info("Message processing completed successfully", extra=log_extra)
             return result
 
+        except (ValueError, TypeError, KeyError) as e:
+            # Handle specific, expected errors during message processing/parsing
+            log_extra = {
+                "user_id": user_id if user_id is not None else "unknown",
+                "source": getattr(queue_message, "source", "unknown"),
+                "type": getattr(queue_message, "type", "unknown"),
+            }
+            logger.warning(
+                f"Error processing message due to invalid data/structure: {type(e).__name__}",
+                error=str(e),
+                extra=log_extra,
+            )
+            # Return specific error payload for bad data
+            return {
+                "user_id": user_id if user_id is not None else "unknown",
+                "text": getattr(
+                    getattr(queue_message, "content", None), "message", "unknown"
+                ),
+                "status": "error",
+                # Provide a slightly more informative error message to the user
+                "response": f"Message processing failed due to an internal error: {type(e).__name__}",
+                "error": str(e),  # Keep detailed error for internal use/output queue
+                "source": getattr(queue_message, "source", "unknown").value
+                if hasattr(getattr(queue_message, "source", None), "value")
+                else "unknown",
+                "type": getattr(queue_message, "type", "unknown").value
+                if hasattr(getattr(queue_message, "type", None), "value")
+                else "unknown",
+                "metadata": getattr(
+                    getattr(queue_message, "content", None), "metadata", None
+                )
+                or {},
+            }
         except Exception as e:
             log_extra = {
                 "user_id": user_id if user_id is not None else "unknown",
@@ -251,10 +283,10 @@ class AssistantOrchestrator:
             content_str = f"Reminder triggered. Details: {json.dumps(reminder_payload)}"
 
             # Prepare metadata
-            metadata = {
-                "tool_name": tool_name,
-                "original_event": reminder_event_data,  # Store the original event for context
-            }
+            # metadata = { # Variable not used
+            #     "tool_name": tool_name,
+            #     "original_event": reminder_event_data,  # Store the original event for context
+            # }
 
             tool_message = ToolMessage(
                 content=content_str,

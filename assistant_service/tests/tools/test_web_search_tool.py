@@ -132,13 +132,13 @@ async def test_web_search_tool_execute_with_invalid_max_results(web_search_tool)
     # Patch TavilyClient
     with patch("tools.web_search_tool.TavilyClient", return_value=mock_client):
         # Test with max_results < 1
-        result = await web_search_tool._execute("test query", max_results=0)
+        await web_search_tool._execute("test query", max_results=0)
         mock_client.search.assert_called_with(
             query="test query", search_depth="basic", max_results=1
         )
 
         # Test with max_results > 10
-        result = await web_search_tool._execute("test query", max_results=20)
+        await web_search_tool._execute("test query", max_results=20)
         mock_client.search.assert_called_with(
             query="test query", search_depth="basic", max_results=10
         )
