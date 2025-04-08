@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from assistants.base_assistant import BaseAssistant
 from config.logger import get_logger
@@ -30,9 +30,11 @@ class SubAssistantTool(BaseTool):
 
     # Keep args_schema as a class attribute for Langchain
     args_schema: type[SubAssistantSchema] = SubAssistantSchema
+    # Revert sub_assistant to simple type hint
     sub_assistant: BaseAssistant
     sub_assistant_db_id: Optional[str] = None
 
+    # Restore original __init__ signature
     def __init__(
         self,
         sub_assistant: BaseAssistant,
@@ -43,28 +45,35 @@ class SubAssistantTool(BaseTool):
         tool_id: Optional[str] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        **kwargs: Any,  # Add kwargs to catch anything extra
     ):
         """Initialize the tool with a sub-assistant.
 
         Args:
             sub_assistant: The specialized assistant to delegate tasks to.
-            settings: Application settings.
-            user_id: User identifier.
-            parent_assistant_id: ID of the assistant this tool belongs to.
-            sub_assistant_db_id: The database ID of the sub-assistant being wrapped.
-            tool_id: The database ID of this tool instance.
-            name: Optional custom name for the tool.
-            description: Optional custom description.
+            settings: The settings for the tool.
+            user_id: The ID of the user.
+            parent_assistant_id: The ID of the parent assistant.
+            sub_assistant_db_id: The database ID of the sub-assistant.
+            tool_id: The ID of the tool.
+            name: The name of the tool.
+            description: The description of the tool.
+            **kwargs: Additional keyword arguments.
         """
-        # Initialize BaseTool. args_schema is handled by the class attribute.
+        # Call BaseTool's __init__ first
         super().__init__(
-            name=name or self.name,
-            description=description or self.description,
+            name=name or self.name,  # Use provided or class name
+            description=description
+            or self.description,  # Use provided or class description
             settings=settings,
             user_id=user_id,
-            assistant_id=parent_assistant_id,
+            assistant_id=parent_assistant_id,  # This is the parent's ID
             tool_id=tool_id,
+            # Pass the sub_assistant instance ALSO in kwargs for potential BaseTool/Pydantic processing
+            sub_assistant=sub_assistant,
+            **kwargs,  # Pass any other unexpected kwargs up
         )
+        # Explicitly set the attribute AFTER super().__init__
         self.sub_assistant = sub_assistant
         self.sub_assistant_db_id = sub_assistant_db_id
 
