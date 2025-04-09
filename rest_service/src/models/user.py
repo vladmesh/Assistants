@@ -14,6 +14,10 @@ class TelegramUser(BaseModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     telegram_id: int = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
     username: Optional[str]
+    timezone: Optional[str] = Field(default=None, index=True)  # User timezone
+    preferred_name: Optional[str] = Field(
+        default=None
+    )  # How the user wants to be addressed
 
     # Relationships
     calendar_credentials: Optional[CalendarCredentials] = Relationship(

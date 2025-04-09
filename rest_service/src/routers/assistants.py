@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from database import get_session
@@ -15,6 +16,7 @@ class AssistantCreate(BaseModel):
     is_secretary: bool = False
     model: str
     instructions: str
+    description: Optional[str] = None
     assistant_type: str = AssistantType.LLM.value  # Принимаем строку
     openai_assistant_id: str = None
 
@@ -24,6 +26,7 @@ class AssistantUpdate(BaseModel):
     is_secretary: bool = None
     model: str = None
     instructions: str = None
+    description: Optional[str] = None
     assistant_type: str = None  # Принимаем строку
     openai_assistant_id: str = None
     is_active: bool = None

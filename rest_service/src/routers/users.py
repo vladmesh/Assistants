@@ -1,3 +1,5 @@
+from typing import Optional
+
 from database import get_session
 from fastapi import APIRouter, Depends, HTTPException
 from models import TelegramUser
@@ -11,6 +13,11 @@ router = APIRouter()
 class UserCreate(BaseModel):
     telegram_id: int
     username: str = None
+
+
+class UserUpdate(BaseModel):
+    timezone: Optional[str] = None
+    preferred_name: Optional[str] = None
 
 
 @router.post("/users/")
@@ -48,3 +55,22 @@ async def list_users(session: AsyncSession = Depends(get_session)):
     query = select(TelegramUser)
     result = await session.execute(query)
     return result.scalars().all()
+
+
+@router.patch("/users/{user_id}", response_model=TelegramUser)
+async def update_user(
+    user_id: int, user_update: UserUpdate, session: AsyncSession = Depends(get_session)
+):
+    """Update user details (timezone, preferred_name)."""
+    db_user = await session.get(TelegramUser, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    update_data = user_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+
+    session.add(db_user)
+    await session.commit()
+    await session.refresh(db_user)
+    return db_user

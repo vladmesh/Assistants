@@ -47,6 +47,7 @@ class Assistant(BaseModel, table=True):
     is_secretary: bool = Field(default=False, index=True)
     model: str  # gpt-4, gpt-3.5-turbo и т.д.
     instructions: str  # Промпт/инструкции для ассистента
+    description: Optional[str] = Field(default=None)  # Description for user selection
     assistant_type: Annotated[str, AssistantType] = Field(
         sa_column=Column(String), default=AssistantType.LLM.value
     )
