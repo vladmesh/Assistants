@@ -40,4 +40,4 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY google_calendar_service/src/ /src/
 COPY google_calendar_service/tests/ /tests/
 
-CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"] 
+CMD ["pytest", "-vv", "--cov=src", "--cov-report=term-missing", "/tests/"] 

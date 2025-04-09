@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -95,11 +95,19 @@ def schedule_job(reminder):
             else:
                 run_date = run_date.astimezone(utc)
 
-            # Don't schedule jobs in the past unless misfire_grace_time allows it
-            if run_date < datetime.now(utc):
+            # Check if the job is already past (use <= for current time)
+            # Allow a grace period (e.g., 10 seconds) to account for execution delays
+            if run_date <= datetime.now(utc) - timedelta(seconds=10):
                 logger.warning(
                     f"Skipping past one-time reminder {job_id} scheduled for {run_date}"
                 )
+                # Check if job exists and remove it if it's definitively in the past
+                if existing_job:
+                    try:
+                        scheduler.remove_job(job_id)
+                        logger.info(f"Removed past job {job_id}.")
+                    except Exception as remove_err:
+                        logger.error(f"Error removing past job {job_id}: {remove_err}")
                 return
 
             trigger = DateTrigger(run_date=run_date)

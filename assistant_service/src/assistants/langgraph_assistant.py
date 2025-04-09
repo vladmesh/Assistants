@@ -34,6 +34,8 @@ from typing_extensions import TypedDict
 from utils.error_handler import handle_assistant_error  # Import error handlers
 from utils.error_handler import AssistantError, MessageProcessingError
 
+from shared_models import TriggerType
+
 logger = logging.getLogger(__name__)
 
 # --- State Definition (copied and adapted from llm_chat.py) ---
@@ -246,15 +248,40 @@ class LangGraphAssistant(BaseAssistant):
                 extra=log_extra,
             )
             # Craft a message to inform the LLM about the trigger
-            # Example: Use HumanMessage to make it clear this is an external event prompt
-            trigger_message_content = (
-                f"System Notification: Reminder Triggered\n"
-                f"Reminder ID: {triggered_event.get('reminder_id')}\n"
-                f"Type: {triggered_event.get('reminder_type')}\n"
-                f"Reminder Content: {triggered_event.get('payload', {}).get('message', 'No details provided.')}\n"
-                f"Trigger Time (UTC): {triggered_event.get('trigger_timestamp_utc')}\n\n"
-                f"Please inform the user about this reminder."
-            )
+            trigger_type = triggered_event.get("trigger_type")
+            payload = triggered_event.get("payload", {})
+            source = triggered_event.get("source", "unknown")
+            timestamp = triggered_event.get("timestamp", "unknown")
+
+            trigger_message_content = f"System Notification: Event Triggered\n"
+            trigger_message_content += f"Source: {source}\n"
+            trigger_message_content += f"Type: {trigger_type}\n"
+            trigger_message_content += f"Timestamp (UTC): {timestamp}\n\n"
+
+            # Customize message based on trigger type
+            if trigger_type == TriggerType.REMINDER.value:  # Compare with enum value
+                trigger_message_content += (
+                    f"Reminder ID: {payload.get('reminder_id')}\n"
+                    f"Assistant ID: {payload.get('assistant_id')}\n"
+                    f"Reminder Type: {payload.get('reminder_type')}\n"
+                    f"Reminder Content: {payload.get('payload', {}).get('message', 'No details provided.')}\n\n"
+                    f"Please inform the user about this reminder."
+                )
+            elif (
+                trigger_type == TriggerType.GOOGLE_AUTH.value
+            ):  # Compare with enum value
+                trigger_message_content += (
+                    f"Details: Google Calendar authorization was successful.\n\n"
+                    f"Please confirm to the user that their Google Calendar is now connected."
+                )
+            else:
+                # Generic message for unknown trigger types
+                trigger_message_content += (
+                    f"Payload: {str(payload)}\n\n"
+                    f"Please acknowledge this system event to the user appropriately."
+                )
+
+            # Use HumanMessage to make it clear this is an external event prompt
             trigger_inform_message = HumanMessage(content=trigger_message_content)
             messages_for_agent.append(trigger_inform_message)
             # Mark the trigger as processed by setting it to None in the returned state

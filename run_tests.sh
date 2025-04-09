@@ -24,7 +24,9 @@ run_service_tests() {
         # Запускаем тесты в Docker
         cd $service
         # Фильтруем вывод, оставляя только строки с результатами тестов и ошибками
-        docker compose -f docker-compose.test.yml up --build --abort-on-container-exit 2>&1 | grep -E "collected|PASSED|FAILED|ERROR|===.*test session starts|===.*in [0-9]+\.[0-9]+s|ImportError|ModuleNotFoundError|SyntaxError|Exception|Traceback"
+        # docker compose -f docker-compose.test.yml up --build --abort-on-container-exit 2>&1 | grep -E "collected|PASSED|FAILED|ERROR|===.*test session starts|===.*in [0-9]+\.[0-9]+s|ImportError|ModuleNotFoundError|SyntaxError|Exception|Traceback"
+        # Run without grep to see full output
+        docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
         test_exit_code=${PIPESTATUS[0]}
         docker compose -f docker-compose.test.yml down -v > /dev/null 2>&1
         cd ..

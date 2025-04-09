@@ -5,13 +5,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from config.settings import Settings
-from messages.queue_models import (
+from orchestrator import AssistantOrchestrator
+
+from shared_models import (
+    HumanQueueMessageContent,
     QueueMessage,
-    QueueMessageContent,
     QueueMessageSource,
     QueueMessageType,
+    ToolQueueMessageContent,
 )
-from orchestrator import AssistantOrchestrator
 
 
 @pytest.fixture
@@ -22,6 +24,8 @@ def settings():
         REDIS_DB=0,
         INPUT_QUEUE="test:input",
         OUTPUT_QUEUE="test:output",
+        OPENAI_API_KEY="test_key",
+        TAVILY_API_KEY="test_tavily_key",
     )
 
 
@@ -30,8 +34,8 @@ def human_queue_message():
     return QueueMessage(
         type=QueueMessageType.HUMAN,
         user_id=123,
-        source=QueueMessageSource.USER,
-        content=QueueMessageContent(
+        source=QueueMessageSource.TELEGRAM,
+        content=HumanQueueMessageContent(
             message="Hello, assistant!", metadata={"chat_id": 456}
         ),
         timestamp=datetime.now(),
@@ -44,7 +48,7 @@ def tool_queue_message():
         type=QueueMessageType.TOOL,
         user_id=123,
         source=QueueMessageSource.CALENDAR,
-        content=QueueMessageContent(
+        content=ToolQueueMessageContent(
             message="Event created successfully",
             metadata={"tool_name": "calendar_create", "event_id": "abc123"},
         ),
@@ -78,6 +82,7 @@ async def test_process_human_message(settings, human_queue_message):
         mock_secretary.process_message.assert_awaited_once_with(
             message=unittest.mock.ANY,  # Check that message argument was passed
             user_id="123",  # Check user_id keyword argument
+            triggered_event=None,
         )
         # The checks below are now covered by assert_awaited_once_with
         # call_args, call_kwargs = mock_secretary.process_message.call_args
@@ -116,6 +121,7 @@ async def test_process_tool_message(settings, tool_queue_message):
         mock_secretary.process_message.assert_awaited_once_with(
             message=unittest.mock.ANY,  # Check that message argument was passed
             user_id="123",  # Check user_id keyword argument
+            triggered_event=None,
         )
         # The checks below are now covered by assert_awaited_once_with
         # call_args, call_kwargs = mock_secretary.process_message.call_args
@@ -156,6 +162,7 @@ async def test_process_message_error(settings, human_queue_message):
         mock_secretary.process_message.assert_awaited_once_with(
             message=unittest.mock.ANY,  # Check that message argument was passed
             user_id="123",  # Check user_id keyword argument
+            triggered_event=None,
         )
         # The checks below are now covered by assert_awaited_once_with
         # call_args, call_kwargs = mock_secretary.process_message.call_args
@@ -197,6 +204,7 @@ async def test_listen_for_messages(settings, human_queue_message):
         mock_secretary.process_message.assert_awaited_once_with(
             message=unittest.mock.ANY,  # Check that message argument was passed
             user_id="123",  # Check user_id keyword argument
+            triggered_event=None,
         )
         # The checks below are now covered by assert_awaited_once_with
         # call_args, call_kwargs = mock_secretary.process_message.call_args
