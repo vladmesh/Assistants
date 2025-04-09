@@ -32,13 +32,17 @@ class OLDBaseAssistant(ABC):
 
     @abstractmethod
     async def process_message(
-        self, message: BaseMessage, user_id: Optional[str] = None
+        self,
+        message: Optional[BaseMessage],
+        user_id: Optional[str] = None,
+        triggered_event: Optional[dict] = None,
     ) -> str:
-        """Process a message and return response
+        """Process a message or a triggered event and return response
 
         Args:
-            message: Input message to process
+            message: Input message to process. Can be None if triggered_event is provided.
             user_id: Optional user identifier for tool context
+            triggered_event: Optional dictionary containing data from an external trigger (e.g., reminder).
 
         Returns:
             Assistant's response

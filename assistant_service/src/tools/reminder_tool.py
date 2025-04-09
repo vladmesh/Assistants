@@ -1,4 +1,5 @@
 import json
+import time  # Import time
 from datetime import datetime, timezone
 from typing import Optional, Type
 from zoneinfo import ZoneInfo
@@ -124,6 +125,14 @@ class ReminderTool(BaseTool):
         cron_expression: Optional[str] = None,
     ) -> str:
         """Создает напоминание через REST API /reminders/"""
+        start_time = time.perf_counter()  # Start timer
+        log_extra = {
+            "tool_name": self.name,
+            "user_id": self.user_id,
+            "assistant_id": self.assistant_id,
+        }
+        logger.debug(f"Executing {self.name} tool", extra=log_extra)
+
         # Access attributes like user_id and assistant_id from self (set by BaseTool)
         if not self.user_id:
             raise ToolError(
@@ -148,6 +157,10 @@ class ReminderTool(BaseTool):
                 cron_expression=cron_expression,
             )
         except ValueError as e:
+            log_extra["validation_error"] = str(e)
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
+            logger.warning(f"Input validation failed for {self.name}", extra=log_extra)
             raise ToolError(
                 message=f"Ошибка валидации входных данных: {str(e)}",
                 tool_name=self.name,
@@ -172,10 +185,18 @@ class ReminderTool(BaseTool):
         http_client = self.get_client()  # Use lazy getter
 
         try:
+            start_api_time = time.perf_counter()  # Start API timer
             response = await http_client.post(
                 f"{self.rest_service_url}/api/reminders/", json=api_data
             )
+            api_duration_ms = round((time.perf_counter() - start_api_time) * 1000)
+            log_extra["api_duration_ms"] = api_duration_ms
+
             if response.status_code not in [200, 201]:
+                log_extra["api_status_code"] = response.status_code
+                log_extra["api_response"] = response.text[:200]  # Log snippet
+                duration_ms = round((time.perf_counter() - start_time) * 1000)
+                log_extra["duration_ms"] = duration_ms
                 logger.error(
                     "Reminder API request failed",
                     status_code=response.status_code,
@@ -193,17 +214,24 @@ class ReminderTool(BaseTool):
                     error_code="API_ERROR",
                 )
 
-            logger.info("Reminder successfully created via API")
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
+            logger.info("Reminder successfully created via API", extra=log_extra)
             return "Напоминание успешно создано."
 
         except httpx.RequestError as e:
-            logger.error(f"HTTP request failed: {e}", exc_info=True)
+            log_extra["network_error"] = str(e)
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
+            logger.error(f"HTTP request failed: {e}", exc_info=True, extra=log_extra)
             raise ToolError(
                 message=f"Ошибка сети при создании напоминания: {str(e)}",
                 tool_name=self.name,
                 error_code="NETWORK_ERROR",
             )
         except Exception as e:
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
             logger.exception("Unexpected error during reminder creation", exc_info=True)
             raise ToolError(
                 message=f"Непредвиденная ошибка: {str(e)}",

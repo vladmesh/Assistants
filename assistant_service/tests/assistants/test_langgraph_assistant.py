@@ -16,7 +16,7 @@ from langchain_core.callbacks import (
     CallbackManagerForLLMRun,
 )
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import Tool
 from langgraph.checkpoint.memory import MemorySaver
@@ -177,6 +177,8 @@ async def assistant_instance(
         # tool_definitions argument is removed from LangGraphAssistant init
         # tool_factory argument is removed
     )
+    # Add system prompt message as an attribute for easier testing
+    instance.system_prompt_message = SystemMessage(content=instance.system_prompt)
     return instance
 
 
@@ -281,10 +283,33 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
     first_call_args = first_mock.call_args[0][0]
     second_call_args = second_mock.call_args[0][0]
 
+    # Ожидаем, что SystemMessage будет первым в списке
+    expected_first_messages = [
+        instance.system_prompt_message,
+        input1,
+    ]  # SystemMessage + HumanMessage
+    expected_second_messages = [
+        instance.system_prompt_message,
+        input2,
+    ]  # SystemMessage + HumanMessage
+
     assert "messages" in first_call_args
-    assert first_call_args["messages"] == [input1]
+    # Сравниваем содержимое, а не объекты напрямую, если system_prompt_message создается динамически
+    assert len(first_call_args["messages"]) == len(expected_first_messages)
+    assert first_call_args["messages"][0].content == expected_first_messages[0].content
+    assert first_call_args["messages"][1] == expected_first_messages[1]
     assert first_call_args["user_id"] == user_id
+    # Check other state elements passed
+    assert first_call_args["triggered_event"] is None
+    assert first_call_args["dialog_state"] == ["idle"]
 
     assert "messages" in second_call_args
-    assert second_call_args["messages"] == [input2]
+    assert len(second_call_args["messages"]) == len(expected_second_messages)
+    assert (
+        second_call_args["messages"][0].content == expected_second_messages[0].content
+    )
+    assert second_call_args["messages"][1] == expected_second_messages[1]
     assert second_call_args["user_id"] == user_id
+    # Check other state elements passed
+    assert second_call_args["triggered_event"] is None
+    assert second_call_args["dialog_state"] == ["idle"]
