@@ -50,15 +50,30 @@ class AssistantFactory:
         """Close REST client connection and all assistant instances"""
         await self.rest_client.close()
 
-        # Close all assistant instances
-        for assistant in self._secretary_cache.values():
-            if hasattr(assistant, "close"):
-                await assistant.close()
+        # Close all assistant instances from the correct cache
+        async with self._cache_lock:  # Ensure thread-safe access during iteration
+            for instance, _ in self._assistant_cache.values():
+                if hasattr(instance, "close") and asyncio.iscoroutinefunction(
+                    instance.close
+                ):
+                    try:
+                        await instance.close()
+                    except Exception as e:
+                        logger.warning(
+                            f"Error closing assistant instance {getattr(instance, 'assistant_id', 'unknown')}: {e}"
+                        )
+                elif hasattr(instance, "close"):
+                    try:
+                        instance.close()  # Assuming synchronous close if not coroutine
+                    except Exception as e:
+                        logger.warning(
+                            f"Error closing assistant instance {getattr(instance, 'assistant_id', 'unknown')} (sync): {e}"
+                        )
 
-        self._secretary_cache.clear()
-        self._assistant_cache.clear()
+            # Clear caches after closing instances
+            self._assistant_cache.clear()
         self._secretary_assignments.clear()  # Clear assignments cache too
-        logger.info("AssistantFactory caches cleared.")
+        logger.info("AssistantFactory closed REST client and cleared caches.")
 
     async def get_user_secretary(self, user_id: int) -> BaseAssistant:
         """Get secretary assistant for user using the cached assignments.

@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Optional
 from uuid import UUID
 
@@ -8,7 +9,7 @@ from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
 from langchain_core.messages import HumanMessage, ToolMessage
-from messages.queue_models import QueueMessage, QueueMessageType
+from messages.queue_models import QueueMessage, QueueMessageSource, QueueMessageType
 from services.rest_service import RestServiceClient
 
 logger = get_logger(__name__)
@@ -70,6 +71,9 @@ class AssistantOrchestrator:
     async def process_message(self, queue_message: QueueMessage) -> Optional[dict]:
         """Process an incoming message from queue using the correct thread_id."""
         user_id = None
+        start_time = time.perf_counter()
+        get_secretary_start_time = None
+        process_message_start_time = None
         try:
             user_id = queue_message.user_id
             text = queue_message.content.message
@@ -84,7 +88,12 @@ class AssistantOrchestrator:
 
             # Get user's secretary directly from the factory (which handles caching)
             logger.debug("Getting secretary from factory", extra=log_extra)
+            get_secretary_start_time = time.perf_counter()
             secretary: BaseAssistant = await self.factory.get_user_secretary(user_id)
+            get_secretary_duration = time.perf_counter() - get_secretary_start_time
+            log_extra["get_secretary_duration_ms"] = round(
+                get_secretary_duration * 1000
+            )
             if not secretary:
                 # Should not happen if factory raises ValueError on failure, but handle defensively
                 logger.error(
@@ -108,8 +117,13 @@ class AssistantOrchestrator:
 
             # Process message with user's secretary
             logger.debug("Invoking secretary.process_message", extra=log_extra)
+            process_message_start_time = time.perf_counter()
             response = await secretary.process_message(
                 message=message, user_id=str(user_id)
+            )
+            process_message_duration = time.perf_counter() - process_message_start_time
+            log_extra["process_message_duration_ms"] = round(
+                process_message_duration * 1000
             )
             logger.info(
                 "Secretary response received",
@@ -126,6 +140,8 @@ class AssistantOrchestrator:
                 "type": queue_message.type.value,
                 "metadata": queue_message.content.metadata or {},
             }
+            total_duration = time.perf_counter() - start_time
+            log_extra["total_processing_duration_ms"] = round(total_duration * 1000)
             logger.info("Message processing completed successfully", extra=log_extra)
             return result
 
@@ -163,6 +179,7 @@ class AssistantOrchestrator:
                 or {},
             }
         except Exception as e:
+            total_duration = time.perf_counter() - start_time
             log_extra = {
                 "user_id": user_id if user_id is not None else "unknown",
                 "source": getattr(queue_message, "source", "unknown"),
@@ -209,6 +226,9 @@ class AssistantOrchestrator:
         self, reminder_event_data: dict
     ) -> Optional[dict]:
         """Handles the 'reminder_triggered' event from Redis."""
+        start_time = time.perf_counter()
+        get_secretary_start_time = None
+        process_message_start_time = None
         log_extra = {"event_type": "reminder_triggered"}
         logger.info(
             "Handling reminder trigger event",
@@ -218,21 +238,43 @@ class AssistantOrchestrator:
         user_id = None
         reminder_id = None
         try:
-            # 1. Extract data safely
-            event_payload = reminder_event_data.get("payload", {})
-            assistant_uuid_str = reminder_event_data.get("assistant_id")
-            user_id = event_payload.get("user_id")
-            reminder_id = event_payload.get("reminder_id")
-            reminder_payload = event_payload.get("payload", {})
+            # 1. Extract data safely from QueueMessage structure
+            content_dict = reminder_event_data.get("content", {})
+            metadata_dict = content_dict.get("metadata", {})
 
-            log_extra["user_id"] = user_id
+            user_id_str = reminder_event_data.get("user_id")  # User ID is top-level
+            assistant_uuid_str = metadata_dict.get("assistant_id")
+            reminder_id = metadata_dict.get("reminder_id")
+            reminder_payload = metadata_dict.get("payload", {})  # Inner payload is here
+            reminder_type = metadata_dict.get("reminder_type")
+            triggered_at_event = metadata_dict.get("triggered_at_event")
+
+            # Convert user_id to int (or handle potential error)
+            user_id = None
+            if user_id_str is not None:
+                try:
+                    user_id = int(user_id_str)
+                except ValueError:
+                    logger.error(
+                        "Invalid user_id format in reminder event",
+                        user_id_str=user_id_str,
+                        extra=log_extra,
+                    )
+                    return None  # Or raise error
+
+            log_extra["user_id"] = user_id  # Log the potentially converted ID
             log_extra["reminder_id"] = reminder_id
-            log_extra["assistant_id"] = assistant_uuid_str
+            log_extra["assistant_id"] = assistant_uuid_str  # Keep as string for now
 
-            if not all([assistant_uuid_str, user_id, reminder_id]):
+            if not all(
+                [assistant_uuid_str, user_id is not None, reminder_id]
+            ):  # Check if user_id conversion succeeded
                 logger.error(
-                    "Missing required fields in reminder event",
-                    data=reminder_event_data,
+                    "Missing required fields after parsing reminder event",
+                    parsed_user_id=user_id,
+                    parsed_assistant_id=assistant_uuid_str,
+                    parsed_reminder_id=reminder_id,
+                    original_data=reminder_event_data,
                     extra=log_extra,
                 )
                 return None
@@ -249,105 +291,156 @@ class AssistantOrchestrator:
                 )
                 return None
 
-            logger.debug("Extracted reminder data", extra=log_extra)
+            logger.debug("Extracted reminder data successfully", extra=log_extra)
 
             # 2. Get assistant instance (user's secretary) via factory
-            try:
-                secretary: BaseAssistant = await self.factory.get_user_secretary(
-                    user_id
+            logger.debug("Getting secretary for reminder", extra=log_extra)
+            get_secretary_start_time = time.perf_counter()
+            # Secretary should now be LangGraphAssistant type for direct graph access
+            secretary: BaseAssistant = (
+                await self.factory.get_user_secretary(  # Use BaseAssistant type hint
+                    user_id  # Pass integer user_id
                 )
-
-                if not secretary:
-                    # Should not happen if factory raises ValueError, but double-check
-                    logger.error(
-                        "Secretary not found for user via factory", user_id=user_id
-                    )
-                    return None  # Indicate error or skip processing
-
-                logger.info(
-                    "Retrieved secretary instance via factory for reminder",
-                    assistant_name=secretary.name,
-                    user_id=user_id,
-                )
-            except ValueError as e:
-                logger.error(
-                    f"Failed to get secretary instance via factory: {e}",
-                    user_id=user_id,
-                )
-                return None  # Indicate error
-
-            # 3. Construct ToolMessage
-            tool_name = "reminder_trigger"
-            tool_call_id = str(reminder_id)  # Use reminder_id as unique ID
-            # Create a descriptive content string
-            content_str = f"Reminder triggered. Details: {json.dumps(reminder_payload)}"
-
-            # Prepare metadata
-            # metadata = { # Variable not used
-            #     "tool_name": tool_name,
-            #     "original_event": reminder_event_data,  # Store the original event for context
-            # }
-
-            tool_message = ToolMessage(
-                content=content_str,
-                tool_call_id=tool_call_id,
-                tool_name=tool_name,
             )
-            logger.debug(
-                "Constructed ToolMessage",
-                tool_name=tool_name,
-                tool_call_id=tool_call_id,
+            get_secretary_duration = time.perf_counter() - get_secretary_start_time
+            log_extra["get_secretary_duration_ms"] = round(
+                get_secretary_duration * 1000
+            )
+            if not secretary:
+                # Should not happen if factory raises ValueError, but double-check
+                logger.error(
+                    "Secretary not found for user via factory", user_id=user_id
+                )
+                return None  # Indicate error or skip processing
+            # Remove check for compiled_graph as we rely on BaseAssistant interface
+            # if not hasattr(secretary, 'compiled_graph'):
+            #     logger.error(...)
+            #     return None
+
+            logger.info(
+                "Retrieved secretary instance via factory for reminder",
+                assistant_name=secretary.name,
+                user_id=user_id,
+            )
+
+            # 3. Prepare trigger event data
+            reminder_trigger_data = {
+                # "event_type": "reminder_triggered", # This field is not strictly needed for the graph state
+                "reminder_id": reminder_id,
+                "assistant_id": str(assistant_uuid),
+                "reminder_type": reminder_type,
+                "payload": reminder_payload,  # Contains the user-facing message
+                "trigger_timestamp_utc": triggered_at_event,
+            }
+            logger.info(
+                "Prepared reminder trigger data",
+                trigger_data=reminder_trigger_data,
                 extra=log_extra,
             )
 
-            # 4. Call secretary.process_message, passing thread_id
-            response_text = await secretary.process_message(
-                message=tool_message, user_id=str(user_id)
+            # 4. Invoke the secretary's process_message with the trigger event
+            logger.debug(
+                "Invoking secretary.process_message for reminder trigger",
+                extra=log_extra,
             )
+            process_message_start_time = time.perf_counter()
+            # Pass None for message, but provide triggered_event
+            response_text = await secretary.process_message(
+                message=None,  # No direct message from user
+                user_id=str(user_id),  # Pass user_id for context/threading
+                triggered_event=reminder_trigger_data,  # Pass the trigger data
+            )
+            process_message_duration = time.perf_counter() - process_message_start_time
+            log_extra["process_message_duration_ms"] = round(
+                process_message_duration * 1000
+            )
+
             logger.info(
                 "Secretary processed reminder trigger",
                 response_preview=str(response_text)[:100],
                 extra=log_extra,
             )
 
-            # 5. Prepare response payload for the output queue
-            if response_text:
-                response_payload = {
-                    "user_id": user_id,
-                    "response": response_text,
-                    "status": "success",
-                    "source": "reminder_trigger",
-                    "type": "assistant",
-                    "metadata": {"reminder_id": reminder_id},
+            # 5. Format response for output queue
+            response_payload = {
+                "user_id": user_id,
+                "response": response_text,  # The actual response string from the secretary
+                "status": "success",
+                "source": "reminder_trigger",  # Indicate the source
+                "type": "assistant",  # Indicate the type is an assistant response
+                "metadata": {  # Include reminder ID for context if needed downstream
+                    "reminder_id": reminder_id
+                },
+            }
+            logger.debug(
+                "Reminder response payload prepared",
+                payload=response_payload,
+                extra=log_extra,
+            )
+
+            total_duration = time.perf_counter() - start_time
+            log_extra["total_processing_duration_ms"] = round(total_duration * 1000)
+            logger.info(
+                "Reminder trigger processed successfully",
+                reminder_id=reminder_id,
+                user_id=user_id,
+                extra=log_extra,
+            )
+            return response_payload
+
+        except (ValueError, TypeError, KeyError) as e:
+            # Handle specific errors during data extraction or processing
+            log_extra.update(
+                {
+                    "user_id": user_id if user_id is not None else "unknown",
+                    "reminder_id": reminder_id
+                    if reminder_id is not None
+                    else "unknown",
                 }
-                logger.debug(
-                    "Reminder response payload prepared",
-                    payload=response_payload,
-                    extra=log_extra,
-                )
-                return response_payload
-            else:
-                logger.info(
-                    "Assistant did not generate a response for reminder trigger",
-                    extra=log_extra,
-                )
-                return None
+            )
+            logger.warning(
+                f"Error handling reminder trigger due to invalid data: {type(e).__name__}",
+                error=str(e),
+                extra=log_extra,
+            )
+            # Optionally return an error payload
+            return {
+                "user_id": user_id if user_id is not None else "unknown",
+                "status": "error",
+                "response": f"Failed to process reminder trigger: {type(e).__name__}",
+                "error": str(e),
+                "source": "reminder_trigger",
+                "type": "error",
+                "metadata": {"reminder_id": reminder_id if reminder_id else "unknown"},
+            }
 
         except Exception as e:
-            log_extra["user_id"] = user_id
+            # Catch-all for unexpected errors
+            total_duration = time.perf_counter() - start_time
+            log_extra.update(
+                {
+                    "user_id": user_id if user_id is not None else "unknown",
+                    "reminder_id": reminder_id
+                    if reminder_id is not None
+                    else "unknown",
+                    "total_processing_duration_ms": round(total_duration * 1000),
+                }
+            )
             logger.exception(
-                "Failed to process reminder trigger",
+                "Unexpected error handling reminder trigger",
                 error=str(e),
                 exc_info=True,
                 extra=log_extra,
             )
+            # Return an error payload
             return {
-                "user_id": user_id if user_id else "unknown",
+                "user_id": user_id if user_id is not None else "unknown",
                 "status": "error",
-                "error": f"Failed to process reminder {reminder_id}: {str(e)}",
+                "response": f"Internal error processing reminder trigger: {type(e).__name__}",
+                "error": str(e),
                 "source": "reminder_trigger",
-                "type": "system_error",
-                "metadata": {"reminder_id": reminder_id} if reminder_id else {},
+                "type": "error",
+                "metadata": {"reminder_id": reminder_id if reminder_id else "unknown"},
             }
 
     async def listen_for_messages(self, max_messages: int | None = None):
@@ -380,24 +473,36 @@ class AssistantOrchestrator:
 
                 response_payload = None
 
-                # Determine message type and generate thread_id
-                if message_dict.get("event_type") == "reminder_triggered":
-                    user_id = message_dict.get("payload", {}).get("user_id")
+                # --- Corrected Trigger Identification Logic ---
+                is_trigger = False
+                if (
+                    message_dict.get("source") == QueueMessageSource.CRON.value
+                    and message_dict.get("type") == QueueMessageType.TOOL.value
+                ):
+                    # Further check based on metadata if needed
+                    metadata = message_dict.get("content", {}).get("metadata", {})
+                    if metadata.get("tool_name") == "reminder_trigger":
+                        is_trigger = True
+
+                if is_trigger:
+                    # Handle reminder trigger
+                    user_id = message_dict.get("user_id")  # Get user_id for logging
                     if user_id:
                         logger.info(
-                            f"Reminder trigger event received for user {user_id}",
+                            f"Reminder trigger event (identified by source/type/tool_name) received for user {user_id}",
                         )
+                        # Pass the original dictionary to handle_reminder_trigger
                         response_payload = await self.handle_reminder_trigger(
                             message_dict
                         )
                     else:
+                        # This check is also inside handle_reminder_trigger, log here for context
                         logger.error(
-                            "User ID missing in reminder event payload",
+                            "User ID missing in reminder event payload (check in listen_for_messages)",
                             data=message_dict,
                         )
-
                 else:
-                    # Assume standard QueueMessage
+                    # Handle standard QueueMessage
                     try:
                         queue_message = QueueMessage(**message_dict)
                         user_id = queue_message.user_id

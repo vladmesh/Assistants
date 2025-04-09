@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Import BaseMessage for type hinting
 from langchain_core.messages import BaseMessage
@@ -36,14 +36,21 @@ class BaseAssistant(ABC):
         self.kwargs = kwargs
 
     @abstractmethod
-    async def process_message(self, message: BaseMessage, user_id: str) -> str:
-        """Processes an incoming message and returns the assistant's response string.
+    async def process_message(
+        self,
+        message: Optional[BaseMessage],
+        user_id: str,
+        triggered_event: Optional[dict] = None,
+    ) -> str:
+        """Processes an incoming message or a triggered event and returns the assistant's response string.
 
         Args:
             message: The input message (standard Langchain BaseMessage).
+                     Can be None if triggered_event is provided.
             user_id: The identifier of the user initiating the request.
                      The assistant implementation is responsible for managing
                      conversation context/memory based on the user_id.
+            triggered_event: Optional dictionary containing data from an external trigger (e.g., reminder).
 
         Returns:
             A string containing the assistant's response.
