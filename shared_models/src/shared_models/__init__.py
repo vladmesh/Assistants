@@ -8,23 +8,29 @@ from shared_models.api_models import (
     ToolModel,
     UserModel,
 )
-from shared_models.queue import (
-    HumanQueueMessage,
+
+# Update queue imports: remove old, add new
+from shared_models.queue import HumanQueueMessageContent  # Keep content model import
+from shared_models.queue import QueueTrigger  # Added
+from shared_models.queue import ToolQueueMessageContent  # Keep content model import
+from shared_models.queue import TriggerType  # Added
+from shared_models.queue import (  # HumanQueueMessage, # Removed; ToolQueueMessage, # Removed
     QueueMessage,
-    QueueMessageContent,
     QueueMessageSource,
     QueueMessageType,
-    ToolQueueMessage,
 )
 
 __all__ = [
     # Queue models
     "QueueMessage",
-    "QueueMessageContent",
+    "HumanQueueMessageContent",  # Re-added to export
+    "ToolQueueMessageContent",  # Re-added to export
     "QueueMessageSource",
     "QueueMessageType",
-    "ToolQueueMessage",
-    "HumanQueueMessage",
+    # "ToolQueueMessage", # Removed
+    # "HumanQueueMessage", # Removed
+    "QueueTrigger",  # Added
+    "TriggerType",  # Added
     # API models
     "AssistantModel",
     "ToolModel",

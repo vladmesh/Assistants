@@ -10,6 +10,8 @@ from services.calendar import GoogleCalendarService
 from services.redis_service import RedisService
 from services.rest_service import RestService
 
+from shared_models import TriggerType
+
 logger = structlog.get_logger()
 router = APIRouter()
 
@@ -87,11 +89,15 @@ async def get_auth_url(
             raise HTTPException(status_code=404, detail="User not found")
 
         # Check if user already has credentials
-        credentials = await rest_service.get_calendar_token(user_id)
-        if credentials:
-            raise HTTPException(status_code=400, detail="User already authorized")
+        # credentials = await rest_service.get_calendar_token(user_id)
+        # if credentials:
+        #     # Allow generating URL even if token exists (for re-authentication)
+        #     # raise HTTPException(status_code=400, detail=\"User already authorized\")
+        #     pass # Log maybe?
+        #     logger.info(\"User already has credentials, but proceeding to generate auth URL for potential re-auth.\", user_id=user_id)
 
         # Get auth URL with state
+        logger.info(f"Generating auth URL for user {user_id}")
         auth_url = calendar_service.get_auth_url(user_id)
 
         return {"auth_url": auth_url}
@@ -135,8 +141,7 @@ async def handle_callback(
 
         # Send message to assistant
         await redis_service.send_to_assistant(
-            user_id=user_id,
-            message="✅ Авторизация в Google Calendar успешно завершена!",
+            user_id=user_id, trigger_type=TriggerType.GOOGLE_AUTH, payload={}
         )
 
         # Redirect to Telegram

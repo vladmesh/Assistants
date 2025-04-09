@@ -7,7 +7,7 @@ from typing import Any, Dict
 import redis
 
 # Импортируем необходимые модели из shared_models
-from shared_models import QueueMessageContent, QueueMessageSource, QueueMessageType
+from shared_models import QueueMessageSource, QueueTrigger, TriggerType
 
 # from models import CronMessage # Remove old model import
 
@@ -34,14 +34,14 @@ logger.info(f"--- CREATING redis_client instance with ID: {id(redis_client)} ---
 
 def send_reminder_trigger(reminder_data: Dict[str, Any]) -> None:
     """
-    Sends a reminder trigger event to the assistant via Redis using QueueMessage format.
+    Sends a reminder trigger event to the assistant via Redis using QueueTrigger format.
 
     Args:
         reminder_data: Dictionary containing the reminder details fetched from the API.
                        Expected keys: 'id', 'user_id', 'assistant_id', 'type',
                        'payload', 'trigger_at', 'created_at'.
     """
-    logger.info("--- ENTERING send_reminder_trigger ---")
+    logger.info("--- ENTERING send_reminder_trigger (using QueueTrigger) ---")
     try:
         payload_from_data = reminder_data.get("payload", "{}")
         logger.info(f'Type of reminder_data["payload"]: {type(payload_from_data)}')
@@ -55,52 +55,54 @@ def send_reminder_trigger(reminder_data: Dict[str, Any]) -> None:
                 inner_payload = payload_from_data  # Already a dict
         except json.JSONDecodeError as decode_error:
             logger.error(f"Failed to decode inner payload: {decode_error}")
-            inner_payload = {}  # Используем пустой словарь при ошибке
+            inner_payload = {}  # Use empty dict on error
 
-        # Извлекаем user_id, проверяем наличие
         user_id = reminder_data.get("user_id")
         if user_id is None:
             logger.error(
                 "Missing 'user_id' in reminder_data", extra={"data": reminder_data}
             )
-            # Можно либо вернуть, либо выбросить исключение, чтобы указать на ошибку
-            # return
             raise KeyError("'user_id' is missing in reminder_data")
 
-        # Формируем metadata для QueueMessageContent
-        metadata = {
-            "tool_name": "reminder_trigger",  # Указываем имя "инструмента"
+        assistant_id = reminder_data.get("assistant_id")
+        if assistant_id is None:
+            logger.warning(
+                "Missing 'assistant_id' in reminder_data, proceeding without it.",
+                extra={"data": reminder_data},
+            )
+
+        # --- Create QueueTrigger Payload ---
+        trigger_payload = {
             "reminder_id": reminder_data.get("id"),
-            "assistant_id": reminder_data.get("assistant_id"),
+            "assistant_id": str(assistant_id)
+            if assistant_id
+            else None,  # Ensure string or None
             "reminder_type": reminder_data.get("type"),
-            "payload": inner_payload,  # Распарсенный payload
+            "payload": inner_payload,  # Parsed payload
             "created_at": reminder_data.get("created_at"),
-            # Можно добавить исходное trigger_at, если нужно
+            # Consider adding original trigger_at if needed for logic
             # "original_trigger_at": reminder_data.get("trigger_at"),
-            "triggered_at_event": datetime.now(timezone.utc).isoformat(),
+            "triggered_at_event": datetime.now(
+                timezone.utc
+            ).isoformat(),  # Timestamp of this trigger event
         }
 
-        # Формируем QueueMessageContent
-        message_content_dict = QueueMessageContent(
-            message=f"Reminder triggered: {reminder_data.get('id', 'N/A')}",  # Описательное сообщение
-            metadata=metadata,
-        ).model_dump()  # Используем model_dump для Pydantic v2+
+        # --- Create QueueTrigger Instance ---
+        queue_trigger = QueueTrigger(
+            trigger_type=TriggerType.REMINDER,
+            user_id=int(user_id),  # Ensure user_id is int
+            source=QueueMessageSource.CRON,
+            payload=trigger_payload,
+            # Timestamp is handled by default_factory in QueueTrigger
+        )
 
-        # Формируем основной объект сообщения QueueMessage
-        queue_message_dict = {
-            "type": QueueMessageType.TOOL.value,
-            "user_id": int(user_id),  # Убедимся, что user_id - это int
-            "source": QueueMessageSource.CRON.value,
-            "content": message_content_dict,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-        # Сериализуем и отправляем
-        logger.info(f"QueueMessage object before json.dumps: {queue_message_dict}")
-        message_json = json.dumps(queue_message_dict, default=str)
+        # --- Serialize using Pydantic ---
+        message_json = (
+            queue_trigger.model_dump_json()
+        )  # Directly serialize the QueueTrigger instance
 
         logger.info(
-            f"Attempting to push QueueMessage to Redis. Queue: {OUTPUT_QUEUE}, Message: {message_json}"
+            f"Attempting to push QueueTrigger to Redis. Queue: {OUTPUT_QUEUE}, Message: {message_json}"
         )
         logger.info(
             f"--> ID of redis_client in send_reminder_trigger: {id(redis_client)}"
@@ -109,25 +111,19 @@ def send_reminder_trigger(reminder_data: Dict[str, Any]) -> None:
         redis_client.rpush(OUTPUT_QUEUE, message_json)
 
         logger.info(
-            f"Reminder trigger event (as QueueMessage) for {reminder_data.get('id')} sent to {OUTPUT_QUEUE}."
+            f"Reminder trigger event (as QueueTrigger) for {reminder_data.get('id')} sent to {OUTPUT_QUEUE}."
         )
 
-    except json.JSONDecodeError as e:  # Эта ошибка теперь обрабатывается выше
-        logger.error(
-            f"Error encoding final message to JSON for {reminder_data.get('id', 'unknown')}: {e}"
-        )
     except KeyError as e:
-        # KeyError теперь может возникнуть, если 'user_id' отсутствует и мы вызываем raise
         logger.error(
             f"Missing essential key in reminder_data for {reminder_data.get('id', 'unknown')}: {e}"
         )
     except TypeError as e:
-        # Например, если user_id не может быть преобразован в int
         logger.error(
-            f"Type error constructing QueueMessage for {reminder_data.get('id', 'unknown')}: {e}"
+            f"Type error constructing QueueTrigger for {reminder_data.get('id', 'unknown')}: {e}"
         )
     except Exception as e:
         logger.error(
-            f"Error sending reminder trigger QueueMessage to Redis: {e}", exc_info=True
+            f"Error sending reminder trigger QueueTrigger to Redis: {e}", exc_info=True
         )
         raise

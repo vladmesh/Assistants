@@ -43,10 +43,10 @@ class ListEventsRequest(BaseModel):
     )
 
 
-class CalendarCreateTool(BaseTool):
-    """Tool for creating events in Google Calendar. Uses name/description from DB."""
+# --- Base Class for Calendar Tools ---
+class BaseGoogleCalendarTool(BaseTool):
+    """Base class for Google Calendar tools with common auth logic."""
 
-    args_schema: Type[CreateEventRequest] = CreateEventRequest
     base_url: str = "http://google_calendar_service:8000"
     rest_url: str = "http://rest_service:8000/api"
 
@@ -62,16 +62,122 @@ class CalendarCreateTool(BaseTool):
             if response.status_code == 404 or (
                 response.status_code == 200 and not response.json()
             ):
+                # No token found, request auth URL
                 auth_response = await client.get(
                     f"{self.base_url}/auth/url/{self.user_id}"
                 )
                 auth_response.raise_for_status()
-                return auth_response.json()["auth_url"]
-            response.raise_for_status()
-            return None
+                auth_url = auth_response.json().get("auth_url")
+                if auth_url:
+                    logger.info(
+                        "Authorization required, returning auth URL",
+                        user_id=self.user_id,
+                    )
+                    return auth_url
+                else:
+                    logger.error("Auth URL not found in response", user_id=self.user_id)
+                    return "Ошибка: Не удалось получить URL для авторизации Google."
+            response.raise_for_status()  # Raise for other non-200 status codes from token check
+            return None  # Token exists or other non-404 error occurred during check (handled below)
+        except httpx.HTTPStatusError as e:
+            # Error during the token check itself (e.g., rest_service down)
+            logger.error(
+                "HTTP error checking authorization token",
+                status_code=e.response.status_code,
+                error=str(e),
+                exc_info=True,
+            )
+            return f"Ошибка проверки токена авторизации ({e.response.status_code}): {e.response.text}"
         except Exception as e:
             logger.error("Failed to check authorization", error=str(e), exc_info=True)
             return f"Ошибка проверки авторизации: {str(e)}"
+
+    async def _handle_http_status_error(
+        self,
+        e: httpx.HTTPStatusError,
+        client: httpx.AsyncClient,
+        action: str = "выполнения операции",
+    ) -> str:
+        """Handles HTTPStatusError, checking for invalid_grant."""
+        err_msg = f"Ошибка API календаря ({e.response.status_code}) при {action}"
+        err_detail_text = e.response.text
+        try:
+            # Try to parse detail from JSON response
+            err_detail = e.response.json().get("detail")
+            if err_detail:
+                err_detail_text = str(err_detail)
+                err_msg += f": {err_detail_text}"
+            else:
+                err_msg += f": {err_detail_text}"
+        except json.JSONDecodeError:
+            err_msg += f": {err_detail_text}"
+
+        logger.error(
+            f"HTTP error during calendar {action}",
+            error=err_msg,
+            exc_info=True,
+            status_code=e.response.status_code,
+        )
+
+        # Check for invalid_grant error specifically
+        if e.response.status_code == 500 and "invalid_grant" in err_detail_text:
+            logger.warning(
+                f"Invalid grant detected during calendar {action}. Requesting re-authentication.",
+                user_id=self.user_id,
+            )
+            # --- Directly request new auth URL instead of calling _check_auth ---
+            auth_url = None
+            try:
+                logger.info(
+                    f"Requesting new auth URL for user {self.user_id} due to invalid_grant"
+                )
+                auth_response = await client.get(
+                    f"{self.base_url}/auth/url/{self.user_id}"
+                )
+                auth_response.raise_for_status()  # Raise for non-200 status
+                auth_url = auth_response.json().get("auth_url")
+                if not auth_url:
+                    logger.error(
+                        "Auth URL not found in response from calendar service",
+                        user_id=self.user_id,
+                        response_status=auth_response.status_code,
+                    )
+            except httpx.HTTPStatusError as auth_err:
+                logger.error(
+                    "HTTP error requesting new auth URL after invalid_grant",
+                    user_id=self.user_id,
+                    status_code=auth_err.response.status_code,
+                    error=str(auth_err),
+                    exc_info=True,
+                )
+            except Exception as auth_err:
+                logger.error(
+                    "Failed to request new auth URL after invalid_grant",
+                    user_id=self.user_id,
+                    error=str(auth_err),
+                    exc_info=True,
+                )
+            # --- End of direct auth URL request ---
+
+            if auth_url:  # Check if we successfully got the auth URL
+                # Return the auth URL prompt
+                return f"Для {action} необходимо повторно авторизоваться из-за недействительного токена. Перейдите по ссылке: {auth_url}"
+            else:
+                # Fallback if getting auth URL failed
+                logger.error(
+                    "Failed to get re-authentication URL after invalid_grant",
+                    user_id=self.user_id,
+                )
+                return f"Ошибка обновления токена Google при {action}. Пожалуйста, попробуйте переподключить календарь или обратитесь к администратору."
+
+        return err_msg  # Return original formatted error message if not invalid_grant
+
+
+# --- Specific Calendar Tools ---
+class CalendarCreateTool(BaseGoogleCalendarTool):
+    """Tool for creating events in Google Calendar. Uses common base class."""
+
+    args_schema: Type[CreateEventRequest] = CreateEventRequest
 
     async def _execute(
         self,
@@ -86,19 +192,32 @@ class CalendarCreateTool(BaseTool):
             return "Ошибка: ID пользователя не найден."
 
         async with httpx.AsyncClient() as client:
-            auth_check_result = await self._check_auth(client)
-            if auth_check_result is not None:
-                if auth_check_result.startswith(
-                    "Error:"
-                ) or auth_check_result.startswith("Ошибка"):
-                    return auth_check_result
+            # Initial auth check
+            auth_url = await self._check_auth(client)
+            if auth_url is not None:
+                if auth_url.startswith("Error:") or auth_url.startswith("Ошибка"):
+                    return auth_url  # Return auth check error
                 else:
-                    return f"Для создания события необходимо авторизоваться. Перейдите по ссылке: {auth_check_result}"
+                    # Return prompt to authorize
+                    return f"Для создания события необходимо авторизоваться. Перейдите по ссылке: {auth_url}"
+
+            # Prepare event data (specific to create tool)
+            # Ensure start_time and end_time are JSON-serializable dicts
+            start_time_dict = (
+                start_time.model_dump(mode="json")
+                if hasattr(start_time, "model_dump")
+                else start_time
+            )
+            end_time_dict = (
+                end_time.model_dump(mode="json")
+                if hasattr(end_time, "model_dump")
+                else end_time
+            )
 
             event_data = {
                 "title": title,
-                "start_time": start_time,
-                "end_time": end_time,
+                "start_time": start_time_dict,
+                "end_time": end_time_dict,
             }
             if description:
                 event_data["description"] = description
@@ -107,6 +226,7 @@ class CalendarCreateTool(BaseTool):
 
             logger.debug("Sending event data to calendar service", data=event_data)
             try:
+                # Make the API call (specific to create tool)
                 response = await client.post(
                     f"{self.base_url}/events/{self.user_id}", json=event_data
                 )
@@ -116,53 +236,26 @@ class CalendarCreateTool(BaseTool):
                     f"Событие '{created_event.get('summary', title)}' успешно создано!"
                 )
             except httpx.HTTPStatusError as e:
-                err_msg = f"Ошибка API календаря ({e.response.status_code})"
-                try:
-                    err_detail = e.response.json().get("detail")
-                    err_msg += f": {err_detail}"
-                except json.JSONDecodeError:
-                    err_msg += f": {e.response.text}"
-                logger.error("HTTP error creating event", error=err_msg, exc_info=True)
-                return err_msg
+                # Use the common handler from the base class
+                return await self._handle_http_status_error(
+                    e, client, action="создания события"
+                )
             except httpx.RequestError as e:
+                # Keep specific error message for network errors
                 logger.error(
                     "Network error creating event", error=str(e), exc_info=True
                 )
                 return f"Сетевая ошибка при создании события: {str(e)}"
             except Exception as e:
+                # Keep specific error message for other errors
                 logger.error("Calendar create tool error", error=str(e), exc_info=True)
                 return f"Непредвиденная ошибка при создании события: {str(e)}"
 
 
-class CalendarListTool(BaseTool):
-    """Tool for listing events from Google Calendar. Uses name/description from DB."""
+class CalendarListTool(BaseGoogleCalendarTool):
+    """Tool for listing events from Google Calendar. Uses common base class."""
 
     args_schema: Type[ListEventsRequest] = ListEventsRequest
-    base_url: str = "http://google_calendar_service:8000"
-    rest_url: str = "http://rest_service:8000/api"
-
-    async def _check_auth(self, client: httpx.AsyncClient) -> Optional[str]:
-        """Check if user is authorized and return auth URL if not."""
-        if not self.user_id:
-            logger.warning("Cannot check auth without user_id")
-            return "Error: User ID not available for authorization check."
-        try:
-            response = await client.get(
-                f"{self.rest_url}/calendar/user/{self.user_id}/token"
-            )
-            if response.status_code == 404 or (
-                response.status_code == 200 and not response.json()
-            ):
-                auth_response = await client.get(
-                    f"{self.base_url}/auth/url/{self.user_id}"
-                )
-                auth_response.raise_for_status()
-                return auth_response.json()["auth_url"]
-            response.raise_for_status()
-            return None
-        except Exception as e:
-            logger.error("Failed to check authorization", error=str(e), exc_info=True)
-            return f"Ошибка проверки авторизации: {str(e)}"
 
     async def _execute(
         self, time_min: Optional[str] = None, time_max: Optional[str] = None
@@ -178,16 +271,17 @@ class CalendarListTool(BaseTool):
             time_max=time_max,
         )
         async with httpx.AsyncClient() as client:
-            auth_check_result = await self._check_auth(client)
-            if auth_check_result is not None:
-                if auth_check_result.startswith(
-                    "Error:"
-                ) or auth_check_result.startswith("Ошибка"):
-                    return auth_check_result
+            # Initial auth check
+            auth_url = await self._check_auth(client)
+            if auth_url is not None:
+                if auth_url.startswith("Error:") or auth_url.startswith("Ошибка"):
+                    return auth_url  # Return auth check error
                 else:
+                    # Return prompt to authorize
                     logger.info("User needs authorization", user_id=self.user_id)
-                    return f"Для просмотра событий необходимо авторизоваться. Перейдите по ссылке: {auth_check_result}"
+                    return f"Для просмотра событий необходимо авторизоваться. Перейдите по ссылке: {auth_url}"
 
+            # Prepare parameters (specific to list tool)
             params = {}
             if time_min:
                 params["time_min"] = time_min
@@ -200,6 +294,7 @@ class CalendarListTool(BaseTool):
                 params=params,
             )
             try:
+                # Make the API call (specific to list tool)
                 response = await client.get(
                     f"{self.base_url}/events/{self.user_id}", params=params
                 )
@@ -214,6 +309,7 @@ class CalendarListTool(BaseTool):
                 if not events:
                     return "У вас нет событий в указанный период"
 
+                # Format results (specific to list tool)
                 result = "Ваши события:\n\n"
                 for event in events:
                     summary = event.get("summary", "Без названия")
@@ -258,19 +354,22 @@ class CalendarListTool(BaseTool):
                 return result.strip()
 
             except httpx.HTTPStatusError as e:
-                err_msg = f"Ошибка API календаря ({e.response.status_code})"
-                try:
-                    err_detail = e.response.json().get("detail")
-                    err_msg += f": {err_detail}"
-                except json.JSONDecodeError:
-                    err_msg += f": {e.response.text}"
-                logger.error("HTTP error listing events", error=err_msg, exc_info=True)
-                return err_msg
+                # Use the common handler from the base class
+                return await self._handle_http_status_error(
+                    e, client, action="получения событий"
+                )
             except httpx.RequestError as e:
+                # Keep specific error message for network errors
                 logger.error(
                     "Network error listing events", error=str(e), exc_info=True
                 )
                 return f"Сетевая ошибка при получении событий: {str(e)}"
             except Exception as e:
-                logger.error("Calendar list tool error", error=str(e), exc_info=True)
+                # Keep specific error message for other errors
+                logger.error(
+                    "Calendar list tool error",
+                    error=str(e),
+                    user_id=self.user_id,
+                    exc_info=True,
+                )
                 return f"Непредвиденная ошибка при получении событий: {str(e)}"

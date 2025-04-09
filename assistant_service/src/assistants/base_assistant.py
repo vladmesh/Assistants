@@ -14,7 +14,7 @@ class BaseAssistant(ABC):
         name: str,
         config: Dict,
         tool_definitions: List[Dict],
-        **kwargs
+        **kwargs,
     ):
         """Initializes the assistant with basic info and raw configurations.
 
