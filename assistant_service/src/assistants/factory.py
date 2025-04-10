@@ -87,54 +87,74 @@ class AssistantFactory:
         Raises:
             ValueError: If no active assignment found and default secretary fails.
         """
-        secretary_id = None
-        assignment_found = False
+        secretary_id_to_fetch: Optional[
+            UUID
+        ] = None  # Variable to store the ID outside the lock
+
         async with self._cache_lock:
             assignment = self._secretary_assignments.get(user_id)
             if assignment:
                 secretary_id, _ = assignment
-                assignment_found = True
+                logger.debug(
+                    f"Found assignment for user {user_id} in cache: secretary_id={secretary_id}"
+                )
+                secretary_id_to_fetch = secretary_id  # Store the ID
+                # Do NOT call get_assistant_by_id while holding the lock
+            else:
+                logger.info(
+                    f"No assignment found for user {user_id} in cache, attempting direct fetch."
+                )
 
-        if assignment_found and secretary_id:
-            logger.debug(
-                f"Found assignment for user {user_id} in cache: secretary_id={secretary_id}"
-            )
+        # If found in cache, fetch assistant instance outside the lock
+        if secretary_id_to_fetch:
             try:
-                # get_assistant_by_id handles its own caching
+                # get_assistant_by_id handles its own caching/locking
                 return await self.get_assistant_by_id(
-                    secretary_id, user_id=str(user_id)
+                    secretary_id_to_fetch, user_id=str(user_id)
                 )
             except Exception as e:
                 logger.exception(
-                    f"Failed to get secretary instance {secretary_id} for user {user_id} from cache",
+                    f"Failed to get secretary instance {secretary_id_to_fetch} for user {user_id} from cache, falling back to direct fetch.",
                     error=str(e),
                     exc_info=True,
                 )
-                # Fall through to default secretary logic on error
+                # Fall through to fetch directly if cache retrieval fails
 
-        # Fallback: If no assignment found in cache or error getting cached secretary
-        log_message = (
-            f"No assignment found for user {user_id} in cache, falling back to default secretary."
-            if not assignment_found
-            else f"Error retrieving cached secretary {secretary_id} for user {user_id}, falling back to default."
-        )
-        logger.warning(log_message)
+        # If not found in cache or cache retrieval failed, try fetching directly from REST
         try:
-            secretary_data = (
-                await self.get_secretary_assistant()
-            )  # Fetches default secretary config
-            # Get default secretary instance (might be cached by UUID in get_assistant_by_id)
-            return await self.get_assistant_by_id(
-                secretary_data.id, user_id=str(user_id)
+            secretary_data = await self.rest_client.get_user_secretary_assignment(
+                user_id
             )
+            if secretary_data and secretary_data.get("id"):
+                secretary_uuid = UUID(secretary_data["id"])
+                logger.info(
+                    f"Fetched secretary assignment directly for user {user_id}: secretary_id={secretary_uuid}"
+                )
+                # Update cache (best effort, lock not strictly needed here as it's informational)
+                # We need assignment time for proper cache invalidation later, which isn't in secretary_data
+                # self._secretary_assignments[user_id] = (secretary_uuid, datetime.now(UTC))
+
+                # Get the assistant instance (might hit instance cache)
+                return await self.get_assistant_by_id(
+                    secretary_uuid, user_id=str(user_id)
+                )
+            else:
+                logger.warning(
+                    f"No active secretary found for user {user_id} via direct fetch."
+                )
+                raise ValueError(f"No secretary assigned for user {user_id}")
+
         except Exception as e:
             logger.exception(
-                f"Failed to get default secretary for user {user_id}",
+                f"Failed to get secretary assignment for user {user_id} via direct fetch",
                 error=str(e),
                 exc_info=True,
             )
+            # Re-raise specific error if it was ValueError, otherwise wrap
+            if isinstance(e, ValueError):
+                raise
             raise ValueError(
-                f"No secretary assignment found for user {user_id} and failed to get default secretary."
+                f"Error retrieving secretary assignment for user {user_id}."
             ) from e
 
     async def get_assistant_by_id(
