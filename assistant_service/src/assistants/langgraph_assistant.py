@@ -478,9 +478,12 @@ class LangGraphAssistant(BaseAssistant):
             "dialog_state": ["processing"],
             "last_activity": datetime.now(timezone.utc),
             "triggered_event": triggered_event,  # Pass the trigger event
-            # Always include the system prompt if it exists, followed by the current message
+            # Always include the system prompt (as SystemMessage) if it exists,
+            # followed by the current message
             "messages": (
-                [self.system_prompt_message] if self.system_prompt_message else []
+                [SystemMessage(content=self.system_prompt)]
+                if self.system_prompt
+                else []
             )
             + ([message] if message else []),
         }
