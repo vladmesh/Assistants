@@ -1,10 +1,15 @@
 import asyncio
 import signal  # Add signal handling
 
+from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import get_settings
+from core.message_queue import MessageQueue
 from dotenv import load_dotenv
 from orchestrator import AssistantOrchestrator
+from services.rest_service import (  # Ensure this is imported if needed elsewhere
+    RestServiceClient,
+)
 
 logger = get_logger(__name__)
 load_dotenv()  # Load .env for API keys
@@ -29,10 +34,10 @@ async def main():
     try:
         logger.info("Starting assistant service...")
         # Preload assignments before starting main loops
-        await service.factory._preload_assignments()
+        await service.factory._preload_secretaries()
 
-        # Start background refresh task
-        refresh_task = asyncio.create_task(service.factory._periodic_refresh_cache())
+        # Start background tasks using the new method
+        await service.factory.start_background_tasks()
 
         # Start main message listening task
         listen_task = asyncio.create_task(service.listen_for_messages())
@@ -40,7 +45,6 @@ async def main():
         # Wait for any task to complete or shutdown signal
         tasks_to_wait = {
             listen_task,
-            refresh_task,
             asyncio.create_task(shutdown_event.wait()),
         }
         done, pending = await asyncio.wait(
@@ -70,21 +74,13 @@ async def main():
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("Service interrupted. Shutting down...")
     except Exception as e:
-        logger.exception(
-            "Service encountered an unhandled error", error=str(e), exc_info=True
-        )
+        logger.exception("Service encountered an unhandled error", error=e)
     finally:
         logger.info("Closing resources...")
-        # Ensure refresh_task is cancelled if it somehow wasn't in pending
-        if refresh_task and not refresh_task.done():
-            refresh_task.cancel()
-            try:
-                await refresh_task
-            except asyncio.CancelledError:
-                pass
-        # Close factory resources (like the REST client)
-        if hasattr(service.factory, "close"):
-            await service.factory.close()
+        # Stop background tasks using the new method
+        await service.factory.stop_background_tasks()
+        await service.factory.close()
+        await service.message_queue.close()
         logger.info("Assistant service shut down.")
 
 
