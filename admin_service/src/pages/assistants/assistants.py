@@ -137,6 +137,7 @@ def show_assistants_page(rest_client: RestServiceClient):
     with st.expander("➕ Создать нового ассистента", expanded=False):
         with st.form("create_assistant_form"):
             name = st.text_input("Имя")
+            description = st.text_area("Описание")
             is_secretary = st.checkbox("Является секретарем")
             model = st.text_input("Модель")
             instructions = st.text_area("Инструкции")
@@ -152,6 +153,7 @@ def show_assistants_page(rest_client: RestServiceClient):
                     with st.spinner("Создаем ассистента..."):
                         new_assistant = AssistantCreate(
                             name=name,
+                            description=description,
                             is_secretary=is_secretary,
                             model=model,
                             instructions=instructions,
@@ -173,6 +175,9 @@ def show_assistants_page(rest_client: RestServiceClient):
 
         with st.form("edit_assistant_form"):
             new_name = st.text_input("Имя", value=assistant.name)
+            new_description = st.text_area(
+                "Описание", value=assistant.description or ""
+            )
             new_is_secretary = st.checkbox(
                 "Является секретарем", value=assistant.is_secretary
             )
@@ -202,6 +207,7 @@ def show_assistants_page(rest_client: RestServiceClient):
                     with st.spinner("Обновляем ассистента..."):
                         updated_assistant = AssistantUpdate(
                             name=new_name,
+                            description=new_description,
                             is_secretary=new_is_secretary,
                             model=new_model,
                             instructions=new_instructions,
