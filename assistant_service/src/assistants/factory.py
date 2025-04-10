@@ -1,6 +1,6 @@
 import asyncio  # Add asyncio
 from datetime import datetime  # Add datetime
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 # Project imports
@@ -33,8 +33,10 @@ class AssistantFactory:
         self.rest_client = RestServiceClient()
         # Cache for user_id -> (secretary_id, assignment_updated_at)
         self._secretary_assignments: Dict[int, Tuple[UUID, datetime]] = {}
-        # Cache for assistant_uuid -> (instance, config_loaded_at)
-        self._assistant_cache: Dict[UUID, Tuple[BaseAssistant, datetime]] = {}
+        # Cache for (assistant_uuid, user_id) -> (instance, config_loaded_at)
+        self._assistant_cache: Dict[
+            Tuple[UUID, str], Tuple[BaseAssistant, datetime]
+        ] = {}
         # Lock for cache access
         self._cache_lock = asyncio.Lock()
 
@@ -52,27 +54,29 @@ class AssistantFactory:
 
         # Close all assistant instances from the correct cache
         async with self._cache_lock:  # Ensure thread-safe access during iteration
-            for instance, _ in self._assistant_cache.values():
+            # Iterate over a copy of values if modifying the cache during iteration
+            # For closing, just iterating is usually fine, but copy is safer if closing fails
+            cached_instances = list(self._assistant_cache.values())
+
+        # Close instances outside the lock to prevent blocking cache access for long
+        for instance, _ in cached_instances:
+            try:
                 if hasattr(instance, "close") and asyncio.iscoroutinefunction(
                     instance.close
                 ):
-                    try:
-                        await instance.close()
-                    except Exception as e:
-                        logger.warning(
-                            f"Error closing assistant instance {getattr(instance, 'assistant_id', 'unknown')}: {e}"
-                        )
+                    await instance.close()
                 elif hasattr(instance, "close"):
-                    try:
-                        instance.close()  # Assuming synchronous close if not coroutine
-                    except Exception as e:
-                        logger.warning(
-                            f"Error closing assistant instance {getattr(instance, 'assistant_id', 'unknown')} (sync): {e}"
-                        )
+                    instance.close()  # Assuming synchronous close if not coroutine
+            except Exception as e:
+                logger.warning(
+                    f"Error closing assistant instance {getattr(instance, 'assistant_id', 'unknown')}: {e}",
+                    user_id=getattr(instance, "user_id", "unknown"),  # Log user_id too
+                )
 
-            # Clear caches after closing instances
+        # Clear caches after closing instances
+        async with self._cache_lock:
             self._assistant_cache.clear()
-        self._secretary_assignments.clear()  # Clear assignments cache too
+            self._secretary_assignments.clear()  # Clear assignments cache too
         logger.info("AssistantFactory closed REST client and cleared caches.")
 
     async def get_user_secretary(self, user_id: int) -> BaseAssistant:
@@ -158,44 +162,49 @@ class AssistantFactory:
             ) from e
 
     async def get_assistant_by_id(
-        self, assistant_uuid: UUID, user_id: Optional[str] = None
+        self, assistant_uuid: UUID, user_id: str  # user_id is now required
     ) -> BaseAssistant:
-        """Get or create assistant instance by its UUID, using cache.
+        """Get or create assistant instance by its UUID and user_id, using cache.
 
         Args:
             assistant_uuid: The UUID of the assistant.
-            user_id: The string ID of the user requesting the assistant (needed for tool init).
+            user_id: The string ID of the user requesting the assistant (required).
 
         Returns:
             Assistant instance.
 
         Raises:
-            ValueError: If assistant not found or type is unknown.
+            ValueError: If user_id is not provided, assistant not found, or type is unknown.
         """
+        if not user_id:
+            raise ValueError(
+                "user_id must be provided to get or create an assistant instance."
+            )
+
+        cache_key = (assistant_uuid, user_id)
         # Check cache first (under lock)
         async with self._cache_lock:
-            cached_data = self._assistant_cache.get(assistant_uuid)
+            cached_data = self._assistant_cache.get(cache_key)
             if cached_data:
                 instance, loaded_at = cached_data
                 logger.debug(
-                    f"Assistant {assistant_uuid} found in cache (loaded at {loaded_at})."
+                    f"Assistant {assistant_uuid} for user {user_id} found in cache (loaded at {loaded_at})."
                 )
-                # We might add a check here later to see if loaded_at is too old
-                # compared to some TTL or a known config change time, but for now,
-                # the periodic refresh handles updates based on updated_at from REST.
+                # TODO: Add check later to see if config needs refresh based on loaded_at vs assistant_data.updated_at
                 return instance
 
         logger.info(
-            f"Assistant {assistant_uuid} not in cache, creating new instance...",
-            user_id=user_id,
+            f"Assistant {assistant_uuid} for user {user_id} not in cache, creating new instance...",
+            user_id=user_id,  # Log user_id correctly
         )
 
         try:
-            # --- Fetch data (outside lock) ---
+            # --- Fetch assistant config data (outside lock) ---
             assistant_data = await self.rest_client.get_assistant(str(assistant_uuid))
             if not assistant_data:
-                # Should ideally be caught by RestServiceClient, but handle defensively
-                raise ValueError(f"Assistant data for UUID {assistant_uuid} not found.")
+                raise ValueError(
+                    f"Assistant config data for UUID {assistant_uuid} not found."
+                )
 
             tool_definitions = await self.rest_client.get_assistant_tools(
                 str(assistant_uuid)
@@ -215,28 +224,29 @@ class AssistantFactory:
             }
             kwargs = {"is_secretary": assistant_data.is_secretary}
 
+            # Create tools, passing the specific user_id
             created_tools = await self.tool_factory.create_langchain_tools(
                 tool_definitions=tool_definitions,
-                user_id=user_id,
+                user_id=user_id,  # Pass the required user_id
                 assistant_id=str(assistant_data.id),
             )
 
             # Log tool loading results
             if len(created_tools) != len(tool_definitions):
                 logger.warning(
-                    f"Initialized assistant '{assistant_data.name}' ({assistant_uuid}) with "
+                    f"Initialized assistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id} with "
                     f"{len(created_tools)} out of {len(tool_definitions)} defined tools due to initialization errors. "
                     f"Check previous logs for details.",
                     extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
                 )
             elif not tool_definitions:
                 logger.info(
-                    f"Assistant '{assistant_data.name}' ({assistant_uuid}) initialized with no tools defined.",
+                    f"Assistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id} initialized with no tools defined.",
                     extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
                 )
             else:
                 logger.info(
-                    f"Successfully initialized all {len(created_tools)} defined tools for assistant '{assistant_data.name}' ({assistant_uuid}).",
+                    f"Successfully initialized all {len(created_tools)} defined tools for assistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id}.",
                     extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
                 )
 
@@ -247,14 +257,15 @@ class AssistantFactory:
                     name=assistant_data.name,
                     config=config,
                     tools=created_tools,
-                    user_id=user_id,
+                    user_id=user_id,  # Pass user_id to assistant instance
                     checkpointer=self.checkpointer,
                     **kwargs,
                 )
             else:
                 # Handle other types or raise error
                 logger.error(
-                    f"Attempted to create assistant with unknown type: {assistant_data.assistant_type}"
+                    f"Attempted to create assistant with unknown type: {assistant_data.assistant_type}",
+                    extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
                 )
                 raise ValueError(
                     f"Unknown assistant type: {assistant_data.assistant_type}"
@@ -263,30 +274,38 @@ class AssistantFactory:
             # --- Update cache (under lock) ---
             config_loaded_at = getattr(assistant_data, "updated_at", datetime.now())
             async with self._cache_lock:
-                # Store the new instance and its load time
-                self._assistant_cache[assistant_uuid] = (
+                # Store using the (uuid, user_id) key
+                self._assistant_cache[cache_key] = (
                     assistant_instance,
-                    config_loaded_at,  # Use updated_at from REST data
+                    config_loaded_at,
                 )
-                logger.info(
-                    f"Created and cached assistant instance {assistant_uuid}",
-                    name=assistant_instance.name,
-                    loaded_at=config_loaded_at,
-                )
+            logger.info(
+                f"Created and cached assistant instance {assistant_uuid} for user {user_id}",
+                loaded_at=config_loaded_at,  # Add loaded_at timestamp to log
+                name=assistant_data.name,  # Add assistant name to log
+                extra={
+                    "assistant_id": str(assistant_uuid),
+                    "user_id": user_id,
+                },  # Keep extra context
+            )
 
-            # Return the newly created instance
             return assistant_instance
 
-        except Exception as e:
-            logger.exception(
-                f"Failed to create assistant instance {assistant_uuid}",
-                error=str(e),
-                user_id=user_id,
+        except ValueError as ve:
+            logger.error(
+                f"ValueError creating assistant {assistant_uuid} for user {user_id}: {ve}",
                 exc_info=True,
             )
-            # Reraise as ValueError to signal failure to the caller
+            raise  # Re-raise ValueError
+        except Exception as e:
+            logger.exception(
+                f"Unexpected error creating assistant {assistant_uuid} for user {user_id}",
+                exc_info=True,
+            )
+            # Wrap other exceptions in ValueError for consistent error handling upstream?
+            # Or maybe a custom AssistantCreationError?
             raise ValueError(
-                f"Failed to get or create assistant {assistant_uuid}. Reason: {e}"
+                f"Failed to create assistant {assistant_uuid} for user {user_id}."
             ) from e
 
     async def get_secretary_assistant(self) -> dict:
@@ -330,259 +349,248 @@ class AssistantFactory:
         self._secretary_assignments.clear()  # Clear assignments cache too
         logger.info("AssistantFactory caches cleared.")
 
-    async def _preload_assignments(self):
-        """Preload secretary assignments and cache assistant instances at startup."""
+    async def _preload_secretaries(self):
+        """Preload secretary assignments and potentially instances."""
         logger.info("Preloading secretary assignments...")
+        assignments_loaded = 0
+        assistants_preloaded = 0
+        assistants_failed = 0
+        assignments_to_preload: List[Tuple[int, UUID]] = []
+
         try:
-            assignments = (
-                await self.rest_client.list_active_user_secretary_assignments()
+            remote_assignments = (
+                await self.rest_client.get_all_user_secretary_assignments()
             )
-            logger.info(f"Found {len(assignments)} active assignments.")
-
-            tasks = []
-            user_assignments_to_cache = {}
-            secretary_ids_to_preload = set()
-
-            for assignment in assignments:
-                user_assignments_to_cache[assignment.user_id] = (
-                    assignment.secretary_id,
-                    assignment.updated_at,
-                )
-                secretary_ids_to_preload.add(assignment.secretary_id)
-
-            # Preload unique secretaries concurrently
-            for secretary_id in secretary_ids_to_preload:
-                # Find one user_id associated with this secretary for context during preload
-                # This assumes tools might need *some* user context, even if generic
-                user_id_for_context = next(
-                    (
-                        uid
-                        for uid, (sid, _) in user_assignments_to_cache.items()
-                        if sid == secretary_id
-                    ),
-                    None,
-                )
-                if user_id_for_context:
-                    tasks.append(
-                        self.get_assistant_by_id(
-                            secretary_id, user_id=str(user_id_for_context)
+            if remote_assignments:
+                logger.info(f"Found {len(remote_assignments)} active assignments.")
+                async with self._cache_lock:
+                    for assignment in remote_assignments:
+                        user_id = assignment.user_id
+                        secretary_id = assignment.secretary_id
+                        updated_at = assignment.updated_at
+                        self._secretary_assignments[user_id] = (
+                            secretary_id,
+                            updated_at,
                         )
-                    )
-                else:
-                    logger.warning(
-                        f"Could not find a user_id for preloading secretary {secretary_id}, skipping preload."
-                    )
-
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Log preload results
-            loaded_count = 0
-            failed_count = 0
-            for i, result in enumerate(results):
-                secretary_id = list(secretary_ids_to_preload)[
-                    i
-                ]  # Assuming order is preserved
-                if isinstance(result, BaseAssistant):
-                    loaded_count += 1
-                    logger.debug(f"Successfully preloaded assistant {secretary_id}")
-                elif isinstance(result, Exception):
-                    failed_count += 1
-                    logger.error(
-                        f"Failed to preload assistant {secretary_id}: {result}",
-                        exc_info=isinstance(result, Exception),
-                    )
-
-            # Update the assignments cache under lock only after successful preloading attempt
-            async with self._cache_lock:
-                self._secretary_assignments = user_assignments_to_cache
-
-            logger.info(
-                f"Preloading complete. Loaded: {loaded_count}, Failed: {failed_count}, Assignments cached: {len(self._secretary_assignments)}"
-            )
+                        assignments_to_preload.append((user_id, secretary_id))
+                        assignments_loaded += 1
+            else:
+                logger.info("No active secretary assignments found to preload.")
+                return
 
         except Exception as e:
             logger.exception(
-                "Failed to preload secretary assignments", error=str(e), exc_info=True
+                "Failed to fetch secretary assignments during preload", error=e
+            )
+            return
+
+        # Preload assistant instances outside the lock
+        # Use asyncio.gather for concurrent preloading
+        preload_tasks = []
+        for user_id, secretary_id in assignments_to_preload:
+            # Pass user_id to get_assistant_by_id
+            preload_tasks.append(
+                self.get_assistant_by_id(secretary_id, user_id=str(user_id))
             )
 
-    async def _periodic_refresh_cache(self):
-        """Periodically refresh secretary assignments and assistant cache."""
-        while True:
-            try:
-                await asyncio.sleep(60)  # Wait 60 seconds before next refresh
-                logger.info("Starting periodic cache refresh...")
+        results = await asyncio.gather(*preload_tasks, return_exceptions=True)
 
-                # 1. Fetch current assignments from REST
-                remote_assignments_list = (
-                    await self.rest_client.list_active_user_secretary_assignments()
-                )
-                remote_assignments_dict: Dict[int, Tuple[UUID, datetime]] = {
-                    a.user_id: (a.secretary_id, a.updated_at)
-                    for a in remote_assignments_list
-                }
+        for i, result in enumerate(results):
+            user_id, secretary_id = assignments_to_preload[i]
+            if isinstance(result, BaseAssistant):
                 logger.debug(
-                    f"Fetched {len(remote_assignments_dict)} remote assignments."
+                    f"Successfully preloaded assistant {secretary_id} for user {user_id}"
                 )
-
-                # 2. Compare with local cache and identify changes (under lock)
-                async with self._cache_lock:
-                    current_assignments = self._secretary_assignments
-                    added_users = (
-                        remote_assignments_dict.keys() - current_assignments.keys()
-                    )
-                    removed_users = (
-                        current_assignments.keys() - remote_assignments_dict.keys()
-                    )
-                    potentially_updated_users = (
-                        remote_assignments_dict.keys() & current_assignments.keys()
-                    )
-
-                    updated_users = {
-                        uid
-                        for uid in potentially_updated_users
-                        if remote_assignments_dict[uid][1] > current_assignments[uid][1]
-                    }
-
-                    # Apply changes to local assignments cache
-                    for user_id in removed_users:
-                        del self._secretary_assignments[user_id]
-                    for user_id in added_users | updated_users:
-                        self._secretary_assignments[user_id] = remote_assignments_dict[
-                            user_id
-                        ]
-
-                    # Identify secretary IDs to check/preload and IDs to potentially remove
-                    ids_to_check = {
-                        remote_assignments_dict[uid][0]
-                        for uid in added_users | updated_users
-                    }
-                    # We need to update existing assistants if their config changed, even if assignment didn't
-                    active_secretary_ids_in_cache = set(self._assistant_cache.keys())
-                    current_active_secretary_ids = {
-                        assignment[0]
-                        for assignment in self._secretary_assignments.values()
-                    }
-                    ids_to_check.update(
-                        active_secretary_ids_in_cache & current_active_secretary_ids
-                    )  # Also check active ones already in cache
-
-                logger.info(
-                    f"Cache diff: Added={len(added_users)}, Removed={len(removed_users)}, Updated={len(updated_users)}",
-                    added=list(added_users),
-                    removed=list(removed_users),
-                    updated=list(updated_users),
+                assistants_preloaded += 1
+            else:
+                logger.error(
+                    f"Failed to preload assistant {secretary_id} for user {user_id}",
+                    error=str(result),
                 )
+                assistants_failed += 1
 
-                # 3. Update assistant instances (outside lock)
-                tasks = []
-                for secretary_id in ids_to_check:
-                    tasks.append(self._check_and_update_assistant(secretary_id))
+        logger.info(
+            f"Preloading complete. Loaded: {assistants_preloaded}, Failed: {assistants_failed}, Assignments cached: {assignments_loaded}"
+        )
 
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                update_count = sum(1 for r in results if r is True)
-                failed_update_count = sum(
-                    1 for r in results if isinstance(r, Exception)
-                )
+    async def _periodic_refresh(self):
+        """Periodically refresh assignments and check assistant config updates."""
+        logger.info("Starting periodic cache refresh...")
+        assignments_updated = 0
+        assignments_added = 0
+        assignments_removed = 0
+        assistants_updated_or_loaded = 0
+        assistants_update_failed = 0
+        # assistants_removed_from_cache = 0 # We won't remove instances for now
+        added_users = []
+        removed_users = []
+        updated_users = []
 
-                # 4. Clean up assistant cache (under lock)
-                async with self._cache_lock:
-                    final_active_secretary_ids = {
-                        assignment[0]
-                        for assignment in self._secretary_assignments.values()
-                    }
-                    ids_to_remove_from_cache = (
-                        self._assistant_cache.keys() - final_active_secretary_ids
-                    )
-                    for assistant_id in ids_to_remove_from_cache:
-                        del self._assistant_cache[assistant_id]
-                        logger.info(f"Removed assistant {assistant_id} from cache.")
-
-                logger.info(
-                    f"Periodic refresh complete. Updated/Loaded: {update_count}, Failed: {failed_update_count}, Removed from cache: {len(ids_to_remove_from_cache)}"
-                )
-
-            except asyncio.CancelledError:
-                logger.info("Cache refresh task cancelled.")
-                break  # Exit the loop if cancelled
-            except Exception as e:
-                logger.exception(
-                    "Error during periodic cache refresh", error=str(e), exc_info=True
-                )
-                # Avoid busy-looping on persistent errors
-                await asyncio.sleep(300)  # Wait longer after an error
-
-    async def _check_and_update_assistant(self, assistant_id: UUID) -> bool:
-        """Check if assistant config changed and update instance in cache if needed."""
         try:
-            current_assistant_data = await self.rest_client.get_assistant(
-                str(assistant_id)
+            remote_assignments_list = (
+                await self.rest_client.get_all_user_secretary_assignments()
             )
-            if not current_assistant_data:
-                logger.warning(
-                    f"Assistant {assistant_id} not found during refresh check."
-                )
-                return False  # Indicate no update occurred
-
-            config_updated_at = current_assistant_data.updated_at
+            remote_assignments_dict = {
+                a.user_id: (a.secretary_id, a.updated_at)
+                for a in remote_assignments_list
+            }
+            logger.debug(f"Fetched {len(remote_assignments_dict)} remote assignments.")
 
             async with self._cache_lock:
-                cached_data = self._assistant_cache.get(assistant_id)
+                current_users = set(self._secretary_assignments.keys())
+                remote_users = set(remote_assignments_dict.keys())
 
-            should_update = False
-            if not cached_data:
-                should_update = True  # Not in cache, needs loading
-                logger.debug(f"Assistant {assistant_id} not in cache. Triggering load.")
-            elif (
-                config_updated_at
-                and cached_data[1]
-                and config_updated_at > cached_data[1]
-            ):
-                should_update = True  # Config is newer
-                logger.info(
-                    f"Assistant {assistant_id} config updated ({cached_data[1]} -> {config_updated_at}). Triggering reload."
-                )
-                # Explicitly remove the old entry before reloading to force recreation
-                async with self._cache_lock:
-                    if assistant_id in self._assistant_cache:
-                        del self._assistant_cache[assistant_id]
-                        logger.debug(
-                            f"Removed stale entry for {assistant_id} from cache before reload."
+                added_users = list(remote_users - current_users)
+                removed_users = list(current_users - remote_users)
+                common_users = list(current_users & remote_users)
+
+                # Add new assignments
+                for user_id in added_users:
+                    self._secretary_assignments[user_id] = remote_assignments_dict[
+                        user_id
+                    ]
+                    assignments_added += 1
+
+                # Remove old assignments
+                for user_id in removed_users:
+                    del self._secretary_assignments[user_id]
+                    assignments_removed += 1
+                    # We are NOT removing the assistant instance from _assistant_cache here
+                    # to keep it simple. It will be cleaned up on restart or eventually.
+
+                # Check for updated assignments (different secretary_id or newer timestamp)
+                for user_id in common_users:
+                    remote_secretary_id, remote_updated_at = remote_assignments_dict[
+                        user_id
+                    ]
+                    local_secretary_id, local_updated_at = self._secretary_assignments[
+                        user_id
+                    ]
+                    if (
+                        remote_secretary_id != local_secretary_id
+                        or remote_updated_at > local_updated_at
+                    ):
+                        self._secretary_assignments[user_id] = (
+                            remote_secretary_id,
+                            remote_updated_at,
+                        )
+                        assignments_updated += 1
+                        updated_users.append(user_id)
+
+            logger.info(
+                f"Assignment cache diff: Added={assignments_added}, Removed={assignments_removed}, Updated={assignments_updated}",
+                added=added_users,
+                removed=removed_users,
+                updated=updated_users,
+            )
+
+            # --- Check for Assistant Config Updates --- #
+            # Fetch all currently cached assistant UUIDs (unique)
+            cached_assistant_keys: List[Tuple[UUID, str]] = []
+            async with self._cache_lock:
+                cached_assistant_keys = list(self._assistant_cache.keys())
+
+            unique_assistant_uuids = list({uuid for uuid, _ in cached_assistant_keys})
+            if not unique_assistant_uuids:
+                logger.debug("No assistant instances in cache to check for updates.")
+                return  # Nothing more to do if cache is empty
+
+            # Fetch current config data for these UUIDs
+            fetch_tasks = {
+                uuid: self.rest_client.get_assistant(str(uuid))
+                for uuid in unique_assistant_uuids
+            }
+            results = await asyncio.gather(
+                *fetch_tasks.values(), return_exceptions=True
+            )
+
+            latest_assistant_data_map: Dict[UUID, Any] = {}
+            for i, uuid in enumerate(fetch_tasks.keys()):
+                result = results[i]
+                if isinstance(result, Exception):
+                    logger.warning(
+                        f"Failed to fetch latest config for assistant {uuid} during refresh",
+                        error=str(result),
+                    )
+                elif result:
+                    latest_assistant_data_map[uuid] = result
+                else:
+                    logger.warning(
+                        f"Received no data for assistant {uuid} during refresh"
+                    )
+
+            # Now, iterate through the cache and update/remove instances if config changed
+            instances_to_recreate: List[Tuple[UUID, str]] = []
+            async with self._cache_lock:
+                current_cache_keys = list(
+                    self._assistant_cache.keys()
+                )  # Get fresh list under lock
+                for assistant_uuid, user_id in current_cache_keys:
+                    if (assistant_uuid, user_id) not in self._assistant_cache:
+                        continue  # Instance was removed concurrently, skip
+
+                    instance, loaded_at = self._assistant_cache[
+                        (assistant_uuid, user_id)
+                    ]
+                    latest_data = latest_assistant_data_map.get(assistant_uuid)
+
+                    if latest_data:
+                        latest_updated_at = getattr(latest_data, "updated_at", None)
+                        # Check if remote config is newer than cached instance's load time
+                        if (
+                            latest_updated_at
+                            and loaded_at
+                            and latest_updated_at > loaded_at
+                        ):
+                            logger.info(
+                                f"Assistant config for {assistant_uuid} (user: {user_id}) has updated. Recreating instance.",
+                                old_loaded_at=loaded_at,
+                                new_updated_at=latest_updated_at,
+                            )
+                            # Remove from cache, it will be recreated on next get_assistant_by_id
+                            del self._assistant_cache[(assistant_uuid, user_id)]
+                            # Close the old instance outside the lock later if needed (or let it GC)
+                            instances_to_recreate.append((assistant_uuid, user_id))
+                        else:
+                            logger.debug(
+                                f"Assistant {assistant_uuid} (user: {user_id}) is up-to-date."
+                            )
+                    else:
+                        # Assistant config couldn't be fetched, maybe deleted?
+                        # Keep instance for now, maybe log a warning?
+                        logger.warning(
+                            f"Could not verify config for assistant {assistant_uuid} (user: {user_id}). Keeping cached instance."
                         )
 
-            if should_update:
-                # Find a relevant user_id for context
-                async with self._cache_lock:
-                    user_id_for_context = next(
-                        (
-                            uid
-                            for uid, (sid, _) in self._secretary_assignments.items()
-                            if sid == assistant_id
-                        ),
-                        None,
-                    )
-                if user_id_for_context:
+            # Recreate instances that need updating (outside the lock)
+            # This acts like a proactive cache update for changed configs
+            recreate_tasks = [
+                self.get_assistant_by_id(uuid, user_id=uid)
+                for uuid, uid in instances_to_recreate
+            ]
+            recreate_results = await asyncio.gather(
+                *recreate_tasks, return_exceptions=True
+            )
+
+            for i, result in enumerate(recreate_results):
+                uuid, uid = instances_to_recreate[i]
+                if isinstance(result, BaseAssistant):
+                    assistants_updated_or_loaded += 1
                     logger.debug(
-                        f"Reloading assistant {assistant_id} with user context {user_id_for_context}"
+                        f"Successfully recreated assistant {uuid} for user {uid}"
                     )
-                    # Call get_assistant_by_id - it handles cache update internally
-                    await self.get_assistant_by_id(
-                        assistant_id, user_id=str(user_id_for_context)
-                    )
-                    return True  # Indicate update occurred
                 else:
-                    # This might happen if the assignment was removed between checks
-                    logger.warning(
-                        f"Could not find user context for reloading assistant {assistant_id}, skipping reload."
+                    assistants_update_failed += 1
+                    logger.error(
+                        f"Failed to recreate assistant {uuid} for user {uid} after config update",
+                        error=str(result),
                     )
-                    return False  # Indicate no update occurred
-            else:
-                logger.debug(f"Assistant {assistant_id} is up-to-date.")
-                return False  # Indicate no update occurred
 
         except Exception as e:
-            logger.error(
-                f"Failed to check/update assistant {assistant_id}",
-                error=str(e),
-                exc_info=True,
+            logger.exception("Error during periodic cache refresh", error=e)
+
+        finally:
+            logger.info(
+                f"Periodic refresh complete. Updated/Loaded Assistants: {assistants_updated_or_loaded}, Failed Updates: {assistants_update_failed}"
+                # Removed from cache: {assistants_removed_from_cache} - Removed this part
             )
-            raise  # Reraise exception to be caught by gather in _periodic_refresh_cache
