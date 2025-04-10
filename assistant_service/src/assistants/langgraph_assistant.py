@@ -452,158 +452,106 @@ class LangGraphAssistant(BaseAssistant):
         user_id: str,
         triggered_event: Optional[dict] = None,  # Add triggered_event parameter
     ) -> str:
-        """Processes a message or trigger event using the compiled LangGraph graph.
+        """Processes a single message using the LangGraph agent and checkpointer."""
+        start_time = time.time()  # Start timer
+        log_extra = {
+            "assistant_id": self.assistant_id,
+            "user_id": user_id,
+            "message_type": type(message).__name__ if message else "None",
+            "triggered_event_type": triggered_event.get("type")
+            if triggered_event
+            else None,
+        }
+        logger.debug(f"Entering process_message", extra=log_extra)
 
-        Args:
-            message: The incoming message. Can be None if triggered_event is provided.
-            user_id: The ID of the user.
-            triggered_event: Optional data for a triggered event.
+        # Ensure checkpointer is available
+        if not self.checkpointer:
+            logger.error("Checkpointer is not configured.", extra=log_extra)
+            raise AssistantError("Checkpointer is not configured.", self.name)
 
-        Returns:
-            The assistant's response string.
-        """
-        # Ensure user_id consistency
-        if str(user_id) != str(self.user_id):
-            logger.warning(
-                "Mismatch between user_id provided to process_message and assistant instance.",
-                extra={
-                    "assistant_id": self.assistant_id,
-                    "instance_user_id": self.user_id,
-                    "process_message_user_id": user_id,
-                },
+        # Create a configuration dictionary for the specific user thread
+        config = {"configurable": {"thread_id": user_id}}
+
+        # Prepare initial state update
+        initial_state_update = {
+            "user_id": user_id,
+            "dialog_state": ["processing"],
+            "last_activity": datetime.now(timezone.utc),
+            "triggered_event": triggered_event,  # Pass the trigger event
+            # Always include the system prompt if it exists, followed by the current message
+            "messages": (
+                [self.system_prompt_message] if self.system_prompt_message else []
             )
-            # Use the user_id associated with the assistant instance for thread_id
-            # user_id_for_thread = self.user_id
-        # else:
-        #     user_id_for_thread = user_id
-        # Let's consistently use the user_id passed to the method for the thread ID
-        user_id_for_thread = user_id
-
-        # Prepare input for the graph
-        # We always add the system prompt to ensure it's considered.
-        # The graph's add_messages should handle duplicates if needed, but adding it here is safer.
-        initial_messages: List[AnyMessage] = [SystemMessage(content=self.system_prompt)]
-        if message:
-            initial_messages.append(message)
-
-        graph_input = {
-            "messages": initial_messages,
-            "user_id": str(user_id_for_thread),
-            "triggered_event": triggered_event,  # Pass the trigger event here
-            "dialog_state": ["idle"],  # Initial dialog state
-            "last_activity": datetime.now(timezone.utc),  # Use timezone-aware datetime
+            + ([message] if message else []),
         }
 
-        # Define thread configuration
-        thread_id = f"user_{user_id_for_thread}"
-        config = {"configurable": {"thread_id": thread_id}}
-
-        logger.info(
-            "Invoking LangGraph graph",
-            extra={
-                "assistant_id": self.assistant_id,
-                "user_id": user_id_for_thread,
-                "thread_id": thread_id,
-                "has_message": message is not None,
-                "has_trigger": triggered_event is not None,
-            },
-        )
-        start_time = time.perf_counter()
-
         try:
-            # Use asyncio.wait_for for timeout
-            # Timeout handling now happens within the _run_assistant_node
-            # final_state = await asyncio.wait_for(
-            #     self.compiled_graph.ainvoke(graph_input, config=config),
-            #     timeout=self.timeout,
-            # )
-
-            final_state = await self.compiled_graph.ainvoke(graph_input, config=config)
-
-            duration = time.perf_counter() - start_time
-            logger.info(
-                "Graph invocation completed",
-                duration_ms=round(duration * 1000),
-                extra={
-                    "assistant_id": self.assistant_id,
-                    "user_id": user_id_for_thread,
-                    "thread_id": thread_id,
-                },
+            logger.debug(
+                f"Invoking compiled_graph.ainvoke for user {user_id}", extra=log_extra
+            )
+            # Use ainvoke for asynchronous execution
+            # Apply timeout to the graph invocation
+            final_state = await asyncio.wait_for(
+                self.compiled_graph.ainvoke(initial_state_update, config=config),
+                timeout=self.timeout,
+            )
+            logger.debug(
+                f"Graph invocation completed for user {user_id}", extra=log_extra
             )
 
-            # Extract the last response message
-            if final_state and final_state.get("messages"):
-                # Get the last message from the state
+            # Extract the last AI message from the final state
+            if final_state and "messages" in final_state and final_state["messages"]:
                 last_message = final_state["messages"][-1]
-
-                # --- Debugging: Log the last message type and content ---
-                logger.debug(
-                    "Extracted last message from final state",
-                    last_message_type=type(last_message).__name__,
-                    last_message_content=str(last_message)[:200],
-                    extra={
-                        "assistant_id": self.assistant_id,
-                        "user_id": user_id_for_thread,
-                        "thread_id": thread_id,
-                    },
-                )
-                # --- End Debugging ---
-
                 if isinstance(last_message, AIMessage):
-                    return str(last_message.content)
-                elif isinstance(last_message, BaseMessage):
-                    # Handle other message types if necessary, return content or string representation
-                    return (
-                        str(last_message.content)
-                        if hasattr(last_message, "content")
-                        else str(last_message)
+                    response_content = last_message.content
+                    end_time = time.time()  # End timer
+                    log_extra["duration_ms"] = round((end_time - start_time) * 1000)
+                    logger.info(
+                        f"Successfully processed message for user {user_id}",
+                        response_preview=f"{str(response_content)[:100]}...",
+                        extra=log_extra,
                     )
+                    return response_content
                 else:
-                    # This case might happen if the graph returns raw dicts somehow
                     logger.warning(
-                        "Graph returned a non-BaseMessage object in messages list.",
+                        "Last message in final state is not an AIMessage",
                         last_message_type=type(last_message).__name__,
-                        extra={
-                            "assistant_id": self.assistant_id,
-                            "user_id": user_id_for_thread,
-                        },
+                        extra=log_extra,
                     )
-                    return str(last_message)  # Fallback to string representation
+                    # Fallback or error handling? Return empty for now.
+                    return ""
             else:
                 logger.warning(
-                    "Graph did not return a final state or messages.",
-                    extra={
-                        "assistant_id": self.assistant_id,
-                        "user_id": user_id_for_thread,
-                    },
+                    "No messages found in final state",
+                    final_state=final_state,
+                    extra=log_extra,
                 )
-                return "Извините, произошла ошибка при обработке вашего запроса."
+                return ""  # Or raise an error?
 
         except asyncio.TimeoutError:
             logger.error(
-                f"Graph execution timed out after {self.timeout} seconds.",
-                extra={
-                    "assistant_id": self.assistant_id,
-                    "user_id": user_id_for_thread,
-                },
+                f"Timeout occurred processing message for user {user_id}",
+                extra=log_extra,
             )
+            # Optionally, update dialog state to 'timeout'
+            # await self.compiled_graph.update_state(config, {"dialog_state": "timeout"})
             raise MessageProcessingError(
-                f"Assistant timed out after {self.timeout} seconds.", self.name
+                f"Processing timed out after {self.timeout} seconds.", self.name
             )
         except Exception as e:
             logger.exception(
-                "Error during graph invocation",
-                extra={
-                    "assistant_id": self.assistant_id,
-                    "user_id": user_id_for_thread,
-                },
+                f"Error processing message for user {user_id}: {e}",
+                extra=log_extra,
                 exc_info=True,
             )
-            # The decorator @handle_assistant_error should catch this, but re-raising
-            # ensures it's handled if the decorator somehow fails or is removed.
-            raise MessageProcessingError(
-                f"Failed to process message with graph: {str(e)}", self.name
-            ) from e
+            # Optionally, update dialog state to 'error'
+            # await self.compiled_graph.update_state(config, {"dialog_state": "error"})
+            # Use the centralized error handler
+            return handle_assistant_error(e, assistant_name=self.name, user_id=user_id)
+
+    async def close(self):
+        """Placeholder for cleanup, if needed."""
+        logger.info(f"Closing LangGraphAssistant {self.assistant_id}")
 
 
 # TODO:

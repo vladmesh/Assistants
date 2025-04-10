@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -59,6 +60,58 @@ class TelegramClient:
             "sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
         )
 
+    async def send_message_with_inline_keyboard(
+        self, chat_id: int, text: str, keyboard: List[List[Dict[str, str]]]
+    ) -> None:
+        """Send message with inline keyboard."""
+        url = f"{self.base_url}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": text,
+            "reply_markup": json.dumps({"inline_keyboard": keyboard}),
+        }
+        try:
+            async with self.session.post(url, json=payload) as response:
+                response.raise_for_status()
+                logger.info(
+                    "Message with inline keyboard sent", chat_id=chat_id, text=text
+                )
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Error sending message with inline keyboard",
+                chat_id=chat_id,
+                error=str(e),
+            )
+
+    async def answer_callback_query(
+        self, callback_query_id: str, text: Optional[str] = None
+    ) -> None:
+        """Answer callback query to remove the loading state on the button."""
+        url = f"{self.base_url}/answerCallbackQuery"
+        payload = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+            # payload['show_alert'] = False # Optional: show alert instead of toast
+
+        try:
+            async with self.session.post(url, json=payload) as response:
+                response.raise_for_status()
+                result = await response.json()
+                if result.get("ok"):
+                    logger.debug("Callback query answered", query_id=callback_query_id)
+                else:
+                    logger.warning(
+                        "Failed to answer callback query",
+                        query_id=callback_query_id,
+                        response=result,
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Error answering callback query",
+                query_id=callback_query_id,
+                error=str(e),
+            )
+
     async def get_updates(
         self, offset: int = 0, timeout: int = 30
     ) -> List[Dict[str, Any]]:
@@ -66,6 +119,10 @@ class TelegramClient:
         logger.debug("Getting updates", offset=offset)
         result = await self._make_request(
             "getUpdates",
-            json={"offset": offset, "timeout": timeout, "allowed_updates": ["message"]},
+            json={
+                "offset": offset,
+                "timeout": timeout,
+                "allowed_updates": ["message", "callback_query"],
+            },
         )
         return result if isinstance(result, list) else []

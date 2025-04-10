@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 import aiohttp
 import structlog
@@ -37,6 +38,8 @@ class RestClient:
 
         try:
             async with self.session.request(method, url, **kwargs) as response:
+                if response.status == 404:
+                    return None
                 response.raise_for_status()
                 return await response.json()
         except aiohttp.ClientError as e:
@@ -101,3 +104,95 @@ class RestClient:
         except aiohttp.ClientError as e:
             logger.error("Error getting user by id", user_id=user_id, error=str(e))
             return None
+
+    async def get_user_by_telegram_id(
+        self, telegram_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Get user data by Telegram ID."""
+        url = f"{self.base_url}{self.api_prefix}/users/"
+        params = {"telegram_id": telegram_id}
+        try:
+            async with self.session.get(url, params=params) as response:
+                if response.status == 404:
+                    logger.info(
+                        "User not found by telegram_id", telegram_id=telegram_id
+                    )
+                    return None
+                response.raise_for_status()  # Raise for other errors
+                user_data = await response.json()
+                logger.info(
+                    "User found by telegram_id",
+                    telegram_id=telegram_id,
+                    user_id=user_data.get("id"),
+                )
+                return user_data
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Error getting user by telegram_id",
+                telegram_id=telegram_id,
+                error=str(e),
+            )
+            # Optionally re-raise or handle differently
+            return None  # Or raise
+
+    async def list_secretaries(self) -> Optional[List[Dict[str, Any]]]:
+        """Get a list of available secretary assistants."""
+        url = f"{self.base_url}{self.api_prefix}/secretaries/"
+        try:
+            async with self.session.get(url) as response:
+                response.raise_for_status()
+                secretaries = await response.json()
+                logger.info("Retrieved secretaries list", count=len(secretaries))
+                return secretaries
+        except aiohttp.ClientError as e:
+            logger.error("Error retrieving secretaries list", error=str(e))
+            return None
+
+    async def set_user_secretary(
+        self, user_id: int, secretary_id: UUID
+    ) -> Optional[Dict[str, Any]]:
+        """Assign a secretary to a user."""
+        url = (
+            f"{self.base_url}{self.api_prefix}/users/{user_id}/secretary/{secretary_id}"
+        )
+        try:
+            async with self.session.post(url) as response:
+                response.raise_for_status()
+                link_data = await response.json()
+                logger.info(
+                    "Successfully set secretary for user",
+                    user_id=user_id,
+                    secretary_id=secretary_id,
+                )
+                return link_data
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Error setting secretary for user",
+                user_id=user_id,
+                secretary_id=secretary_id,
+                error=str(e),
+            )
+            return None
+
+    async def get_user_secretary(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get the currently assigned secretary for a user."""
+        url = f"{self.base_url}{self.api_prefix}/users/{user_id}/secretary"
+        try:
+            async with self.session.get(url) as response:
+                if response.status == 404:
+                    logger.info("No active secretary found for user", user_id=user_id)
+                    return None
+                response.raise_for_status()  # Raise for other errors
+                secretary_data = await response.json()
+                logger.info(
+                    "Found active secretary for user",
+                    user_id=user_id,
+                    secretary_id=secretary_data.get("id"),
+                )
+                return secretary_data
+        except aiohttp.ClientError as e:
+            logger.error("Error getting user secretary", user_id=user_id, error=str(e))
+            return None
+
+    async def close(self) -> None:
+        """Close the aiohttp session."""

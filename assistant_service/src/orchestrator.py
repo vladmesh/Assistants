@@ -409,6 +409,10 @@ class AssistantOrchestrator:
                 )
 
                 message_dict = json.loads(raw_message_json)
+                logger.debug(
+                    "Successfully parsed JSON",
+                    extra={"keys": list(message_dict.keys())},
+                )
 
                 response_payload = None
 
@@ -419,7 +423,12 @@ class AssistantOrchestrator:
                         logger.info(
                             f"QueueTrigger received for user {user_id} (type: {trigger.trigger_type.value})",
                         )
+                        logger.debug("Calling handle_trigger")
                         response_payload = await self.handle_trigger(trigger)
+                        logger.debug(
+                            "handle_trigger finished",
+                            has_payload=response_payload is not None,
+                        )
                     except Exception as parse_exc:
                         logger.error(
                             f"Failed to parse QueueTrigger: {parse_exc}",
@@ -443,7 +452,12 @@ class AssistantOrchestrator:
                         logger.info(
                             f"Standard QueueMessage received for user {user_id} (type: {queue_message.type.value})",
                         )
+                        logger.debug("Calling process_message")
                         response_payload = await self.process_message(queue_message)
+                        logger.debug(
+                            "process_message finished",
+                            has_payload=response_payload is not None,
+                        )
                     except Exception as parse_exc:
                         logger.error(
                             f"Failed to parse QueueMessage: {parse_exc}",
@@ -479,10 +493,13 @@ class AssistantOrchestrator:
 
                 if response_payload:
                     try:
+                        logger.debug("Attempting to serialize response payload")
                         response_json = json.dumps(response_payload, default=str)
+                        logger.debug("Attempting to push response to Redis")
                         await self.redis.rpush(
                             self.settings.OUTPUT_QUEUE, response_json
                         )
+                        logger.debug("Successfully pushed response to Redis")
                         logger.info(
                             "Response sent to output queue",
                             queue=self.settings.OUTPUT_QUEUE,
@@ -503,6 +520,7 @@ class AssistantOrchestrator:
                             exc_info=True,
                         )
 
+                logger.debug("Incrementing processed_count")
                 processed_count += 1
                 if max_messages and processed_count >= max_messages:
                     logger.info(
@@ -513,6 +531,7 @@ class AssistantOrchestrator:
             except redis.RedisError as e:
                 logger.error(f"Redis error during blpop or rpush: {e}", exc_info=True)
                 time.sleep(1)
+                continue
             except json.JSONDecodeError as e:
                 logger.error(
                     f"Failed to decode JSON message: {e}",
@@ -525,6 +544,7 @@ class AssistantOrchestrator:
                     f"Unexpected error processing message loop: {e}", exc_info=True
                 )
                 time.sleep(1)
+                continue
 
         logger.info("Message listener finished.")
 
