@@ -10,38 +10,54 @@ logger = structlog.get_logger()
 async def handle_start(
     telegram: TelegramClient, rest: RestClient, chat_id: int, user: Dict[str, Any]
 ) -> None:
-    """Handle /start command."""
-    telegram_id = user.get("id")
-    username = user.get("username")
+    """Handle /start command: list secretaries and prompt user to choose."""
+    telegram_id = user.get("telegram_id")  # Use telegram_id from user dict
+    user_id = user.get("id")  # internal user id
 
     try:
-        # Get or create user in REST service
-        user_data = await rest.get_or_create_user(telegram_id, username)
-        is_new_user = user_data.get("id") == telegram_id
+        logger.info("Handling /start command", user_id=user_id, telegram_id=telegram_id)
 
-        # Send appropriate greeting
-        if is_new_user:
-            message = (
-                "👋 Привет! Я ваш персональный ассистент.\n\n"
-                "Я могу помочь вам с:\n"
-                "📅 Управлением встречами и событиями\n"
-                "📝 Созданием заметок\n"
-                "🔍 Поиском информации\n\n"
-                "Чем могу помочь?"
+        # 1. Fetch available secretaries from REST service
+        secretaries = await rest.list_secretaries()
+
+        if not secretaries:
+            logger.error("No secretaries found in REST service.")
+            await telegram.send_message(
+                chat_id,
+                "К сожалению, сейчас нет доступных секретарей. Попробуйте позже.",
             )
-        else:
-            message = "👋 С возвращением!\n\n" "Чем могу помочь сегодня?"
+            return
 
-        await telegram.send_message(chat_id, message)
+        # 2. Format secretaries for display with inline keyboard
+        keyboard_buttons = []
+        for secretary in secretaries:
+            # Ensure description is available, provide fallback if needed
+            description = secretary.get("description") or "(Нет описания)"
+            button_text = f"{secretary.get('name')} - {description[:50]}{'...' if len(description) > 50 else ''}"
+            callback_data = f"select_secretary_{secretary.get('id')}"
+            keyboard_buttons.append(
+                [{"text": button_text, "callback_data": callback_data}]
+            )
+
+        # 3. Send message with inline keyboard
+        message_text = "👋 Привет! Пожалуйста, выбери своего секретаря:"
+        await telegram.send_message_with_inline_keyboard(
+            chat_id=chat_id, text=message_text, keyboard=keyboard_buttons
+        )
+
         logger.info(
-            "Start command handled", telegram_id=telegram_id, is_new_user=is_new_user
+            "Secretaries list sent to user", user_id=user_id, count=len(secretaries)
         )
 
     except Exception as e:
-        error_message = (
-            "Извините, произошла ошибка при обработке команды. Попробуйте позже."
-        )
-        await telegram.send_message(chat_id, error_message)
         logger.error(
-            "Error handling start command", telegram_id=telegram_id, error=str(e)
+            "Error handling start command",
+            user_id=user_id,
+            telegram_id=telegram_id,
+            error=str(e),
+            exc_info=True,
+        )
+        await telegram.send_message(
+            chat_id,
+            "Извините, произошла ошибка при обработке команды /start. Попробуйте позже.",
         )

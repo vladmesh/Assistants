@@ -391,3 +391,36 @@ class RestServiceClient:
                 f"Expected list from /api/user-secretaries/assignments, got {type(response_data)}"
             )
             return []  # Return empty list on unexpected type
+
+    async def get_user_secretary_assignment(self, user_id: int) -> Optional[dict]:
+        """Fetch the active secretary assignment for a specific user."""
+        endpoint = f"/api/users/{user_id}/secretary"
+        try:
+            response_data = await self._request("GET", endpoint)
+            if response_data:
+                logger.info(
+                    "Found secretary assignment for user",
+                    user_id=user_id,
+                    secretary_id=response_data.get("id"),
+                )
+                # We might need to return the link object containing the update time later for caching
+                # For now, just returning the secretary data itself.
+                # The endpoint /users/{user_id}/secretary returns the Assistant object directly.
+                return response_data
+            else:
+                # Handle case where _request returns None (e.g., 404)
+                logger.info(
+                    "No active secretary assignment found for user via REST",
+                    user_id=user_id,
+                )
+                return None
+        except Exception as e:
+            logger.error(
+                f"Error fetching secretary assignment for user {user_id}: {e}",
+                exc_info=True,
+            )
+            return None
+
+    async def get_active_assignments(self) -> List[dict]:
+        """Fetch all active user-secretary assignments."""
+        url = f"{self.base_url}/api/user-secretaries/assignments"

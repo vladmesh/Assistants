@@ -301,7 +301,8 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
     assert first_call_args["user_id"] == user_id
     # Check other state elements passed
     assert first_call_args["triggered_event"] is None
-    assert first_call_args["dialog_state"] == ["idle"]
+    # The initial state passed to invoke should be 'processing'
+    assert first_call_args["dialog_state"] == ["processing"]
 
     assert "messages" in second_call_args
     assert len(second_call_args["messages"]) == len(expected_second_messages)
@@ -312,4 +313,5 @@ async def test_process_message_stateful_memory(assistant_instance, memory_saver)
     assert second_call_args["user_id"] == user_id
     # Check other state elements passed
     assert second_call_args["triggered_event"] is None
-    assert second_call_args["dialog_state"] == ["idle"]
+    # The initial state passed to invoke should be 'processing'
+    assert second_call_args["dialog_state"] == ["processing"]
