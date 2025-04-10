@@ -27,6 +27,7 @@ class Assistant(BaseModel):
     assistant_type: str
     openai_assistant_id: Optional[str] = None
     is_active: bool
+    description: Optional[str] = None
 
 
 class AssistantCreate(BaseModel):
@@ -36,6 +37,7 @@ class AssistantCreate(BaseModel):
     is_secretary: bool = False
     model: str
     instructions: str
+    description: Optional[str] = None
     assistant_type: str = "llm"
     openai_assistant_id: Optional[str] = None
 
@@ -47,6 +49,7 @@ class AssistantUpdate(BaseModel):
     is_secretary: Optional[bool] = None
     model: Optional[str] = None
     instructions: Optional[str] = None
+    description: Optional[str] = None
     assistant_type: Optional[str] = None
     openai_assistant_id: Optional[str] = None
     is_active: Optional[bool] = None
