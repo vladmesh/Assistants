@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # Basic settings
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "DEBUG"
+    HTTP_CLIENT_TIMEOUT: float = 60.0
 
     # API Keys (loaded from .env)
     OPENAI_API_KEY: str
@@ -25,7 +26,10 @@ class Settings(BaseSettings):
     # REST service settings
     REST_SERVICE_HOST: str = "rest_service"  # Docker service name
     REST_SERVICE_PORT: int = 8000
-    REST_SERVICE_BASE_URL: str = f"http://{REST_SERVICE_HOST}:{REST_SERVICE_PORT}"
+
+    @property
+    def REST_SERVICE_URL(self) -> str:
+        return f"http://{self.REST_SERVICE_HOST}:{self.REST_SERVICE_PORT}"
 
     # Queue names
     INPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_SECRETARY")

@@ -1,7 +1,9 @@
 import asyncio  # Add asyncio
-from datetime import datetime  # Add datetime
+from datetime import datetime, timezone  # Add timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
+
+import httpx  # Add httpx import
 
 # Project imports
 from config.logger import get_logger
@@ -9,8 +11,11 @@ from config.settings import Settings
 
 # Langchain imports
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import MemorySaver
+
+# Import the recommended serializer
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from services.rest_service import RestServiceClient
+from storage.rest_checkpoint_saver import RestCheckpointSaver  # Import new saver
 
 # Import ToolFactory
 from tools.factory import ToolFactory
@@ -25,10 +30,8 @@ logger = get_logger(__name__)
 
 
 class AssistantFactory:
-    def __init__(
-        self, settings: Settings, checkpointer: Optional[BaseCheckpointSaver] = None
-    ):
-        """Initialize the factory with settings, REST client, and checkpointer"""
+    def __init__(self, settings: Settings):
+        """Initialize the factory with settings, REST client, and REST checkpointer"""
         self.settings = settings
         self.rest_client = RestServiceClient()
         # Cache for user_id -> (secretary_id, assignment_updated_at)
@@ -40,17 +43,39 @@ class AssistantFactory:
         # Lock for cache access
         self._cache_lock = asyncio.Lock()
 
-        self.checkpointer = checkpointer or MemorySaver()
+        # Initialize HTTP client for the checkpointer
+        self.http_client = httpx.AsyncClient(
+            timeout=settings.HTTP_CLIENT_TIMEOUT
+        )  # Use setting for timeout
+        # Initialize the REST checkpointer with the serializer
+        self.checkpointer = RestCheckpointSaver(
+            base_url=settings.REST_SERVICE_URL,  # Use setting for URL
+            client=self.http_client,
+            serializer=JsonPlusSerializer(),  # Pass the serializer instance
+        )
         # Initialize ToolFactory, passing self (the AssistantFactory instance)
-        self.tool_factory = ToolFactory(settings=self.settings, assistant_factory=self)
+        self.tool_factory = ToolFactory(settings=settings, assistant_factory=self)
         logger.info(
             f"AssistantFactory initialized with checkpointer: {type(self.checkpointer).__name__}"
             f" and ToolFactory"
         )
+        # Note: Consider calling self.checkpointer.setup() during app startup
 
     async def close(self):
-        """Close REST client connection and all assistant instances"""
-        await self.rest_client.close()
+        """Close REST client, checkpointer HTTP client, and assistant instances"""
+        # Close checkpointer's HTTP client first
+        try:
+            await self.http_client.aclose()
+            logger.info("Closed checkpointer HTTP client.")
+        except Exception as e:
+            logger.warning(f"Error closing checkpointer HTTP client: {e}")
+
+        # Close main REST client
+        try:
+            await self.rest_client.close()
+            logger.info("Closed main REST service client.")
+        except Exception as e:
+            logger.warning(f"Error closing main REST service client: {e}")
 
         # Close all assistant instances from the correct cache
         async with self._cache_lock:  # Ensure thread-safe access during iteration
@@ -162,7 +187,7 @@ class AssistantFactory:
             ) from e
 
     async def get_assistant_by_id(
-        self, assistant_uuid: UUID, user_id: str  # user_id is now required
+        self, assistant_uuid: UUID, user_id: str
     ) -> BaseAssistant:
         """Get or create assistant instance by its UUID and user_id, using cache.
 
@@ -195,11 +220,11 @@ class AssistantFactory:
 
         logger.info(
             f"Assistant {assistant_uuid} for user {user_id} not in cache, creating new instance...",
-            user_id=user_id,  # Log user_id correctly
+            user_id=user_id,
         )
 
         try:
-            # --- Fetch assistant config data (outside lock) ---
+            # --- Fetch assistant config data ---
             assistant_data = await self.rest_client.get_assistant(str(assistant_uuid))
             if not assistant_data:
                 raise ValueError(
@@ -210,24 +235,29 @@ class AssistantFactory:
                 str(assistant_uuid)
             )
 
-            # --- Prepare config and create tools (outside lock) ---
-            assistant_config_dict = getattr(assistant_data, "config", None) or {}
-            config = {
+            # --- Prepare config and create tools ---
+            # Construct the config dictionary expected by LangGraphAssistant
+            # Note: Ensure assistant_data has attributes like .config, .model, .instructions
+            assistant_config_dict = getattr(assistant_data, "config", {}) or {}
+            config_for_assistant = {
+                # Extract relevant fields from assistant_data and settings
+                "model_name": assistant_data.model,
+                "temperature": assistant_config_dict.get("temperature", 0.7),
                 "api_key": assistant_config_dict.get(
                     "api_key", self.settings.OPENAI_API_KEY
                 ),
-                "model_name": assistant_data.model,
-                "temperature": assistant_config_dict.get("temperature", 0.7),
                 "system_prompt": assistant_data.instructions,
-                "timeout": assistant_config_dict.get("timeout", 60),
+                "timeout": assistant_config_dict.get(
+                    "timeout", self.settings.HTTP_CLIENT_TIMEOUT
+                ),
+                "tools": tool_definitions,  # Pass raw tool definitions if needed by base class
+                # Add other fields from assistant_data.config if necessary
                 **assistant_config_dict,
             }
-            kwargs = {"is_secretary": assistant_data.is_secretary}
 
-            # Create tools, passing the specific user_id
             created_tools = await self.tool_factory.create_langchain_tools(
                 tool_definitions=tool_definitions,
-                user_id=user_id,  # Pass the required user_id
+                user_id=user_id,
                 assistant_id=str(assistant_data.id),
             )
 
@@ -250,62 +280,57 @@ class AssistantFactory:
                     extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
                 )
 
-            # --- Create assistant instance (outside lock) ---
-            if assistant_data.assistant_type == "llm":
-                assistant_instance = LangGraphAssistant(
-                    assistant_id=str(assistant_data.id),
-                    name=assistant_data.name,
-                    config=config,
+            # --- Create Assistant Instance ---
+            assistant_type = assistant_data.assistant_type
+            instance: Optional[BaseAssistant] = None
+
+            if assistant_type == "llm":
+                instance = LangGraphAssistant(
+                    assistant_id=str(assistant_uuid),
+                    name=assistant_data.name,  # Pass correct name
+                    config=config_for_assistant,  # Pass the constructed config dict
                     tools=created_tools,
-                    user_id=user_id,  # Pass user_id to assistant instance
+                    user_id=user_id,
                     checkpointer=self.checkpointer,
-                    **kwargs,
+                    # Pass is_secretary if needed by base class or LangGraphAssistant
+                    is_secretary=getattr(assistant_data, "is_secretary", False),
+                )
+                logger.info(
+                    f"Created LangGraphAssistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id}"
                 )
             else:
-                # Handle other types or raise error
-                logger.error(
-                    f"Attempted to create assistant with unknown type: {assistant_data.assistant_type}",
-                    extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
-                )
                 raise ValueError(
-                    f"Unknown assistant type: {assistant_data.assistant_type}"
+                    f"Unknown or unhandled assistant type: {assistant_type}"
                 )
 
-            # --- Update cache (under lock) ---
-            config_loaded_at = getattr(assistant_data, "updated_at", datetime.now())
-            async with self._cache_lock:
-                # Store using the (uuid, user_id) key
-                self._assistant_cache[cache_key] = (
-                    assistant_instance,
-                    config_loaded_at,
+            # --- Update Cache ---
+            if instance:
+                async with self._cache_lock:
+                    self._assistant_cache[cache_key] = (
+                        instance,
+                        datetime.now(timezone.utc),
+                    )  # Use timezone.utc
+                logger.info(
+                    f"Assistant {assistant_uuid} for user {user_id} created and added to cache."
                 )
-            logger.info(
-                f"Created and cached assistant instance {assistant_uuid} for user {user_id}",
-                loaded_at=config_loaded_at,  # Add loaded_at timestamp to log
-                name=assistant_data.name,  # Add assistant name to log
-                extra={
-                    "assistant_id": str(assistant_uuid),
-                    "user_id": user_id,
-                },  # Keep extra context
-            )
+                return instance
+            else:
+                # This case should ideally not happen if assistant_type is validated
+                raise ValueError("Failed to create assistant instance.")
 
-            return assistant_instance
-
-        except ValueError as ve:
-            logger.error(
-                f"ValueError creating assistant {assistant_uuid} for user {user_id}: {ve}",
-                exc_info=True,
-            )
-            raise  # Re-raise ValueError
         except Exception as e:
             logger.exception(
-                f"Unexpected error creating assistant {assistant_uuid} for user {user_id}",
-                exc_info=True,
+                f"Failed to get or create assistant {assistant_uuid} for user {user_id}",
+                error=str(e),
+                exc_info=True,  # Include traceback
+                assistant_id=str(assistant_uuid),
+                user_id=user_id,
             )
-            # Wrap other exceptions in ValueError for consistent error handling upstream?
-            # Or maybe a custom AssistantCreationError?
+            # Re-raise specific error if it was ValueError, otherwise wrap
+            if isinstance(e, ValueError):
+                raise
             raise ValueError(
-                f"Failed to create assistant {assistant_uuid} for user {user_id}."
+                f"Error creating/retrieving assistant {assistant_uuid} for user {user_id}."
             ) from e
 
     async def get_secretary_assistant(self) -> dict:
@@ -444,8 +469,68 @@ class AssistantFactory:
             f"Preloading complete. Loaded Instances: {assistants_preloaded}, Failed Instances: {assistants_failed}, Assignments Cached: {assignments_loaded}"
         )
 
+    # Method adjusted for clarity
+    async def _check_and_update_assistant_cache(
+        self, cache_key: Tuple[UUID, str], instance: BaseAssistant, loaded_at: datetime
+    ):
+        """Checks if a cached assistant needs updating and reloads if necessary."""
+        assistant_uuid, user_id = cache_key
+        try:
+            latest_assistant_data = await self.rest_client.get_assistant(
+                str(assistant_uuid)
+            )
+            if latest_assistant_data:
+                latest_updated_at = getattr(latest_assistant_data, "updated_at", None)
+                if latest_updated_at and loaded_at:
+                    # --- Make comparison timezone-aware ---
+                    # Ensure both datetimes are aware and compared in UTC
+                    if not loaded_at.tzinfo:
+                        logger.warning(
+                            f"Loaded_at for {cache_key} is naive, assuming UTC."
+                        )
+                        loaded_at_aware = loaded_at.replace(tzinfo=timezone.utc)
+                    else:
+                        loaded_at_aware = loaded_at.astimezone(timezone.utc)
+
+                    if not latest_updated_at.tzinfo:
+                        logger.warning(
+                            f"Latest_updated_at for {cache_key} is naive, assuming UTC."
+                        )
+                        latest_updated_at_aware = latest_updated_at.replace(
+                            tzinfo=timezone.utc
+                        )
+                    else:
+                        latest_updated_at_aware = latest_updated_at.astimezone(
+                            timezone.utc
+                        )
+
+                    if latest_updated_at_aware > loaded_at_aware:
+                        # --- End timezone comparison fix ---
+                        logger.info(
+                            f"Assistant config for {assistant_uuid} (user {user_id}) has changed. Reloading."
+                        )
+                        # Remove old instance from cache before reloading
+                        async with self._cache_lock:
+                            self._assistant_cache.pop(cache_key, None)
+                        # Recursively call get_assistant_by_id to reload and cache new instance
+                        # This might lead to deep recursion if called rapidly, consider alternative reload mechanism?
+                        await self.get_assistant_by_id(assistant_uuid, user_id)
+                else:
+                    logger.debug(
+                        f"Could not compare update times for {cache_key} (missing data)."
+                    )
+            else:
+                logger.warning(
+                    f"Could not fetch latest data for assistant {assistant_uuid} during refresh."
+                )
+        except Exception as e:
+            logger.exception(
+                f"Error checking/updating cache for assistant {assistant_uuid} (user {user_id}): {e}",
+                exc_info=True,
+            )
+
     async def _periodic_refresh(self):
-        """Periodically refresh assignments and check assistant config updates."""
+        """Periodically refresh assignments and check for assistant config updates."""
         logger.info("Starting periodic cache refresh cycle...")
         assignments_updated = 0
         assignments_added = 0
@@ -553,101 +638,30 @@ class AssistantFactory:
             f"Checking config updates for {len(unique_assistant_uuids)} unique cached assistant UUIDs."
         )
 
-        # Fetch current config data for these UUIDs concurrently
-        fetch_tasks = {
-            uuid: self.rest_client.get_assistant(str(uuid))
-            for uuid in unique_assistant_uuids
-        }
-        results = await asyncio.gather(*fetch_tasks.values(), return_exceptions=True)
-
-        latest_assistant_data_map: Dict[UUID, Any] = {}
-        for i, uuid in enumerate(fetch_tasks.keys()):
-            result = results[i]
-            assistants_configs_checked += 1
-            if isinstance(result, Exception):
-                logger.warning(
-                    f"Failed to fetch latest config for assistant {uuid} during refresh check",
-                    error=str(result),
-                )
-                assistants_update_failed += 1
-            elif result:
-                # Store the fetched AssistantModel (or whatever the type is)
-                latest_assistant_data_map[uuid] = result
-            else:
-                # Assistant might have been deleted from REST service
-                logger.warning(
-                    f"Received no data (likely deleted) for assistant {uuid} during refresh check"
-                )
-                # We will handle removal from cache below if instance exists
-
-        # --- Step 6 & 7: Compare Timestamps and Update Assistant Cache ---
+        # Check for assistant config updates
+        unique_assistant_uuids = set()
+        cache_items_to_check = []
         async with self._cache_lock:
-            # Iterate over the snapshot of keys obtained earlier
-            for assistant_uuid, user_id in cached_assistant_keys:
-                # Double-check if the key still exists in case it was removed concurrently (e.g., by close())
-                if (assistant_uuid, user_id) not in self._assistant_cache:
-                    logger.debug(
-                        f"Assistant instance {assistant_uuid} for user {user_id} was removed concurrently, skipping update check."
-                    )
-                    continue
+            # Create a snapshot of cache items to check to avoid holding lock during awaits
+            cache_items_to_check = list(self._assistant_cache.items())
+            unique_assistant_uuids = {uuid for (uuid, _), _ in cache_items_to_check}
 
-                # Get instance and its load time from cache
-                instance, loaded_at = self._assistant_cache[(assistant_uuid, user_id)]
-                latest_data = latest_assistant_data_map.get(assistant_uuid)
+        if not unique_assistant_uuids:
+            logger.info("Periodic refresh cycle complete (no instances to check).")
+            return
 
-                if latest_data:
-                    latest_updated_at = getattr(latest_data, "updated_at", None)
-                    if not latest_updated_at:
-                        logger.warning(
-                            f"Fetched config for assistant {assistant_uuid} is missing 'updated_at' timestamp."
-                        )
-                        continue  # Cannot compare without timestamp
-
-                    # Compare timestamps (ensure both are valid datetimes)
-                    if isinstance(loaded_at, datetime) and isinstance(
-                        latest_updated_at, datetime
-                    ):
-                        if latest_updated_at > loaded_at:
-                            logger.info(
-                                f"Config for assistant {assistant_uuid} (user: {user_id}) updated remotely ({latest_updated_at} > {loaded_at}). Removing from cache for refresh on next use.",
-                                assistant_id=str(assistant_uuid),
-                                user_id=user_id,
-                            )
-                            # Remove from cache. It will be recreated by get_assistant_by_id on next call.
-                            del self._assistant_cache[(assistant_uuid, user_id)]
-                            assistants_removed_from_cache += 1
-                            assistants_to_update += 1  # Mark that an update is needed (will happen on next get)
-
-                            # Optionally close the old instance here? Maybe better to let GC handle it
-                            # or rely on the main close() method. For now, just remove from cache.
-                        else:
-                            # Config is up-to-date or older (older shouldn't happen)
-                            logger.debug(
-                                f"Assistant {assistant_uuid} (user: {user_id}) config is up-to-date."
-                            )
-                    else:
-                        logger.warning(
-                            f"Invalid or missing timestamp for assistant {assistant_uuid} (user: {user_id}). Cannot compare for updates. Loaded: {loaded_at}, Remote: {latest_updated_at}"
-                        )
-
-                else:
-                    # Latest config data wasn't found (fetch failed or assistant deleted)
-                    # Remove the instance from cache as it likely no longer exists or is invalid.
-                    logger.warning(
-                        f"Config for assistant {assistant_uuid} (user: {user_id}) could not be fetched or assistant deleted. Removing from cache.",
-                        assistant_id=str(assistant_uuid),
-                        user_id=user_id,
-                    )
-                    del self._assistant_cache[(assistant_uuid, user_id)]
-                    assistants_removed_from_cache += 1
-                    # Don't count this as 'to_update', it's a removal due to missing config.
-
-        logger.info(
-            f"Assistant config check complete. Checked: {assistants_configs_checked}, Fetch Failures: {assistants_update_failed}, "
-            f"Marked for Update (removed from cache): {assistants_removed_from_cache}"
-            # Assistants requiring update on next use: {assistants_to_update} - this is same as removed_from_cache now
+        logger.debug(
+            f"Checking config updates for {len(unique_assistant_uuids)} unique cached assistant UUIDs."
         )
-        logger.info("Periodic refresh cycle finished.")
+        # Fetch latest config for all unique assistants (can be optimized)
+        # This part was potentially causing the error - moved detailed check to helper
+        # Instead of fetching all here, we check inside the loop using the helper
+
+        # Iterate through the snapshot of cache items
+        for cache_key, (instance, loaded_at) in cache_items_to_check:
+            await self._check_and_update_assistant_cache(cache_key, instance, loaded_at)
+
+        logger.info("Periodic refresh cycle complete.")
 
     # Keep the startup and shutdown logic separate if needed
     async def start_background_tasks(self):

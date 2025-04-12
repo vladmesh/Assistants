@@ -358,7 +358,7 @@ class LangGraphAssistant(BaseAssistant):
                 extra=log_extra,
             )
             # Format a user-friendly error message
-            error_content = handle_assistant_error(e, self.name, return_str=True)
+            error_content = handle_assistant_error(e, self.name)
             error_message = SystemMessage(content=error_content)
             current_state_update["dialog_state"] = "error"
 
@@ -550,7 +550,7 @@ class LangGraphAssistant(BaseAssistant):
             # Optionally, update dialog state to 'error'
             # await self.compiled_graph.update_state(config, {"dialog_state": "error"})
             # Use the centralized error handler
-            return handle_assistant_error(e, assistant_name=self.name, user_id=user_id)
+            return handle_assistant_error(e, assistant_name=self.name)
 
     async def close(self):
         """Placeholder for cleanup, if needed."""

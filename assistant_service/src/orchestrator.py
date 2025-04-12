@@ -177,7 +177,7 @@ class AssistantOrchestrator:
             logger.warning(
                 f"Error processing QueueMessage due to invalid data/structure: {type(e).__name__}",
                 error=str(e),
-                extra=log_extra,
+                **log_extra,
             )
             return {
                 "user_id": log_extra["user_id"],
@@ -211,7 +211,7 @@ class AssistantOrchestrator:
                 "QueueMessage processing failed unexpectedly",
                 error=str(e),
                 exc_info=True,
-                extra=log_extra,
+                **log_extra,
             )
             return {
                 "user_id": log_extra["user_id"],
@@ -341,7 +341,7 @@ class AssistantOrchestrator:
             logger.warning(
                 f"Error handling QueueTrigger due to invalid data: {type(e).__name__}",
                 error=str(e),
-                extra=log_extra,
+                **log_extra,
             )
             return {
                 "user_id": log_extra["user_id"],
@@ -370,7 +370,7 @@ class AssistantOrchestrator:
                 "Unexpected error handling QueueTrigger",
                 error=str(e),
                 exc_info=True,
-                extra=log_extra,
+                **log_extra,
             )
             return {
                 "user_id": log_extra["user_id"],
@@ -543,6 +543,7 @@ class AssistantOrchestrator:
                 logger.exception(
                     f"Unexpected error processing message loop: {e}", exc_info=True
                 )
+                # No user_id context available here, just log the error
                 time.sleep(1)
                 continue
 

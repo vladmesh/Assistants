@@ -8,6 +8,7 @@ from .assistant import (
 )
 from .base import BaseModel
 from .calendar import CalendarCredentials
+from .checkpoint import Checkpoint
 
 # from .cron import (
 #     CronJob,

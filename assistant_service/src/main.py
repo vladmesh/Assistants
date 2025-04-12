@@ -80,7 +80,7 @@ async def main():
         # Stop background tasks using the new method
         await service.factory.stop_background_tasks()
         await service.factory.close()
-        await service.message_queue.close()
+        await service.factory.message_queue.close()
         logger.info("Assistant service shut down.")
 
 
