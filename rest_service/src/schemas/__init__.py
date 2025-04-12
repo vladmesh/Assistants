@@ -1,4 +1,5 @@
 from .base import BaseSchema, TimestampSchema
+from .checkpoint import CheckpointBase, CheckpointCreate, CheckpointRead
 from .reminder import ReminderBase, ReminderCreate, ReminderRead, ReminderUpdate
 
 __all__ = [
@@ -8,4 +9,7 @@ __all__ = [
     "ReminderCreate",
     "ReminderRead",
     "ReminderUpdate",
+    "CheckpointBase",
+    "CheckpointCreate",
+    "CheckpointRead",
 ]

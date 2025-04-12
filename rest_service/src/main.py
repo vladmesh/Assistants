@@ -1,16 +1,19 @@
 import logging
 from contextlib import asynccontextmanager
 
+from api.endpoints import checkpoints  # Import checkpoints separately
 from database import init_db
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from routers import (
-    assistant_tools,
+
+# Import routers from correct locations
+from routers import assistant_tools  # Assuming this is also in routers
+from routers import secretaries  # Assuming this is also in routers
+from routers import (  # user_secretary_links, # Removed non-existent router
     assistants,
     calendar,
     reminders,
-    secretaries,
     tools,
     users,
 )
@@ -50,6 +53,8 @@ app.include_router(tools.router, prefix="/api", tags=["Tools"])
 app.include_router(assistant_tools.router, prefix="/api", tags=["Assistant Tools"])
 app.include_router(secretaries.router, prefix="/api", tags=["Secretaries"])
 app.include_router(reminders.router, prefix="/api", tags=["Reminders"])
+# app.include_router(user_secretary_links.router, prefix="/api") # Removed non-existent router
+app.include_router(checkpoints.router, prefix="/api")
 
 
 @app.get("/health")
