@@ -1,8 +1,7 @@
 import asyncio
 import base64
-import binascii
 import json
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest

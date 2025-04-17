@@ -1,14 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
 
-from api.endpoints import checkpoints  # Import checkpoints separately
 from database import init_db
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 # Import routers from correct locations
+# from api.endpoints import checkpoints # Import checkpoints separately
 from routers import assistant_tools  # Assuming this is also in routers
+from routers import checkpoints  # Import checkpoints from routers
 from routers import secretaries  # Assuming this is also in routers
 from routers import (  # user_secretary_links, # Removed non-existent router
     assistants,

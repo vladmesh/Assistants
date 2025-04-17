@@ -23,7 +23,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from tools.factory import ToolFactory  # Import ToolFactory
 from tools.time_tool import TimeToolWrapper  # Import a real simple tool
 
-from shared_models.api_models import ToolModel  # Added import
+from shared_models.api_schemas import ToolRead  # Import ToolRead instead
 
 
 # Mock LLM that inherits from BaseChatModel
@@ -128,15 +128,18 @@ def basic_config():
 
 @pytest.fixture
 def time_tool_def():
-    """Provides a sample tool definition dictionary."""
+    """Provides a sample tool definition dictionary compatible with ToolRead."""
+    # Adjusted to match ToolRead schema fields
     return {
         "id": uuid.uuid4(),
         "name": "current_time",
         "description": "Get current time",
-        "tool_type": "time",
+        "tool_type": "time",  # Assuming ToolType enum includes 'time'
         "is_active": True,
-        "config": {},
-        "input_schema": None,
+        "input_schema": None,  # ToolRead expects dict or None
+        "assistant_id": None,
+        "created_at": datetime.now(timezone.utc),  # ToolRead includes timestamps
+        "updated_at": datetime.now(timezone.utc),
     }
 
 
@@ -154,16 +157,14 @@ async def assistant_instance(
     # Define a fixture user_id
     fixture_user_id = "test_user_fixture"
 
-    # Create ToolModel instance from the dictionary definition
-    tool_model_instance = ToolModel(**time_tool_def)
+    # Create ToolRead instance from the dictionary definition
+    tool_schema_instance = ToolRead(**time_tool_def)
 
     # Create tools using the factory
-    # Pass user_id and assistant_id if required by any tool initialization logic within the factory
-    # For the time tool, user_id/assistant_id might not be needed, but pass them for consistency.
     created_tools: List[Tool] = await tool_factory.create_langchain_tools(
-        tool_definitions=[tool_model_instance],  # Pass the ToolModel instance
+        tool_definitions=[tool_schema_instance],  # Pass the ToolRead instance
         user_id=fixture_user_id,
-        assistant_id="test-asst-id",  # Pass the assistant ID being used
+        assistant_id="test-asst-id",
     )
 
     # Create the LangGraphAssistant instance

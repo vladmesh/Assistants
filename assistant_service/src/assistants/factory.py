@@ -1,6 +1,6 @@
 import asyncio  # Add asyncio
 from datetime import datetime, timezone  # Add timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 import httpx  # Add httpx import
@@ -8,9 +8,6 @@ import httpx  # Add httpx import
 # Project imports
 from config.logger import get_logger
 from config.settings import Settings
-
-# Langchain imports
-from langgraph.checkpoint.base import BaseCheckpointSaver
 
 # Import the recommended serializer
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
@@ -22,6 +19,9 @@ from tools.factory import ToolFactory
 
 from .base_assistant import BaseAssistant
 from .langgraph_assistant import LangGraphAssistant
+
+# Langchain imports
+
 
 # Import shared model
 
@@ -535,10 +535,7 @@ class AssistantFactory:
         assignments_updated = 0
         assignments_added = 0
         assignments_removed = 0
-        assistants_configs_checked = 0
-        assistants_to_update = 0
         assistants_update_failed = 0  # Track failures during fetch for update check
-        assistants_removed_from_cache = 0
 
         # --- Step 1 & 2: Fetch and Diff Assignments ---
         try:
@@ -688,6 +685,6 @@ class AssistantFactory:
             except asyncio.CancelledError:
                 logger.info("Periodic refresh loop cancelled.")
                 break  # Exit loop cleanly
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in periodic refresh loop", exc_info=True)
                 await asyncio.sleep(300)  # Wait longer after error

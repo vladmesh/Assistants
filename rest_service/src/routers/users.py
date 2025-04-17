@@ -1,76 +1,137 @@
-from typing import Optional
+from typing import List, Optional
 
+import crud.user as user_crud
+import structlog
 from database import get_session
-from fastapi import APIRouter, Depends, HTTPException
-from models import TelegramUser
-from pydantic import BaseModel
-from sqlmodel import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from models.user import TelegramUser  # Keep for response_model
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from shared_models.api_schemas import (
+    TelegramUserCreate,
+    TelegramUserRead,
+    TelegramUserUpdate,
+)
+
+logger = structlog.get_logger()
 router = APIRouter()
 
 
-class UserCreate(BaseModel):
-    telegram_id: int
-    username: str = None
+@router.post(
+    "/users/", response_model=TelegramUserRead, status_code=status.HTTP_201_CREATED
+)
+async def create_user_route(
+    user_in: TelegramUserCreate, session: AsyncSession = Depends(get_session)
+) -> TelegramUser:
+    """Create a new user."""
+    logger.info(
+        "Attempting to create user",
+        telegram_id=user_in.telegram_id,
+        username=user_in.username,
+    )
+    try:
+        user = await user_crud.create_user(db=session, user_in=user_in)
+        logger.info(
+            "User created successfully", user_id=user.id, telegram_id=user.telegram_id
+        )
+        return user
+    except ValueError as e:  # Catch specific error for existing user
+        logger.warning(
+            "Failed to create user: already exists",
+            telegram_id=user_in.telegram_id,
+            error=str(e),
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to create user due to unexpected error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
 
 
-class UserUpdate(BaseModel):
-    timezone: Optional[str] = None
-    preferred_name: Optional[str] = None
-
-
-@router.post("/users/")
-async def create_user(user: UserCreate, session: AsyncSession = Depends(get_session)):
-    db_user = TelegramUser(telegram_id=user.telegram_id, username=user.username)
-    session.add(db_user)
-    await session.commit()
-    await session.refresh(db_user)
-    return db_user
-
-
-@router.get("/users/")
-async def get_user(telegram_id: int, session: AsyncSession = Depends(get_session)):
-    """Получить пользователя по telegram_id."""
-    query = select(TelegramUser).where(TelegramUser.telegram_id == telegram_id)
-    result = await session.execute(query)
-    user = result.scalar_one_or_none()
+@router.get("/users/by-telegram-id/", response_model=TelegramUserRead)
+async def get_user_by_telegram_id_route(
+    telegram_id: int, session: AsyncSession = Depends(get_session)
+) -> TelegramUser:
+    """Get a user by telegram_id."""
+    logger.info("Getting user by telegram_id", telegram_id=telegram_id)
+    user = await user_crud.get_user_by_telegram_id(db=session, telegram_id=telegram_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        logger.warning("User not found by telegram_id", telegram_id=telegram_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    logger.info("User found by telegram_id", user_id=user.id, telegram_id=telegram_id)
     return user
 
 
-@router.get("/users/{user_id}")
-async def get_user_by_id(user_id: int, session: AsyncSession = Depends(get_session)):
-    """Получить пользователя по ID."""
-    user = await session.get(TelegramUser, user_id)
+@router.get("/users/{user_id}", response_model=TelegramUserRead)
+async def get_user_by_id_route(
+    user_id: int, session: AsyncSession = Depends(get_session)
+) -> TelegramUser:
+    """Get a user by internal database ID."""
+    logger.info("Getting user by internal ID", user_id=user_id)
+    user = await user_crud.get_user_by_id(db=session, user_id=user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        logger.warning("User not found by internal ID", user_id=user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    logger.info(
+        "User found by internal ID", user_id=user_id, telegram_id=user.telegram_id
+    )
     return user
 
 
-@router.get("/users/all/")
-async def list_users(session: AsyncSession = Depends(get_session)):
-    """Получить список всех пользователей."""
-    query = select(TelegramUser)
-    result = await session.execute(query)
-    return result.scalars().all()
+@router.get("/users/", response_model=List[TelegramUserRead])
+async def list_users_route(
+    session: AsyncSession = Depends(get_session),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+) -> List[TelegramUser]:
+    """Get a list of all users."""
+    logger.info("Listing users", skip=skip, limit=limit)
+    users = await user_crud.get_users(db=session, skip=skip, limit=limit)
+    logger.info(f"Found {len(users)} users")
+    return users
 
 
-@router.patch("/users/{user_id}", response_model=TelegramUser)
-async def update_user(
-    user_id: int, user_update: UserUpdate, session: AsyncSession = Depends(get_session)
-):
-    """Update user details (timezone, preferred_name)."""
-    db_user = await session.get(TelegramUser, user_id)
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
+@router.patch("/users/{user_id}", response_model=TelegramUserRead)
+async def update_user_route(
+    user_id: int,
+    user_update: TelegramUserUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> TelegramUser:
+    """Update user details (e.g., timezone, preferred_name) by internal ID."""
+    logger.info(
+        "Attempting to update user",
+        user_id=user_id,
+        update_data=user_update.model_dump(exclude_unset=True),
+    )
+    updated_user = await user_crud.update_user(
+        db=session, user_id=user_id, user_in=user_update
+    )
+    if not updated_user:
+        logger.warning("User not found for update", user_id=user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    logger.info("User updated successfully", user_id=user_id)
+    return updated_user
 
-    update_data = user_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_user, key, value)
 
-    session.add(db_user)
-    await session.commit()
-    await session.refresh(db_user)
-    return db_user
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_route(
+    user_id: int, session: AsyncSession = Depends(get_session)
+) -> None:
+    """Delete a user by internal database ID."""
+    logger.info("Attempting to delete user", user_id=user_id)
+    deleted = await user_crud.delete_user(db=session, user_id=user_id)
+    if not deleted:
+        logger.warning("User not found for deletion", user_id=user_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    logger.info("User deleted successfully", user_id=user_id)
+    return None  # Return None for 204 No Content

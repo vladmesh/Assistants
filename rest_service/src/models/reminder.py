@@ -8,23 +8,14 @@ from pydantic import validator
 from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship
 
+# Import enums from shared_models
+from shared_models.enums import ReminderStatus, ReminderType
+
 from .base import BaseModel
 
 if TYPE_CHECKING:
     from .assistant import Assistant
     from .user import TelegramUser
-
-
-class ReminderType(str, enum.Enum):
-    ONE_TIME = "one_time"
-    RECURRING = "recurring"
-
-
-class ReminderStatus(str, enum.Enum):
-    ACTIVE = "active"
-    PAUSED = "paused"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
 
 
 class Reminder(BaseModel, table=True):

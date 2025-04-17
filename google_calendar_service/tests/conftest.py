@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from main import app

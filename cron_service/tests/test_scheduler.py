@@ -125,7 +125,6 @@ def test_remove_cancelled_job(mock_scheduler, sample_one_time_reminder):
 def test_job_execution_sends_to_redis(mock_redis, sample_one_time_reminder):
     """Test that executing a job correctly sends a message to Redis."""
     # TODO: Implement test for job execution and Redis message sending
-    pass
 
 
 def test_update_jobs_from_rest_flow(

@@ -1,12 +1,15 @@
 import base64
+import logging
 from typing import Any, Dict, Optional
 
 # Use absolute import for models
 from models.checkpoint import Checkpoint
-from schemas.checkpoint import CheckpointCreate  # Keep absolute import
 from sqlalchemy import desc, select
 from sqlmodel import Session  # Use SQLModel session for async
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+# from schemas.checkpoint import CheckpointCreate  # Keep absolute import
+from shared_models.api_schemas import CheckpointCreate  # Use shared schema
 
 
 async def create_checkpoint(

@@ -1,81 +1,103 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+import crud.calendar as calendar_crud
+import crud.user as user_crud
 import structlog
 from database import get_session
-from fastapi import APIRouter, Depends, HTTPException
-from models import CalendarCredentials, TelegramUser
+from fastapi import APIRouter, Depends, HTTPException, status
+from models.calendar import CalendarCredentials
+from models.user import TelegramUser
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+from shared_models.api_schemas import CalendarCredentialsCreate, CalendarCredentialsRead
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
 
-@router.put("/user/{user_id}/token")
-async def update_calendar_token(
+@router.put(
+    "/user/{user_id}/token",
+    response_model=CalendarCredentialsRead,
+    status_code=status.HTTP_200_OK,
+)
+async def update_calendar_token_route(
     user_id: int,
-    access_token: str,
-    refresh_token: str,
-    token_expiry: datetime,
+    creds_in: CalendarCredentialsCreate,
     db: AsyncSession = Depends(get_session),
-):
-    """Update user's Google Calendar token"""
-    result = await db.execute(select(TelegramUser).where(TelegramUser.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
+) -> CalendarCredentials:
+    """Update or create user's Google Calendar token"""
+    logger.info("Attempting to update/create calendar token", user_id=user_id)
     try:
-        # Get or create credentials
-        result = await db.execute(
-            select(CalendarCredentials).where(CalendarCredentials.user_id == user_id)
+        credentials = await calendar_crud.create_or_update_credentials(
+            db=db, user_id=user_id, creds_in=creds_in
         )
-        credentials = result.scalar_one_or_none()
-
-        if not credentials:
-            credentials = CalendarCredentials(
-                user_id=user_id,
-                access_token=access_token,
-                refresh_token=refresh_token,
-                token_expiry=token_expiry,
-            )
-            db.add(credentials)
-        else:
-            credentials.access_token = access_token
-            credentials.refresh_token = refresh_token
-            credentials.token_expiry = token_expiry
-            credentials.updated_at = datetime.utcnow()
-
-        await db.commit()
-        return {"message": "Token updated successfully"}
-
+        logger.info("Calendar token updated/created successfully", user_id=user_id)
+        return credentials
+    except ValueError as e:
+        logger.error(
+            "Failed update/create calendar token: User not found",
+            user_id=user_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     except Exception as e:
-        logger.error("Failed to update token", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to update token")
+        logger.exception(
+            "Failed to update/create calendar token due to unexpected error",
+            user_id=user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update token",
+        )
 
 
-@router.get("/user/{user_id}/token")
-async def get_calendar_token(
+@router.get("/user/{user_id}/token", response_model=Optional[CalendarCredentialsRead])
+async def get_calendar_token_route(
     user_id: int, db: AsyncSession = Depends(get_session)
-) -> Optional[Dict[str, Any]]:
+) -> Optional[CalendarCredentials]:
     """Get user's Google Calendar token"""
+    logger.info("Attempting to get calendar token", user_id=user_id)
     try:
-        # Get credentials
-        result = await db.execute(
-            select(CalendarCredentials).where(CalendarCredentials.user_id == user_id)
-        )
-        credentials = result.scalar_one_or_none()
-
+        credentials = await calendar_crud.get_credentials(db=db, user_id=user_id)
         if not credentials:
+            logger.info("No calendar token found for user", user_id=user_id)
             return None
-
-        return {
-            "access_token": credentials.access_token,
-            "refresh_token": credentials.refresh_token,
-            "token_expiry": credentials.token_expiry.isoformat(),
-        }
-
+        logger.info("Calendar token retrieved successfully", user_id=user_id)
+        return credentials
     except Exception as e:
-        logger.error("Failed to get token", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to get token")
+        logger.exception(
+            "Failed to get calendar token due to unexpected error", user_id=user_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get token",
+        )
+
+
+@router.delete("/user/{user_id}/token", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_calendar_token_route(
+    user_id: int, db: AsyncSession = Depends(get_session)
+) -> None:
+    """Delete user's Google Calendar token"""
+    logger.info("Attempting to delete calendar token", user_id=user_id)
+    try:
+        deleted = await calendar_crud.delete_credentials(db=db, user_id=user_id)
+        if not deleted:
+            logger.warning("Calendar token not found for deletion", user_id=user_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Credentials not found"
+            )
+        logger.info("Calendar token deleted successfully", user_id=user_id)
+        return None
+    except Exception as e:
+        logger.exception(
+            "Failed to delete calendar token due to unexpected error", user_id=user_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete token",
+        )

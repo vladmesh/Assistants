@@ -1,6 +1,9 @@
 """User fixtures"""
 
-from models import TelegramUser
+from typing import List
+
+# from models import TelegramUser
+from models.user import TelegramUser
 
 
 def create_test_users() -> list[TelegramUser]:

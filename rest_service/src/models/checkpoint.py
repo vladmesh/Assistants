@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, Column, DateTime, LargeBinary, String, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlmodel import Field
 
 from .base import BaseModel  # Import from local base

@@ -7,8 +7,8 @@ WORKDIR /
 RUN pip install poetry
 
 # Copy dependency files
-COPY rest_service/pyproject.toml rest_service/poetry.lock* ./rest_service/
 COPY shared_models ./shared_models
+COPY rest_service/pyproject.toml rest_service/poetry.lock* ./rest_service/
 
 # Configure poetry and install dependencies
 RUN poetry config virtualenvs.create false && \
@@ -21,6 +21,7 @@ FROM python:3.11-slim
 WORKDIR /
 
 ENV PYTHONPATH=/src \
+# ENV PYTHONPATH=/src:/shared_models \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 

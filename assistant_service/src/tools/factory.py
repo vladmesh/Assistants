@@ -14,7 +14,8 @@ from tools.sub_assistant_tool import SubAssistantTool  # Import SubAssistantTool
 from tools.time_tool import TimeToolWrapper
 from tools.web_search_tool import WebSearchTool
 
-from shared_models import ToolModel
+# from shared_models import ToolModel # Remove old import
+from shared_models.api_schemas import ToolRead  # Import new schema
 
 if TYPE_CHECKING:
     from assistants.factory import AssistantFactory  # Import for type hinting
@@ -43,10 +44,10 @@ class ToolFactory:
         # self.rest_client = RestServiceClient()
 
     async def create_langchain_tools(
-        self, tool_definitions: List[ToolModel], user_id: str, assistant_id: str
+        self, tool_definitions: List[ToolRead], user_id: str, assistant_id: str
     ) -> List[Tool]:
         """
-        Creates Langchain Tool instances from a list of ToolModel definitions.
+        Creates Langchain Tool instances from a list of ToolRead definitions.
         Name and Description are now fetched from tool_definitions.
         Args_schema is defined in the tool class.
         Returns a list of successfully initialized tools.

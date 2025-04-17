@@ -21,11 +21,12 @@ rest_service/
 │   ├── main.py              # FastAPI application entry point
 │   ├── database.py          # Database connection and ORM setup
 │   ├── config.py            # Configuration settings
-│   ├── models/              # Database models
+│   ├── models/              # Database models (SQLModel)
 │   │   ├── base.py          # Base model with timestamps
 │   │   ├── assistant.py     # Assistant and tool models
 │   │   ├── calendar.py      # Calendar integration models
-│   │   ├── cron.py          # Task scheduling models
+│   │   ├── cron.py          # Task scheduling models (renamed from reminder.py? Check actual)
+│   │   ├── reminder.py      # Reminder models (if exists)
 │   │   ├── user.py          # User models
 │   │   └── user_secretary.py # User-secretary mapping
 │   ├── routers/             # API endpoints
@@ -33,13 +34,15 @@ rest_service/
 │   │   ├── tools.py         # Tool management
 │   │   ├── users.py         # User management
 │   │   ├── calendar.py      # Calendar integration
-│   │   ├── cron_jobs.py     # Task scheduling
+│   │   ├── reminders.py     # Reminder scheduling (if exists)
 │   │   └── secretaries.py   # Secretary management
-│   └── schemas/             # Pydantic models
+│   └── crud/                # CRUD database operations
 └── tests/                   # Test suite
 ```
 
-## 3. Data Models
+## 3. Database Models
+
+*(Note: API Schemas (Pydantic models) used for request/response validation are now defined in the `shared_models` package.)*
 
 ### 3.1 Base Model
 ```python
@@ -49,35 +52,26 @@ class BaseModel(SQLModel):
 ```
 
 ### 3.2 Assistant Models
+*(Enum `AssistantType` is defined in `shared_models.enums`)*
 ```python
-class AssistantType(str, enum.Enum):
-    LLM = "llm"
-    OPENAI_API = "openai_api"
-
 class Assistant(BaseModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str
     is_secretary: bool
     model: str
     instructions: str
-    assistant_type: AssistantType
+    assistant_type: str # Changed from AssistantType enum reference
 ```
 
 ### 3.3 Tool Models
+*(Enum `ToolType` is defined in `shared_models.enums`)*
 ```python
-class ToolType(str, enum.Enum):
-    CALENDAR = "calendar"
-    REMINDER = "reminder"
-    TIME = "time"
-    SUB_ASSISTANT = "sub_assistant"
-    WEATHER = "weather"
-
 class Tool(BaseModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str
-    tool_type: ToolType
+    tool_type: str # Changed from ToolType enum reference
     description: str
-    input_schema: dict
+    input_schema: Optional[str] = None # Changed from dict to Optional[str]
 ```
 
 ### 3.4 User Models
@@ -86,11 +80,11 @@ class TelegramUser(BaseModel, table=True):
     id: int = Field(primary_key=True)
     telegram_id: int = Field(unique=True)
     username: Optional[str]
-    
-    # Relationships
-    cronjobs: List[CronJob]
-    calendar_credentials: Optional[CalendarCredentials]
-    secretary_links: List[UserSecretaryLink]
+
+    # Relationships (Example, adjust based on actual model)
+    # reminders: List["Reminder"] = Relationship(back_populates="user")
+    # calendar_credentials: Optional["CalendarCredentials"] = Relationship(back_populates="user")
+    # secretary_links: List["UserSecretaryLink"] = Relationship(back_populates="user")
 ```
 
 ### 3.5 Calendar Models
@@ -103,19 +97,20 @@ class CalendarCredentials(SQLModel, table=True):
     token_expiry: datetime
 ```
 
-### 3.6 Cron Models
+### 3.6 Reminder Models (If applicable)
+*(Enums `ReminderType`, `ReminderStatus` are defined in `shared_models.enums`)*
 ```python
-class CronJobType(str, enum.Enum):
-    NOTIFICATION = "notification"
-    SCHEDULE = "schedule"
-
-class CronJob(BaseModel, table=True):
-    id: int = Field(primary_key=True)
-    name: str
-    type: CronJobType
-    cron_expression: str
-    user_id: int = Field(foreign_key="telegramuser.id")
-    is_active: bool
+class Reminder(BaseModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: int = Field(foreign_key="telegramuser.id", index=True)
+    assistant_id: UUID = Field(foreign_key="assistant.id", index=True)
+    created_by_assistant_id: UUID = Field(foreign_key="assistant.id", index=True)
+    type: str # Changed from ReminderType
+    trigger_at: Optional[datetime] = Field(default=None, index=True)
+    cron_expression: Optional[str] = Field(default=None)
+    payload: str
+    status: str # Changed from ReminderStatus
+    last_triggered_at: Optional[datetime] = Field(default=None)
 ```
 
 ### 3.7 User-Secretary Mapping

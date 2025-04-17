@@ -5,13 +5,11 @@ services:
       dockerfile: assistant_service/Dockerfile
     container_name: assistant-service
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_DB=${REDIS_DB}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
-      - TAVILY_API_KEY=${TAVILY_API_KEY}
     env_file:
       - .env
     volumes:
@@ -41,7 +39,7 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
-      - REST_SERVICE_URL=http://rest_service:8000}
+      - REST_SERVICE_URL=http://rest_service:8000
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
     volumes:
       - ./telegram_bot_service/src:/src  # для разработки

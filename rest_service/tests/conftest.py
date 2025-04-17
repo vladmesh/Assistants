@@ -7,7 +7,8 @@ from config import Settings
 from database import get_session
 from httpx import AsyncClient
 from main import app  # Assuming your FastAPI app is defined in main.py
-from models import Assistant, TelegramUser
+from models.assistant import Assistant
+from models.user import TelegramUser
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession

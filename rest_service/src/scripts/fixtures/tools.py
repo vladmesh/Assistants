@@ -1,8 +1,10 @@
 """Tool fixtures for database initialization"""
 
-from uuid import UUID
+from typing import List, Union
+from uuid import uuid4
 
-from models import Tool, ToolType
+# from models import Tool, ToolType
+from models.assistant import Tool, ToolType  # Models are in models/assistant.py
 
 
 def create_time_tool() -> Tool:
@@ -102,7 +104,7 @@ def create_sub_assistant_tool(writer_id: str) -> Tool:
             '{"type": "object", "properties": {"message": {"type": "string"}}, '
             '"required": ["message"]}'
         ),
-        assistant_id=UUID(writer_id),  # Convert string ID to UUID
+        assistant_id=uuid4(writer_id),  # Convert string ID to UUID
         is_active=True,
     )
 

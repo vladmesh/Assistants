@@ -9,6 +9,8 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from schemas.calendar import CreateEventRequest
 
+from shared_models.api_schemas import CalendarCredentialsRead
+
 logger = get_logger(__name__)
 
 
@@ -78,21 +80,21 @@ class GoogleCalendarService:
 
     async def get_events(
         self,
-        credentials_data: Dict[str, Any],
+        credentials_data: CalendarCredentialsRead,
         time_min: Optional[datetime] = None,
         time_max: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         """Get user's calendar events"""
         try:
-            # Create credentials object
+            # Create credentials object using attribute access
             credentials = Credentials(
-                token=credentials_data["access_token"],
-                refresh_token=credentials_data["refresh_token"],
+                token=credentials_data.access_token,
+                refresh_token=credentials_data.refresh_token,
                 token_uri="https://oauth2.googleapis.com/token",
                 client_id=self.settings.GOOGLE_CLIENT_ID,
                 client_secret=self.settings.GOOGLE_CLIENT_SECRET,
                 scopes=self.SCOPES,
-                expiry=datetime.fromisoformat(credentials_data["token_expiry"]),
+                expiry=credentials_data.token_expiry,
             )
 
             # Refresh if needed
@@ -136,19 +138,19 @@ class GoogleCalendarService:
             raise
 
     async def create_event(
-        self, credentials_data: Dict[str, Any], event_data: CreateEventRequest
+        self, credentials_data: CalendarCredentialsRead, event_data: CreateEventRequest
     ) -> Dict[str, Any]:
         """Create new calendar event using simplified data model"""
         try:
-            # Create credentials object
+            # Create credentials object using attribute access
             credentials = Credentials(
-                token=credentials_data["access_token"],
-                refresh_token=credentials_data["refresh_token"],
+                token=credentials_data.access_token,
+                refresh_token=credentials_data.refresh_token,
                 token_uri="https://oauth2.googleapis.com/token",
                 client_id=self.settings.GOOGLE_CLIENT_ID,
                 client_secret=self.settings.GOOGLE_CLIENT_SECRET,
                 scopes=self.SCOPES,
-                expiry=datetime.fromisoformat(credentials_data["token_expiry"]),
+                expiry=credentials_data.token_expiry,
             )
 
             # Refresh if needed

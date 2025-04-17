@@ -38,16 +38,19 @@ async def handle_assistant_responses(
                         logger.error("No user_id in response data")
                         continue
 
+                    # RestClient returns TelegramUserRead or None
                     user = await rest.get_user_by_id(int(user_id))
                     if not user:
                         logger.error("User not found", user_id=user_id)
                         continue
 
-                    chat_id = user.get(
-                        "telegram_id"
-                    )  # telegram_id is the same as chat_id
+                    # Use attribute access for the Pydantic model
+                    chat_id = user.telegram_id
                     if not chat_id:
-                        logger.error("No telegram_id in user data", user_id=user_id)
+                        # This should not happen if user object is valid, but keep check
+                        logger.error(
+                            "No telegram_id in user data object", user_id=user_id
+                        )
                         continue
 
                     # Check response status
