@@ -51,9 +51,7 @@ name_service/
 ├── Dockerfile         # Production Dockerfile
 ├── Dockerfile.test    # Test environment Dockerfile
 ├── docker-compose.test.yml  # Test environment compose file
-├── pyproject.toml     # Project configuration and dependencies
-├── README.md         # Service documentation
-└── requirements.txt  # Python dependencies (if not using Poetry)
+└── pyproject.toml     # Project configuration and dependencies
 ```
 
 ## File Templates
