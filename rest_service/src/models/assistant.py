@@ -6,22 +6,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship
 
+# Import enums from shared_models
+from shared_models.enums import AssistantType, ToolType
+
 from .base import BaseModel
 from .reminder import Reminder
-
-
-class AssistantType(str, enum.Enum):
-    LLM = "llm"  # Прямая работа с LLM
-    OPENAI_API = "openai_api"  # Работа через OpenAI Assistants API
-
-
-class ToolType(str, enum.Enum):
-    CALENDAR = "calendar"
-    REMINDER = "reminder"
-    TIME = "time"
-    SUB_ASSISTANT = "sub_assistant"
-    WEATHER = "weather"
-    WEB_SEARCH = "web_search"
 
 
 class AssistantToolLink(BaseModel, table=True):

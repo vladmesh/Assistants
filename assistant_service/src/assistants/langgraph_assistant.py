@@ -15,7 +15,13 @@ from assistants.base_assistant import BaseAssistant
 from config.settings import settings  # To get API keys if not in assistant config
 
 # Base classes and core types
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
 
@@ -517,8 +523,7 @@ class LangGraphAssistant(BaseAssistant):
                     return response_content
                 else:
                     logger.warning(
-                        "Last message in final state is not an AIMessage",
-                        last_message_type=type(last_message).__name__,
+                        f"Last message in final state is not an AIMessage (Type: {type(last_message).__name__})",
                         extra=log_extra,
                     )
                     # Fallback or error handling? Return empty for now.

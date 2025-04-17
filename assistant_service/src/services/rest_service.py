@@ -10,66 +10,24 @@ from config.settings import settings
 from pydantic import BaseModel
 
 # Import Pydantic models used for response parsing
-# Use models from shared_models instead of local models.rest
-from shared_models import AssistantModel  # Renamed from Assistant
-from shared_models import CreateReminderRequest  # Renamed from ReminderCreate
-from shared_models import ReminderModel  # Renamed from Reminder
-from shared_models import ToolModel  # Renamed from Tool
-from shared_models import UserModel  # Renamed from TelegramUser
-from shared_models.api_models import UserSecretaryAssignment  # Import the new model
+# Use schemas from shared_models.api_schemas instead of old models
+# from shared_models import AssistantModel  # Renamed from Assistant
+# from shared_models import CreateReminderRequest  # Renamed from ReminderCreate
+# from shared_models import ReminderModel  # Renamed from Reminder
+# from shared_models import ToolModel  # Renamed from Tool
+# from shared_models import UserModel  # Renamed from TelegramUser
+from shared_models.api_schemas import (
+    AssistantRead,
+    ReminderCreate,
+    ReminderRead,
+    TelegramUserRead,
+    ToolRead,
+    UserSecretaryLinkRead,
+)
+
+# from shared_models.api_models import UserSecretaryAssignment # Remove import of UserSecretaryAssignment
 
 logger = get_logger(__name__)
-
-
-class User(BaseModel):
-    """User model from REST service"""
-
-    id: int
-    telegram_id: int
-    username: Optional[str] = None
-
-
-class Assistant(BaseModel):
-    """Assistant model from REST service"""
-
-    id: UUID
-    name: str
-    is_secretary: bool
-    model: str
-    instructions: str
-    assistant_type: str
-    openai_assistant_id: Optional[str] = None
-    is_active: bool
-    tools: List[UUID] = []
-
-
-class Tool(BaseModel):
-    """Tool model from REST service"""
-
-    id: str
-    name: str
-    description: str
-    is_active: bool
-    tool_type: str
-    input_schema: str  # JSON string
-    created_at: str
-    updated_at: str
-    assistant_id: Optional[str] = None  # ID of sub-assistant for sub_assistant type
-
-    @property
-    def input_schema_dict(self) -> Dict[str, Any]:
-        """Get input schema as dictionary"""
-        return json.loads(self.input_schema)
-
-
-class UserAssistantThread(BaseModel):
-    """User assistant thread model from REST service"""
-
-    id: UUID
-    user_id: str
-    assistant_id: UUID
-    thread_id: str
-    last_used: str
 
 
 class RestServiceError(Exception):
@@ -96,7 +54,7 @@ class RestServiceClient:
         await self._client.aclose()
         logger.info("RestServiceClient closed.")
 
-    async def get_assistant_tools(self, assistant_id: str) -> List[ToolModel]:
+    async def get_assistant_tools(self, assistant_id: str) -> List[ToolRead]:
         """Get tools associated with a specific assistant."""
         # Wrap the core logic in try...except to handle errors from _request
         try:
@@ -105,8 +63,8 @@ class RestServiceClient:
             data = await self._request("GET", f"/api/assistants/{assistant_id}/tools")
             # Ensure data is a list before list comprehension
             if isinstance(data, list):
-                # Parse using ToolModel from shared_models
-                return [ToolModel(**item) for item in data]
+                # Parse using ToolRead from shared_models.api_schemas
+                return [ToolRead(**item) for item in data]
             else:
                 logger.error(
                     f"Received unexpected data format for assistant tools: {type(data)}",
@@ -181,7 +139,7 @@ class RestServiceClient:
         )
         return data  # Return raw dict for now
 
-    async def get_user(self, user_id: int) -> UserModel:
+    async def get_user(self, user_id: int) -> TelegramUserRead:
         """Get user by ID
 
         Args:
@@ -195,7 +153,7 @@ class RestServiceClient:
         """
         # Use _request helper
         data = await self._request("GET", f"/api/users/{user_id}")
-        return UserModel(**data)
+        return TelegramUserRead(**data)
 
     async def _request(
         self, method: str, endpoint: str, **kwargs: Any
@@ -265,11 +223,13 @@ class RestServiceClient:
                 f"Failed to decode JSON response for {method} {full_url}"  # Use full_url
             ) from e
 
-    async def get_user_by_telegram_id(self, telegram_id: str) -> Optional[UserModel]:
+    async def get_user_by_telegram_id(
+        self, telegram_id: str
+    ) -> Optional[TelegramUserRead]:
         """Get user by Telegram ID."""
         try:
             data = await self._request("GET", f"/api/users/by_telegram/{telegram_id}")
-            return UserModel(**data) if data else None
+            return TelegramUserRead(**data) if data else None
         except RestServiceError as e:
             # Specifically handle 404 as user not found, others re-raise
             if "404" in str(e):
@@ -277,35 +237,35 @@ class RestServiceClient:
                 return None
             raise  # Re-raise other errors
 
-    async def get_user_secretary(self, user_id: int) -> Optional[AssistantModel]:
+    async def get_user_secretary(self, user_id: int) -> Optional[AssistantRead]:
         """Get the secretary assistant associated with a user."""
         try:
             data = await self._request("GET", f"/api/users/{user_id}/secretary")
-            return AssistantModel(**data) if data else None
+            return AssistantRead(**data) if data else None
         except RestServiceError as e:
             if "404" in str(e):
                 logger.warning(f"Secretary not found for user_id: {user_id}")
                 return None
             raise
 
-    async def get_assistant(self, assistant_id: str) -> Optional[AssistantModel]:
+    async def get_assistant(self, assistant_id: str) -> Optional[AssistantRead]:
         """Get assistant details by ID."""
         try:
             data = await self._request("GET", f"/api/assistants/{assistant_id}")
-            return AssistantModel(**data) if data else None
+            return AssistantRead(**data) if data else None
         except RestServiceError as e:
             if "404" in str(e):
                 logger.warning(f"Assistant not found with id: {assistant_id}")
                 return None
             raise
 
-    async def get_assistants(self) -> List[AssistantModel]:
+    async def get_assistants(self) -> List[AssistantRead]:
         """Get a list of all assistants."""
         try:
             data = await self._request("GET", "/api/assistants/")
             # Ensure data is a list before list comprehension
             if isinstance(data, list):
-                return [AssistantModel(**item) for item in data]
+                return [AssistantRead(**item) for item in data]
             else:
                 logger.error(
                     f"Received unexpected data type for assistants list: {type(data)}"
@@ -318,12 +278,12 @@ class RestServiceClient:
             logger.exception("Unexpected error getting assistants list", exc_info=True)
             return []  # Return empty list on unexpected errors
 
-    async def get_tools(self) -> List[ToolModel]:
+    async def get_tools(self) -> List[ToolRead]:
         """Get list of all tools."""
         try:
             data = await self._request("GET", "/api/tools/")
             if isinstance(data, list):
-                return [ToolModel(**tool) for tool in data]
+                return [ToolRead(**tool) for tool in data]
             else:
                 logger.error(
                     f"Received unexpected data type for tools list: {type(data)}"
@@ -336,11 +296,11 @@ class RestServiceClient:
             logger.exception("Unexpected error getting tools list", exc_info=True)
             return []
 
-    async def get_tool(self, tool_id: str) -> Optional[ToolModel]:
+    async def get_tool(self, tool_id: str) -> Optional[ToolRead]:
         """Get tool by ID."""
         try:
             data = await self._request("GET", f"/api/tools/{tool_id}")
-            return ToolModel(**data) if data else None
+            return ToolRead(**data) if data else None
         except RestServiceError as e:
             if "404" in str(e):
                 logger.warning(f"Tool not found with id: {tool_id}")
@@ -351,14 +311,14 @@ class RestServiceClient:
             return None
 
     async def create_reminder(
-        self, reminder_data: CreateReminderRequest
-    ) -> Optional[ReminderModel]:
+        self, reminder_data: ReminderCreate
+    ) -> Optional[ReminderRead]:
         """Create a new reminder."""
         try:
             response_data = await self._request(
                 "POST", "/api/reminders/", json=reminder_data.model_dump()
             )
-            return ReminderModel(**response_data) if response_data else None
+            return ReminderRead(**response_data) if response_data else None
         except RestServiceError as e:  # Changed exception handling
             # Log details if needed, re-raise
             logger.error(
@@ -377,15 +337,14 @@ class RestServiceClient:
 
     async def list_active_user_secretary_assignments(
         self,
-    ) -> List[UserSecretaryAssignment]:
+    ) -> List[UserSecretaryLinkRead]:
         """Fetch the list of active user-secretary assignments."""
         # Add the /api prefix to the URL
         response_data = await self._request("GET", "/api/user-secretaries/assignments")
         # _request already returns decoded JSON (list in this case)
         if isinstance(response_data, list):
-            return [
-                UserSecretaryAssignment(**assignment) for assignment in response_data
-            ]
+            # Parse using UserSecretaryLinkRead
+            return [UserSecretaryLinkRead(**assignment) for assignment in response_data]
         else:
             logger.error(
                 f"Expected list from /api/user-secretaries/assignments, got {type(response_data)}"

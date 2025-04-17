@@ -1,6 +1,8 @@
 """Assistant-Tool relationship fixtures for database initialization"""
 
-from models import Assistant, AssistantToolLink, Tool
+from typing import List
+
+from models.assistant import Assistant, AssistantToolLink, Tool
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 

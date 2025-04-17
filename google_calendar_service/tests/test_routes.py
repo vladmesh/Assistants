@@ -1,7 +1,3 @@
-import pytest
-from httpx import AsyncClient
-from main import app
-
 # @pytest.mark.asyncio
 # async def test_get_auth_url(mock_services):
 #     """Test getting auth URL."""

@@ -1,6 +1,10 @@
 """Test data initialization script"""
 
-from models import Assistant, TelegramUser
+from typing import List
+
+# from models import Assistant, TelegramUser
+from models.assistant import Assistant
+from models.user import TelegramUser
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 

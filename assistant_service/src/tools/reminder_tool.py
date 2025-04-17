@@ -1,12 +1,12 @@
 import json
 import time  # Import time
 from datetime import datetime, timezone
-from typing import Optional, Type
+from typing import Any, Dict, Optional, Type
 from zoneinfo import ZoneInfo
 
 import httpx
 from config.logger import get_logger
-from pydantic import BaseModel, Field, root_validator, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from tools.base import BaseTool
 from utils.error_handler import ToolError
 
@@ -33,20 +33,25 @@ class ReminderSchema(BaseModel):
         description="CRON-выражение для 'recurring' напоминания (например, '0 10 * * *').",
     )
 
-    @validator("payload")
-    def validate_payload_is_json(cls, v):
+    @field_validator("payload")
+    @classmethod
+    def validate_payload_is_json(cls, v: str) -> str:
         try:
             json.loads(v)
             return v
         except json.JSONDecodeError:
             raise ValueError("payload должен быть валидной JSON строкой")
 
-    @root_validator(pre=True)
-    def check_trigger_conditions(cls, values):
-        reminder_type = values.get("type")
-        trigger_at = values.get("trigger_at")
-        timezone_val = values.get("timezone")
-        cron_expression = values.get("cron_expression")
+    @model_validator(mode="before")
+    @classmethod
+    def check_trigger_conditions(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        reminder_type = data.get("type")
+        trigger_at = data.get("trigger_at")
+        timezone_val = data.get("timezone")
+        cron_expression = data.get("cron_expression")
 
         if reminder_type == "one_time":
             if not trigger_at or not timezone_val:
@@ -66,10 +71,10 @@ class ReminderSchema(BaseModel):
                 raise ValueError(
                     "Для 'recurring' напоминания не должны быть указаны trigger_at или timezone."
                 )
-        else:
+        elif reminder_type is not None:
             raise ValueError("type должен быть 'one_time' или 'recurring'")
 
-        return values
+        return data
 
     def get_trigger_datetime_utc(self) -> Optional[datetime]:
         """Convert trigger_at with timezone to UTC datetime."""

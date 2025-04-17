@@ -1,27 +1,44 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import structlog
-from client.rest import RestClient
+from client.rest import RestClient, RestClientError
 from client.telegram import TelegramClient
+
+from shared_models.api_schemas import AssistantRead, TelegramUserRead
 
 logger = structlog.get_logger()
 
 
 async def handle_start(
-    telegram: TelegramClient, rest: RestClient, chat_id: int, user: Dict[str, Any]
+    telegram: TelegramClient, rest: RestClient, chat_id: int, user: TelegramUserRead
 ) -> None:
     """Handle /start command: list secretaries and prompt user to choose."""
-    telegram_id = user.get("telegram_id")  # Use telegram_id from user dict
-    user_id = user.get("id")  # internal user id
+    telegram_id = user.telegram_id  # Use attribute access
+    user_id = user.id  # Use attribute access
 
     try:
         logger.info("Handling /start command", user_id=user_id, telegram_id=telegram_id)
 
         # 1. Fetch available secretaries from REST service
-        secretaries = await rest.list_secretaries()
+        secretaries: List[AssistantRead] = []
+        try:
+            secretaries = await rest.list_secretaries()
+        except RestClientError as e:
+            logger.error(
+                "REST Client Error listing secretaries during /start",
+                user_id=user_id,
+                error=str(e),
+            )
+            await telegram.send_message(
+                chat_id,
+                "Не удалось загрузить список секретарей. Попробуйте /start позже.",
+            )
+            return  # Stop processing
 
         if not secretaries:
-            logger.error("No secretaries found in REST service.")
+            logger.warning(
+                "No secretaries found in REST service (empty list)."
+            )  # Changed from error
             await telegram.send_message(
                 chat_id,
                 "К сожалению, сейчас нет доступных секретарей. Попробуйте позже.",
@@ -31,10 +48,10 @@ async def handle_start(
         # 2. Format secretaries for display with inline keyboard
         keyboard_buttons = []
         for secretary in secretaries:
-            # Ensure description is available, provide fallback if needed
-            description = secretary.get("description") or "(Нет описания)"
-            button_text = f"{secretary.get('name')} - {description[:50]}{'...' if len(description) > 50 else ''}"
-            callback_data = f"select_secretary_{secretary.get('id')}"
+            # Use attribute access for schema objects
+            description = secretary.description or "(Нет описания)"
+            button_text = f"{secretary.name} - {description[:50]}{'...' if len(description) > 50 else ''}"
+            callback_data = f"select_secretary_{secretary.id}"
             keyboard_buttons.append(
                 [{"text": button_text, "callback_data": callback_data}]
             )
@@ -49,9 +66,9 @@ async def handle_start(
             "Secretaries list sent to user", user_id=user_id, count=len(secretaries)
         )
 
-    except Exception as e:
+    except Exception as e:  # Catch any other unexpected errors
         logger.error(
-            "Error handling start command",
+            "Unexpected error handling /start command",
             user_id=user_id,
             telegram_id=telegram_id,
             error=str(e),
@@ -59,5 +76,5 @@ async def handle_start(
         )
         await telegram.send_message(
             chat_id,
-            "Извините, произошла ошибка при обработке команды /start. Попробуйте позже.",
+            "Извините, произошла непредвиденная ошибка при обработке команды /start. Попробуйте позже.",
         )

@@ -1,124 +1,135 @@
-from typing import Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
+import crud.assistant as assistant_crud  # Import the CRUD module
+import structlog
 from database import get_session
-from fastapi import APIRouter, Depends, HTTPException
-from models.assistant import Assistant, AssistantType
-from pydantic import BaseModel
-from sqlmodel import select
+from fastapi import APIRouter, Depends, HTTPException, status
+from models.assistant import Assistant  # Keep model import for response_model
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from shared_models.api_schemas import AssistantCreate, AssistantRead, AssistantUpdate
+
+logger = structlog.get_logger()
 router = APIRouter()
 
 
-class AssistantCreate(BaseModel):
-    name: str
-    is_secretary: bool = False
-    model: str
-    instructions: str
-    description: Optional[str] = None
-    assistant_type: str = AssistantType.LLM.value  # Принимаем строку
-    openai_assistant_id: str = None
-
-
-class AssistantUpdate(BaseModel):
-    name: str = None
-    is_secretary: bool = None
-    model: str = None
-    instructions: str = None
-    description: Optional[str] = None
-    assistant_type: str = None  # Принимаем строку
-    openai_assistant_id: str = None
-    is_active: bool = None
-
-
-@router.get("/assistants/")
+@router.get("/assistants/", response_model=List[AssistantRead])
 async def list_assistants(
-    session: AsyncSession = Depends(get_session), skip: int = 0, limit: int = 100
-):
-    """Получить список всех ассистентов"""
-    query = select(Assistant).offset(skip).limit(limit)
-    result = await session.execute(query)
-    assistants = result.scalars().all()
-
-    # Загружаем связи с инструментами для каждого ассистента
-    for assistant in assistants:
-        await session.refresh(assistant, ["tools"])
-
+    session: AsyncSession = Depends(get_session),
+    skip: int = 0,
+    limit: int = 100,
+) -> List[Assistant]:
+    """Get a list of all assistants"""
+    logger.info("Listing assistants", skip=skip, limit=limit)
+    assistants = await assistant_crud.get_assistants(db=session, skip=skip, limit=limit)
+    logger.info(f"Found {len(assistants)} assistants")
     return assistants
 
 
-@router.get("/assistants/{assistant_id}")
+@router.get("/assistants/{assistant_id}", response_model=AssistantRead)
 async def get_assistant(
     assistant_id: UUID, session: AsyncSession = Depends(get_session)
-):
-    """Получить ассистента по ID"""
-    assistant = await session.get(Assistant, assistant_id)
+) -> Assistant:
+    """Get an assistant by ID"""
+    logger.info("Getting assistant by ID", assistant_id=str(assistant_id))
+    assistant = await assistant_crud.get_assistant(
+        db=session, assistant_id=assistant_id
+    )
     if not assistant:
-        raise HTTPException(status_code=404, detail="Assistant not found")
-
-    # Загружаем связи с инструментами
-    await session.refresh(assistant, ["tools"])
-
+        logger.warning("Assistant not found", assistant_id=str(assistant_id))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found"
+        )
+    logger.info("Assistant found", assistant_id=str(assistant_id), name=assistant.name)
     return assistant
 
 
-@router.post("/assistants/")
+@router.post(
+    "/assistants/", response_model=AssistantRead, status_code=status.HTTP_201_CREATED
+)
 async def create_assistant(
-    assistant: AssistantCreate, session: AsyncSession = Depends(get_session)
-):
-    """Создать нового ассистента"""
-    # Преобразуем строку в enum
-    assistant_data = assistant.model_dump()
-    if assistant_data["assistant_type"] not in [t.value for t in AssistantType]:
-        raise HTTPException(status_code=400, detail="Invalid assistant type")
-    assistant_data["assistant_type"] = AssistantType(assistant_data["assistant_type"])
+    assistant_in: AssistantCreate, session: AsyncSession = Depends(get_session)
+) -> Assistant:
+    """Create a new assistant"""
+    logger.info(
+        "Attempting to create assistant",
+        name=assistant_in.name,
+        type=assistant_in.assistant_type,
+    )
+    try:
+        db_assistant = await assistant_crud.create_assistant(
+            db=session, assistant_in=assistant_in
+        )
+        logger.info("Assistant created successfully", assistant_id=str(db_assistant.id))
+        return db_assistant
+    except ValueError as e:
+        logger.error("Failed to create assistant due to invalid type", error=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to create assistant due to unexpected error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
 
-    db_assistant = Assistant(**assistant_data)
-    session.add(db_assistant)
-    await session.commit()
-    await session.refresh(db_assistant)
-    return db_assistant
 
-
-@router.put("/assistants/{assistant_id}")
+@router.put("/assistants/{assistant_id}", response_model=AssistantRead)
 async def update_assistant(
     assistant_id: UUID,
     assistant_update: AssistantUpdate,
     session: AsyncSession = Depends(get_session),
-):
-    """Обновить ассистента"""
-    db_assistant = await session.get(Assistant, assistant_id)
-    if not db_assistant:
-        raise HTTPException(status_code=404, detail="Assistant not found")
-
-    assistant_data = assistant_update.model_dump(exclude_unset=True)
-
-    # Преобразуем строку в enum, если тип указан
-    if "assistant_type" in assistant_data:
-        if assistant_data["assistant_type"] not in [t.value for t in AssistantType]:
-            raise HTTPException(status_code=400, detail="Invalid assistant type")
-        assistant_data["assistant_type"] = AssistantType(
-            assistant_data["assistant_type"]
+) -> Assistant:
+    """Update an assistant"""
+    logger.info("Attempting to update assistant", assistant_id=str(assistant_id))
+    try:
+        updated_assistant = await assistant_crud.update_assistant(
+            db=session, assistant_id=assistant_id, assistant_in=assistant_update
+        )
+        if updated_assistant is None:
+            logger.warning(
+                "Assistant not found for update", assistant_id=str(assistant_id)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found"
+            )
+        logger.info(
+            "Assistant updated successfully", assistant_id=str(updated_assistant.id)
+        )
+        return updated_assistant
+    except ValueError as e:
+        logger.error(
+            "Failed to update assistant due to invalid type",
+            assistant_id=str(assistant_id),
+            error=str(e),
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception(
+            "Failed to update assistant due to unexpected error",
+            assistant_id=str(assistant_id),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
-    for key, value in assistant_data.items():
-        setattr(db_assistant, key, value)
 
-    await session.commit()
-    await session.refresh(db_assistant)
-    return db_assistant
-
-
-@router.delete("/assistants/{assistant_id}")
+@router.delete("/assistants/{assistant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_assistant(
     assistant_id: UUID, session: AsyncSession = Depends(get_session)
-):
-    """Удалить ассистента"""
-    assistant = await session.get(Assistant, assistant_id)
-    if not assistant:
-        raise HTTPException(status_code=404, detail="Assistant not found")
-
-    await session.delete(assistant)
-    await session.commit()
-    return {"message": "Assistant deleted successfully"}
+) -> None:
+    """Delete an assistant"""
+    logger.info("Attempting to delete assistant", assistant_id=str(assistant_id))
+    deleted = await assistant_crud.delete_assistant(
+        db=session, assistant_id=assistant_id
+    )
+    if not deleted:
+        logger.warning(
+            "Assistant not found for deletion", assistant_id=str(assistant_id)
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found"
+        )
+    logger.info("Assistant deleted successfully", assistant_id=str(assistant_id))
+    return None  # Return None for 204 No Content

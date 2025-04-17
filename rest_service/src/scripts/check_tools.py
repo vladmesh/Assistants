@@ -1,7 +1,7 @@
 import asyncio
 
-from database import AsyncSessionLocal
-from models import Tool
+# from models import Tool
+from models.assistant import Tool
 from sqlmodel import select
 
 

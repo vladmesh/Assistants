@@ -119,7 +119,7 @@ Run tests for specific services:
 ├── telegram_bot_service/ # Telegram bot
 ├── admin_service/       # Admin interface
 ├── rag_service/         # RAG service
-├── shared_models/       # Shared data models
+├── shared_models/       # Shared Pydantic schemas, Enums, and queue models
 ├── scripts/            # Utility scripts
 ├── manage.py          # Project management
 ├── run_tests.sh       # Test execution

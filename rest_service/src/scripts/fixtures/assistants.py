@@ -1,7 +1,8 @@
 """Assistant fixtures for database initialization"""
 import os
+from typing import List
 
-from models import Assistant, AssistantType
+from models.assistant import Assistant, AssistantType
 
 
 def create_secretary_assistant() -> Assistant:

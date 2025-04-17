@@ -15,7 +15,6 @@ from langgraph.checkpoint.base import (
     Checkpoint,
     CheckpointMetadata,
     CheckpointTuple,
-    PendingWrite,
 )
 
 # Import SerializerProtocol
@@ -116,7 +115,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
         print(
             f"Warning: put_writes called but not implemented for RestCheckpointSaver. Config: {config}, Task ID: {task_id}"
         )
-        pass
 
     # --- Keep the original async methods ---
 

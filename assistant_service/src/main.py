@@ -1,10 +1,8 @@
 import asyncio
 import signal  # Add signal handling
 
-from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import get_settings
-from core.message_queue import MessageQueue
 from dotenv import load_dotenv
 from orchestrator import AssistantOrchestrator
 from services.rest_service import (  # Ensure this is imported if needed elsewhere
@@ -19,7 +17,6 @@ async def main():
     """Main entry point with preloading, background refresh, and graceful shutdown."""
     settings = get_settings()
     service = AssistantOrchestrator(settings)
-    refresh_task = None
     listen_task = None
     shutdown_event = asyncio.Event()
 

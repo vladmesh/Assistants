@@ -6,8 +6,9 @@ from typing import Any
 from crud import checkpoint as checkpoint_crud  # Import specific module
 from database import get_session  # Import directly
 from fastapi import APIRouter, Depends, HTTPException, status
-from schemas import CheckpointCreate, CheckpointRead  # Import specific schemas
 from sqlmodel.ext.asyncio.session import AsyncSession  # Use AsyncSession
+
+from shared_models.api_schemas import CheckpointCreate, CheckpointRead
 
 router = APIRouter(prefix="/checkpoints", tags=["checkpoints"])
 
