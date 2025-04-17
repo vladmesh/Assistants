@@ -147,3 +147,39 @@ class QueueTrigger(BaseModel):
 #
 # print(reminder_trigger.to_json())
 # print(QueueTrigger.from_json(auth_trigger.to_json()))
+
+# --- Model for Assistant Responses ---
+
+
+class AssistantResponseMessage(BaseModel):
+    """
+    Model for messages sent FROM the assistant service TO other services (e.g., Telegram bot) via the queue.
+    """
+
+    user_id: int  # Internal user ID (from rest_service DB)
+    status: str = "success"  # "success" or "error"
+    source: Optional[str] = None  # e.g., "assistant", "tool:reminder_tool"
+    response: Optional[str] = None  # Text response content if status is "success"
+    error: Optional[str] = None  # Error message content if status is "error"
+
+    @model_validator(mode="before")
+    def check_status_and_content(cls, values):
+        """Ensure response is set on success and error on error."""
+        status = values.get("status")
+        response = values.get("response")
+        error = values.get("error")
+
+        if status == "success" and response is None:
+            # Allow empty successful responses
+            pass
+            # raise ValueError("Field 'response' is required when status is 'success'")
+        elif status == "error" and error is None:
+            raise ValueError("Field 'error' is required when status is 'error'")
+        elif status not in ["success", "error"]:
+            raise ValueError("Field 'status' must be either 'success' or 'error'")
+
+        return values
+
+    model_config = {
+        "extra": "forbid",  # Prevent unexpected fields during validation
+    }

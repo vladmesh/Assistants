@@ -11,6 +11,7 @@ from .enums import AssistantType, ReminderStatus, ReminderType, ToolType
 
 # Import queue models
 from .queue import (
+    AssistantResponseMessage,
     HumanQueueMessageContent,
     QueueMessage,
     QueueMessageSource,
@@ -22,6 +23,7 @@ from .queue import (
 
 __all__ = [
     # Queue models
+    "AssistantResponseMessage",
     "QueueMessage",
     "HumanQueueMessageContent",
     "ToolQueueMessageContent",
