@@ -8,9 +8,15 @@ from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
 from langchain_core.messages import HumanMessage, ToolMessage
+from pydantic import ValidationError
 from services.rest_service import RestServiceClient
 
-from shared_models import QueueMessage, QueueMessageType, QueueTrigger
+from shared_models import (
+    AssistantResponseMessage,
+    QueueMessage,
+    QueueMessageType,
+    QueueTrigger,
+)
 
 logger = get_logger(__name__)
 
@@ -493,8 +499,21 @@ class AssistantOrchestrator:
 
                 if response_payload:
                     try:
-                        logger.debug("Attempting to serialize response payload")
-                        response_json = json.dumps(response_payload, default=str)
+                        logger.debug(
+                            "Attempting to create and validate AssistantResponseMessage"
+                        )
+                        assistant_response_message = AssistantResponseMessage(
+                            user_id=response_payload["user_id"],
+                            status=response_payload.get("status", "error"),
+                            response=response_payload.get("response"),
+                            error=response_payload.get("error"),
+                            source=response_payload.get("source"),
+                        )
+                        logger.debug(
+                            "Attempting to serialize AssistantResponseMessage payload"
+                        )
+                        response_json = assistant_response_message.model_dump_json()
+                        logger.debug("Successfully serialized AssistantResponseMessage")
                         logger.debug("Attempting to push response to Redis")
                         await self.redis.rpush(
                             self.settings.OUTPUT_QUEUE, response_json
@@ -503,21 +522,38 @@ class AssistantOrchestrator:
                         logger.info(
                             "Response sent to output queue",
                             queue=self.settings.OUTPUT_QUEUE,
-                            user_id=response_payload.get("user_id"),
-                            status=response_payload.get("status"),
-                            source=response_payload.get("source"),
+                            user_id=assistant_response_message.user_id,
+                            status=assistant_response_message.status,
+                            source=assistant_response_message.source,
                         )
+                    except ValidationError as validation_err:
+                        logger.error(
+                            "Failed to validate assistant response data before sending to Redis",
+                            payload=response_payload,
+                            errors=validation_err.errors(),
+                            exc_info=True,
+                        )
+                        # Do not send invalid message
                     except redis.RedisError as push_e:
                         logger.error(
                             f"Failed to push response to Redis queue {self.settings.OUTPUT_QUEUE}: {push_e}",
-                            payload=response_payload,
+                            payload=response_payload,  # Log original dict
                             exc_info=True,
                         )
-                    except TypeError as json_err:
+                    except (
+                        TypeError
+                    ) as json_err:  # Should not happen with model_dump_json
                         logger.error(
-                            f"Failed to serialize response payload to JSON: {json_err}",
-                            payload=response_payload,
+                            f"Failed to serialize AssistantResponseMessage payload to JSON: {json_err}",
+                            payload=str(assistant_response_message)
+                            if "assistant_response_message" in locals()
+                            else str(response_payload),
                             exc_info=True,
+                        )
+                    else:
+                        logger.error(
+                            "Cannot send response, user_id is missing",
+                            payload=response_payload,
                         )
 
                 logger.debug("Incrementing processed_count")

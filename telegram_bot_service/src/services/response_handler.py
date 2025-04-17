@@ -5,7 +5,10 @@ import structlog
 from client.rest import RestClient
 from client.telegram import TelegramClient
 from config.settings import settings
+from pydantic import ValidationError
 from redis import asyncio as aioredis
+
+from shared_models.queue import AssistantResponseMessage
 
 logger = structlog.get_logger()
 
@@ -30,16 +33,28 @@ async def handle_assistant_responses(
 
                 if response:
                     _, data = response
-                    response_data = json.loads(data)
+                    try:
+                        # Validate and parse incoming message using Pydantic model
+                        response_message = AssistantResponseMessage.model_validate_json(
+                            data
+                        )
+                        logger.debug(
+                            "Successfully validated AssistantResponseMessage",
+                            user_id=response_message.user_id,
+                        )
+                    except ValidationError as e:
+                        logger.error(
+                            "Failed to validate incoming assistant response message from queue",
+                            raw_data=data.decode("utf-8", errors="ignore"),
+                            errors=e.errors(),
+                            exc_info=True,
+                        )
+                        continue  # Skip processing this invalid message
 
-                    # Get user data from REST service
-                    user_id = response_data.get("user_id")
-                    if not user_id:
-                        logger.error("No user_id in response data")
-                        continue
-
+                    # Get user data from REST service using validated user_id
+                    user_id = response_message.user_id
                     # RestClient returns TelegramUserRead or None
-                    user = await rest.get_user_by_id(int(user_id))
+                    user = await rest.get_user_by_id(user_id)  # user_id is already int
                     if not user:
                         logger.error("User not found", user_id=user_id)
                         continue
@@ -53,15 +68,16 @@ async def handle_assistant_responses(
                         )
                         continue
 
-                    # Check response status
-                    if response_data.get("status") == "error":
-                        error_message = response_data.get(
-                            "error", "Произошла неизвестная ошибка"
+                    # Check response status using model attribute
+                    if response_message.status == "error":
+                        error_message = (
+                            response_message.error or "Произошла неизвестная ошибка"
                         )
                         logger.error(
-                            "Error in assistant response",
+                            "Error received in assistant response",
                             error=error_message,
                             user_id=user_id,
+                            source=response_message.source,
                         )
                         # Send error message to user
                         await telegram.send_message(
@@ -69,27 +85,36 @@ async def handle_assistant_responses(
                             text=f"Извините, произошла ошибка: {error_message}",
                         )
                     else:
-                        # Send successful response to user
-                        response_text = response_data.get("response")
+                        # Send successful response to user using model attribute
+                        response_text = response_message.response
                         if response_text:
                             await telegram.send_message(
                                 chat_id=chat_id, text=response_text
                             )
 
                             logger.info(
-                                "Sent response to user",
+                                "Sent successful response to user",
                                 user_id=user_id,
                                 message_preview=response_text[:100],
+                                source=response_message.source,
                             )
                         else:
                             logger.warning(
-                                "Empty response from assistant", user_id=user_id
+                                "Empty successful response from assistant",
+                                user_id=user_id,
+                                source=response_message.source,
                             )
 
-            except json.JSONDecodeError as e:
-                logger.error("Invalid JSON in response", error=str(e))
-            except KeyError as e:
-                logger.error("Missing required field in response", error=str(e))
+            except json.JSONDecodeError as e:  # Should be caught by ValidationError now
+                logger.error(
+                    "Invalid JSON in response (should be caught by validation)",
+                    error=str(e),
+                )
+            except KeyError as e:  # Should be caught by ValidationError now
+                logger.error(
+                    "Missing required field in response (should be caught by validation)",
+                    error=str(e),
+                )
             except Exception as e:
                 logger.error("Error handling assistant response", error=str(e))
 
