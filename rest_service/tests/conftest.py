@@ -30,14 +30,6 @@ engine = create_async_engine(
 )
 
 
-@pytest_asyncio.fixture(scope="session")
-def event_loop(request) -> Generator:
-    """Create an instance of the default event loop for each test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_database() -> AsyncGenerator[None, None]:
     """Create the database tables before running tests and drop them after."""

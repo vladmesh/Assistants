@@ -24,7 +24,8 @@ def mock_async_client():
     # Mock the response object structure that client methods return
     mock_response = AsyncMock(spec=httpx.Response)
     mock_response.status_code = 200
-    mock_response.raise_for_status = AsyncMock()  # Mock this method
+    # Use MagicMock for the synchronous raise_for_status method
+    mock_response.raise_for_status = MagicMock()
     # Важно: используем MagicMock вместо AsyncMock для json(), чтобы возвращать
     # словарь напрямую, а не корутину
     mock_response.json = MagicMock(return_value={})  # Default empty json
@@ -121,7 +122,8 @@ class TestRestCheckpointSaver:
         # Configure mock response for POST
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 201  # Typically 201 Created for POST
-        mock_response.raise_for_status = AsyncMock()
+        # Use MagicMock for the synchronous raise_for_status method
+        mock_response.raise_for_status = MagicMock()
         mock_async_client.post.return_value = mock_response
 
         # Call aput
@@ -187,8 +189,11 @@ class TestRestCheckpointSaver:
         """Test HTTP error during save."""
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Server error", request=None, response=mock_response
+        # raise_for_status should be a sync mock raising the error
+        mock_response.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError(
+                "Server error", request=None, response=mock_response
+            )
         )
         mock_async_client.post.return_value = mock_response
 
@@ -233,7 +238,8 @@ class TestRestCheckpointSaver:
         }
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 200
-        mock_response.raise_for_status = AsyncMock()
+        # Use MagicMock for the synchronous raise_for_status method
+        mock_response.raise_for_status = MagicMock()
         # Используем MagicMock, чтобы возвращать словарь напрямую, а не корутину
         mock_response.json = MagicMock(return_value=response_json)
         mock_async_client.get.return_value = mock_response
@@ -258,8 +264,12 @@ class TestRestCheckpointSaver:
         """Test loading when checkpoint is not found (404)."""
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 404
-        # raise_for_status should NOT be called on 404 in this specific case in aget_tuple
-        mock_response.raise_for_status = AsyncMock()
+        # raise_for_status should be a sync mock raising the error
+        mock_response.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError(
+                "Not Found", request=None, response=mock_response
+            )
+        )
         mock_async_client.get.return_value = mock_response
 
         result_tuple = await checkpoint_saver.aget_tuple(test_config)
@@ -288,7 +298,8 @@ class TestRestCheckpointSaver:
         }
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 200
-        mock_response.raise_for_status = AsyncMock()
+        # Use MagicMock for the synchronous raise_for_status method
+        mock_response.raise_for_status = MagicMock()
         # Используем MagicMock вместо AsyncMock
         mock_response.json = MagicMock(return_value=response_json)
         mock_async_client.get.return_value = mock_response
@@ -312,8 +323,9 @@ class TestRestCheckpointSaver:
         }
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 200
-        mock_response.raise_for_status = AsyncMock()
-        # Используем MagicMock вместо AsyncMock
+        # Use MagicMock for the synchronous raise_for_status method
+        mock_response.raise_for_status = MagicMock()
+        # Используем MagicMock, чтобы возвращать словарь напрямую, а не корутину
         mock_response.json = MagicMock(return_value=response_json)
         mock_async_client.get.return_value = mock_response
 

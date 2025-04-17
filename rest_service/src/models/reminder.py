@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
-from pydantic import validator
+from pydantic import field_validator
 from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship
 
@@ -45,7 +45,7 @@ class Reminder(BaseModel, table=True):
         sa_relationship_kwargs={"foreign_keys": "Reminder.created_by_assistant_id"},
     )  # noqa: F821
 
-    @validator("type")
+    @field_validator("type")
     def validate_type(cls, v):
         if v not in [ReminderType.ONE_TIME.value, ReminderType.RECURRING.value]:
             raise ValueError(
@@ -54,7 +54,7 @@ class Reminder(BaseModel, table=True):
             )
         return v
 
-    @validator("status")
+    @field_validator("status")
     def validate_status(cls, v):
         if v not in [
             ReminderStatus.ACTIVE.value,
@@ -68,7 +68,7 @@ class Reminder(BaseModel, table=True):
             )
         return v
 
-    @validator("payload")
+    @field_validator("payload")
     def validate_payload(cls, v):
         try:
             json.loads(v)
