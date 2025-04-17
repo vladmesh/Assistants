@@ -2,11 +2,12 @@
 
 import logging
 from typing import Any, Dict, Optional, Type
+from uuid import UUID
 
 from assistants.base_assistant import BaseAssistant
 from config.settings import Settings
 from langchain_core.tools import BaseTool as LangBaseTool
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from utils.error_handler import InvalidInputError, ToolError, ToolExecutionError
 
 logger = logging.getLogger(__name__)
@@ -32,9 +33,10 @@ class BaseTool(LangBaseTool):
     # Allow arbitrary types for flexibility, though specific tools might constrain this
     args_schema: Optional[Type[BaseModel]] = None
 
-    class Config:
+    model_config = ConfigDict(
         # Allow arbitrary types to be stored on the model
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed=True
+    )
 
     def __init__(
         self,

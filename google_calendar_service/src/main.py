@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from api.routes import router
 from config.logger import get_logger
 from config.settings import Settings
@@ -13,11 +15,36 @@ logger = get_logger(__name__)
 # Create settings instance
 settings = Settings()
 
-# Create FastAPI app
+# Create services (can be created outside lifespan if they don't need startup/shutdown logic intrinsically)
+rest_service = RestService(settings)
+calendar_service = GoogleCalendarService(settings)
+redis_service = RedisService(settings)
+
+
+# Lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Code to run on startup
+    logger.info("Starting Google Calendar service (using lifespan)")
+    # Add services to app state if they need to be accessed within lifespan or request handlers
+    app.state.rest_service = rest_service
+    app.state.calendar_service = calendar_service
+    app.state.redis_service = redis_service
+    # Any other startup logic like connecting to DB if needed
+    yield
+    # Code to run on shutdown
+    logger.info("Shutting down Google Calendar service (using lifespan)")
+    await rest_service.close()
+    await redis_service.close()
+    # Any other shutdown logic
+
+
+# Create FastAPI app with lifespan
 app = FastAPI(
     title="Google Calendar Service",
     description="Service for working with Google Calendar",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -29,32 +56,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create services
-rest_service = RestService(settings)
-calendar_service = GoogleCalendarService(settings)
-redis_service = RedisService(settings)
-
-# Add services to app state
-app.state.rest_service = rest_service
-app.state.calendar_service = calendar_service
-app.state.redis_service = redis_service
-
 # Include API routes
 app.include_router(router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Startup event handler"""
-    logger.info("Starting Google Calendar service")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Close service connections"""
-    await rest_service.close()
-    await redis_service.close()
-    logger.info("Shutting down Google Calendar service")
 
 
 @app.get("/health")
