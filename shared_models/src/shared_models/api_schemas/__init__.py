@@ -22,6 +22,7 @@ from .calendar import (
 from .checkpoint import CheckpointBase, CheckpointCreate, CheckpointRead
 from .reminder import ReminderBase, ReminderCreate, ReminderRead, ReminderUpdate
 from .user import TelegramUserCreate, TelegramUserRead, TelegramUserUpdate
+from .user_fact import UserFactBase, UserFactCreate, UserFactRead
 from .user_secretary import (
     UserSecretaryLinkBase,
     UserSecretaryLinkCreate,
@@ -65,4 +66,8 @@ __all__ = [
     "UserSecretaryLinkBase",
     "UserSecretaryLinkCreate",
     "UserSecretaryLinkRead",
+    # UserFact
+    "UserFactBase",
+    "UserFactCreate",
+    "UserFactRead",
 ]

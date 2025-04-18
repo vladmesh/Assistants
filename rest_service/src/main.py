@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from routers import assistant_tools  # Assuming this is also in routers
 from routers import checkpoints  # Import checkpoints from routers
 from routers import secretaries  # Assuming this is also in routers
+from routers import user_facts  # Add user_facts
 from routers import (  # user_secretary_links, # Removed non-existent router
     assistants,
     calendar,
@@ -54,6 +55,9 @@ app.include_router(tools.router, prefix="/api", tags=["Tools"])
 app.include_router(assistant_tools.router, prefix="/api", tags=["Assistant Tools"])
 app.include_router(secretaries.router, prefix="/api", tags=["Secretaries"])
 app.include_router(reminders.router, prefix="/api", tags=["Reminders"])
+app.include_router(
+    user_facts.router, prefix="/api", tags=["User Facts"]
+)  # Add user_facts router
 # app.include_router(user_secretary_links.router, prefix="/api") # Removed non-existent router
 app.include_router(checkpoints.router, prefix="/api")
 

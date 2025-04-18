@@ -18,6 +18,7 @@ from .calendar import CalendarCredentials
 # )
 from .reminder import Reminder, ReminderStatus, ReminderType
 from .user import TelegramUser
+from .user_fact import UserFact
 from .user_secretary import UserSecretaryLink
 
 __all__ = [
