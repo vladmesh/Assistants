@@ -71,8 +71,8 @@ services:
         - app_network
       healthcheck:
         test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-        interval: 3s
-        timeout: 5s
+        interval: 2s
+        timeout: 10s
         retries: 6
 
   rest_service:
@@ -97,8 +97,8 @@ services:
         - app_network
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-        interval: 5s
-        timeout: 5s
+        interval: 2s
+        timeout: 3s
         retries: 8
 
   cron_service:
