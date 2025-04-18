@@ -12,6 +12,7 @@ from tools.sub_assistant_tool import SubAssistantTool  # Import SubAssistantTool
 
 # Import specific tool implementation classes
 from tools.time_tool import TimeToolWrapper
+from tools.user_fact_tool import UserFactTool  # Import the new tool
 from tools.web_search_tool import WebSearchTool
 
 # from shared_models import ToolModel # Remove old import
@@ -87,6 +88,8 @@ class ToolFactory:
                         )
                 elif tool_type == "web_search":
                     tool_class = WebSearchTool
+                elif tool_type == "user_fact":  # Add handling for the new tool type
+                    tool_class = UserFactTool
                 elif tool_type == "sub_assistant":
                     if not self.assistant_factory:
                         raise ValueError(
