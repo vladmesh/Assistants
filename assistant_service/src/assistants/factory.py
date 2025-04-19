@@ -4,6 +4,8 @@ from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 import httpx  # Add httpx import
+from assistants.base_assistant import BaseAssistant
+from assistants.langgraph.langgraph_assistant import LangGraphAssistant
 
 # Project imports
 from config.logger import get_logger
@@ -17,14 +19,7 @@ from storage.rest_checkpoint_saver import RestCheckpointSaver  # Import new save
 # Import ToolFactory
 from tools.factory import ToolFactory
 
-from .base_assistant import BaseAssistant
-from .langgraph_assistant import LangGraphAssistant
-
-# Langchain imports
-
-
-# Import shared model
-
+from shared_models.enums import AssistantType
 
 logger = get_logger(__name__)
 
@@ -282,38 +277,42 @@ class AssistantFactory:
 
             # --- Create Assistant Instance ---
             assistant_type = assistant_data.assistant_type
-            instance: Optional[BaseAssistant] = None
+            assistant_instance: BaseAssistant
 
-            if assistant_type == "llm":
-                instance = LangGraphAssistant(
+            # Compare the enum member directly
+            if assistant_type == AssistantType.LLM:
+                logger.debug(
+                    f"Creating LangGraphAssistant instance for {assistant_uuid}, user {user_id}"
+                )
+                # Ensure all required args are present
+                assistant_instance = LangGraphAssistant(
                     assistant_id=str(assistant_uuid),
-                    name=assistant_data.name,  # Pass correct name
-                    config=config_for_assistant,  # Pass the constructed config dict
+                    name=assistant_data.name,
+                    config=config_for_assistant,
                     tools=created_tools,
-                    user_id=user_id,
-                    checkpointer=self.checkpointer,
-                    # Pass is_secretary if needed by base class or LangGraphAssistant
-                    is_secretary=getattr(assistant_data, "is_secretary", False),
+                    user_id=user_id,  # Pass user_id to assistant instance
+                    checkpointer=self.checkpointer,  # Pass the checkpointer
+                    rest_client=self.rest_client,  # Pass the factory's rest_client
                 )
-                logger.info(
-                    f"Created LangGraphAssistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id}"
-                )
+            # elif assistant_type == AssistantType.OPENAI: # Example for another type
+            #     # ... code for OpenAI assistant ...
             else:
+                # Use f-string for cleaner logging
                 raise ValueError(
-                    f"Unknown or unhandled assistant type: {assistant_type}"
+                    f"Unknown or unsupported assistant type '{assistant_type}' for assistant {assistant_uuid}"
                 )
 
             # --- Update Cache ---
-            if instance:
+            if assistant_instance:
                 async with self._cache_lock:
                     self._assistant_cache[cache_key] = (
-                        instance,
+                        assistant_instance,
                         datetime.now(timezone.utc),
                     )  # Use timezone.utc
                 logger.info(
                     f"Assistant {assistant_uuid} for user {user_id} created and added to cache."
                 )
-                return instance
+                return assistant_instance
             else:
                 # This case should ideally not happen if assistant_type is validated
                 raise ValueError("Failed to create assistant instance.")

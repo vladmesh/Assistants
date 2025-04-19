@@ -24,6 +24,7 @@ from shared_models.api_schemas import (
     ToolRead,
     UserSecretaryLinkRead,
 )
+from shared_models.api_schemas.user_fact import UserFactRead
 
 # from shared_models.api_models import UserSecretaryAssignment # Remove import of UserSecretaryAssignment
 
@@ -383,3 +384,59 @@ class RestServiceClient:
     async def get_active_assignments(self) -> List[dict]:
         """Fetch all active user-secretary assignments."""
         url = f"{self.base_url}/api/user-secretaries/assignments"
+
+    async def get_user_facts(self, user_id: str) -> List[str]:
+        """Get facts for a specific user.
+
+        Args:
+            user_id: The ID of the user.
+
+        Returns:
+            A list of fact strings.
+
+        Raises:
+            RestServiceError: If the request fails or returns unexpected data.
+        """
+        try:
+            logger.debug(f"Fetching facts for user ID: {user_id}")
+            # Use the _request helper
+            data = await self._request("GET", f"/api/users/{user_id}/facts")
+
+            # Ensure data is a list before processing
+            if isinstance(data, list):
+                # Parse each item using UserFactRead and extract the 'fact' string
+                facts_list: List[UserFactRead] = [UserFactRead(**item) for item in data]
+                fact_strings: List[str] = [fact_obj.fact for fact_obj in facts_list]
+                logger.debug(
+                    f"Successfully parsed {len(fact_strings)} facts for user {user_id}."
+                )
+                return fact_strings
+            else:
+                logger.error(
+                    f"Received unexpected data format for user facts: {type(data)}",
+                    user_id=user_id,
+                    data_received=data,
+                )
+                # Raise an error or return empty list? Raising for clarity.
+                raise RestServiceError(
+                    f"Unexpected data format received for user facts: {type(data)}"
+                )
+
+        except RestServiceError as e:
+            # Log the specific error for this operation
+            logger.error(f"Failed to get facts for user {user_id}: {e}", exc_info=True)
+            # Handle 404 specifically if needed (user not found or no facts)
+            if "404" in str(e):
+                logger.warning(f"User {user_id} not found or has no facts.")
+                return []  # Return empty list if user/facts not found
+            # For other errors, re-raise to indicate a problem
+            raise e
+        except Exception as e:
+            # Catch any other unexpected errors during processing/parsing
+            logger.exception(
+                f"Unexpected error getting facts for user {user_id}: {e}",
+                exc_info=True,
+            )
+            raise RestServiceError(
+                f"Unexpected error processing facts for user {user_id}"
+            ) from e
