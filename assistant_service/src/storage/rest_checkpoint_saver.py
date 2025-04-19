@@ -112,9 +112,7 @@ class RestCheckpointSaver(BaseCheckpointSaver):
     ) -> None:
         """Synchronous wrapper for aput_writes. (Minimal implementation)"""
         # For now, this is a no-op as intermediate writes aren't persisted via REST.
-        print(
-            f"Warning: put_writes called but not implemented for RestCheckpointSaver. Config: {config}, Task ID: {task_id}"
-        )
+        pass
 
     # --- Keep the original async methods ---
 
@@ -197,9 +195,7 @@ class RestCheckpointSaver(BaseCheckpointSaver):
         # This method is required by BaseCheckpointSaver, but we don't persist
         # intermediate writes via REST in this custom implementation.
         thread_id = config.get("configurable", {}).get("thread_id")
-        print(
-            f"Warning: aput_writes called for thread_id {thread_id}, task_id {task_id} but not implemented for RestCheckpointSaver."
-        )
+
         pass  # Do nothing
 
     async def aput(

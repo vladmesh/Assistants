@@ -77,7 +77,9 @@ async def main():
         # Stop background tasks using the new method
         await service.factory.stop_background_tasks()
         await service.factory.close()
-        await service.factory.message_queue.close()
+        # Close the redis client which is part of the orchestrator
+        # await service.message_queue.close() # Incorrect
+        await service.redis.close()  # Correct: Close the redis client
         logger.info("Assistant service shut down.")
 
 

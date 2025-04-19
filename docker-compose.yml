@@ -10,6 +10,7 @@ services:
       - REDIS_DB=${REDIS_DB}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+      - LOG_LEVEL=DEBUG
     env_file:
       - .env
     volumes:

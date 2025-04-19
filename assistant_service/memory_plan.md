@@ -129,7 +129,7 @@ async def load_user_facts_node(state: AssistantState) -> dict:
         # Если факты не обновились, просто возвращаем текущий token_count (если он есть)
         return {"facts_loaded": False, "current_token_count": state.get("current_token_count")} 
     
-    msg_content = "Current user facts:\n" + "\\n".join(f"- {f}" for f in pending_facts)
+    msg_content = "Факты о пользователе:\n" + "\\n".join(f"- {f}" for f in pending_facts)
     msg = SystemMessage(content=msg_content, name="user_facts")
     
     current_messages = state.get("messages", [])
