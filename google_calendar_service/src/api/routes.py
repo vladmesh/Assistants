@@ -141,7 +141,9 @@ async def handle_callback(
 
         # Send message to assistant
         await redis_service.send_to_assistant(
-            user_id=user_id, trigger_type=TriggerType.GOOGLE_AUTH, payload={}
+            user_id=user_id,
+            trigger_type=TriggerType.GOOGLE_AUTH,
+            payload={"message": "Google Calendar connected"},
         )
 
         # Redirect to Telegram

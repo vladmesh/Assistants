@@ -78,7 +78,7 @@ def send_reminder_trigger(reminder_data: Dict[str, Any]) -> None:
             if assistant_id
             else None,  # Ensure string or None
             "reminder_type": reminder_data.get("type"),
-            "payload": inner_payload,  # Parsed payload
+            "message": inner_payload,  # Parsed payload
             "created_at": reminder_data.get("created_at"),
             # Consider adding original trigger_at if needed for logic
             # "original_trigger_at": reminder_data.get("trigger_at"),
