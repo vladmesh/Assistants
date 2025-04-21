@@ -72,8 +72,7 @@ class ToolCreate(BaseModel):
 
     name: str
     tool_type: str
-    description: str
-    input_schema: Optional[str] = None
+    description: Optional[str] = None
     assistant_id: Optional[UUID] = None
     is_active: bool = True
 
@@ -81,7 +80,10 @@ class ToolCreate(BaseModel):
 class ToolUpdate(BaseModel):
     """Model for updating a tool"""
 
+    name: Optional[str] = None
+    tool_type: Optional[str] = None
     description: Optional[str] = None
+    assistant_id: Optional[UUID] = None
     is_active: Optional[bool] = None
 
 
