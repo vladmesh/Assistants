@@ -25,6 +25,13 @@ from pydantic.json import pydantic_encoder  # Import pydantic_encoder
 # DEFAULT_SERIALIZER = Pickler()
 
 
+# Define custom exception for checkpoint errors
+class CheckpointError(Exception):
+    """Custom exception for checkpoint loading/saving errors."""
+
+    pass
+
+
 # Inherit from BaseCheckpointSaver instead of AsyncCheckpointSaver
 class RestCheckpointSaver(BaseCheckpointSaver):
     """An async-capable checkpoint saver that stores checkpoints via a REST API."""
@@ -161,14 +168,38 @@ class RestCheckpointSaver(BaseCheckpointSaver):
                 metadata=metadata,
                 parent_config=None,
             )
-        except httpx.RequestError as e:
-            print(f"Error fetching checkpoint for thread_id {thread_id}: {e}")
-            return None
-        except (KeyError, TypeError, binascii.Error) as e:
+        except httpx.HTTPStatusError as e:  # Catch HTTP errors first
+            # Don't raise for 404, just return None as before
+            if e.response.status_code == 404:
+                print(f"Checkpoint not found for thread_id: {thread_id}")
+                return None
+            else:
+                # For other HTTP errors, log and raise CheckpointError
+                print(f"HTTP error fetching checkpoint for thread_id {thread_id}: {e}")
+                raise CheckpointError(
+                    f"Failed to fetch checkpoint due to HTTP error {e.response.status_code}"
+                ) from e
+        except httpx.RequestError as e:  # Catch network/request errors
+            print(f"Request error fetching checkpoint for thread_id {thread_id}: {e}")
+            # Raise CheckpointError for network issues
+            raise CheckpointError(
+                f"Failed to fetch checkpoint due to request error: {e}"
+            ) from e
+        except (
+            KeyError,
+            TypeError,
+            binascii.Error,
+            Exception,
+        ) as e:  # Catch deserialization/other errors
+            # Use logger.exception for better logging with traceback
+            # logger.exception(f"Error decoding/deserializing checkpoint for thread_id {thread_id}", exc_info=True)
             print(
                 f"Error decoding/deserializing checkpoint for thread_id {thread_id}: {e}"
             )
-            return None
+            # Raise CheckpointError for data issues
+            raise CheckpointError(
+                f"Failed to decode/deserialize checkpoint: {e}"
+            ) from e
 
     async def alist(
         self,
@@ -244,9 +275,30 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             response.raise_for_status()
             print(f"Successfully saved checkpoint for thread_id: {thread_id}")
             return config
-        except httpx.RequestError as e:
-            print(f"Error saving checkpoint for thread_id {thread_id}: {e}")
-            raise IOError(f"Failed to save checkpoint for thread {thread_id}") from e
-        except Exception as e:
-            print(f"Unexpected error saving checkpoint for thread_id {thread_id}: {e}")
-            raise IOError(f"Failed to save checkpoint for thread {thread_id}") from e
+        except httpx.HTTPStatusError as e:  # Catch HTTP errors separately
+            # Log the specific HTTP error
+            print(
+                f"HTTP error {e.response.status_code} saving checkpoint for thread_id {thread_id}: {e}"
+            )
+            # Raise CheckpointError, preserving original exception context
+            raise CheckpointError(
+                f"Failed to save checkpoint due to HTTP error {e.response.status_code}"
+            ) from e
+        except httpx.RequestError as e:  # Catch network/request errors
+            print(f"Request error saving checkpoint for thread_id {thread_id}: {e}")
+            # Raise CheckpointError, preserving original exception context
+            raise CheckpointError(
+                f"Failed to save checkpoint due to request error: {e}"
+            ) from e
+        except (
+            TypeError,
+            binascii.Error,
+            Exception,
+        ) as e:  # Catch serialization or other errors
+            # Log the specific error (e.g., serialization failure)
+            # logger.exception(f"Error serializing or saving checkpoint for thread_id {thread_id}", exc_info=True)
+            print(
+                f"Error serializing or saving checkpoint for thread_id {thread_id}: {e}"
+            )
+            # Raise CheckpointError, preserving original exception context
+            raise CheckpointError(f"Failed to serialize or save checkpoint: {e}") from e

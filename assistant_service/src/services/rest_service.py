@@ -1,12 +1,19 @@
 """REST service client for interacting with the REST API"""
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import httpx
 from config.logger import get_logger
 from config.settings import settings
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 # Import Pydantic models used for response parsing
 # Use schemas from shared_models.api_schemas instead of old models
@@ -45,7 +52,11 @@ class RestServiceClient:
                 If not provided, uses settings.
         """
         self.base_url = (base_url or settings.REST_SERVICE_URL).rstrip("/")
-        self._client = httpx.AsyncClient()
+        # Initialize AsyncClient with timeout from settings
+        timeout = httpx.Timeout(
+            settings.HTTP_CLIENT_TIMEOUT, connect=5.0
+        )  # Use configured timeout, add connect timeout
+        self._client = httpx.AsyncClient(timeout=timeout)
         self._cache: Dict[str, Any] = {}
         logger.info(f"RestServiceClient initialized with base URL: {self.base_url}")
 
@@ -155,16 +166,50 @@ class RestServiceClient:
         data = await self._request("GET", f"/api/users/{user_id}")
         return TelegramUserRead(**data)
 
+    @retry(
+        stop=stop_after_attempt(3),  # Retry up to 3 times
+        wait=wait_exponential(
+            multiplier=1, min=1, max=10
+        ),  # Exponential backoff (1s, 2s, 4s ...)
+        retry=retry_if_exception_type(
+            (
+                httpx.TimeoutException,
+                httpx.ConnectError,
+                httpx.NetworkError,
+                httpx.HTTPStatusError,  # Add HTTPStatusError to potentially retry on 5xx
+            )
+        ),
+        reraise=True,  # Re-raise the exception after retries are exhausted
+        before_sleep=lambda retry_state: logger.warning(
+            f"Retrying request {retry_state.args[1]} {retry_state.args[2]} due to {retry_state.outcome.exception()}, attempt {retry_state.attempt_number}"
+        ),  # Log before sleep
+    )
     async def _request(
         self, method: str, endpoint: str, **kwargs: Any
     ) -> Dict[str, Any]:
-        """Helper method to make requests and handle common errors."""
+        """Helper method to make requests and handle common errors with retries."""
         full_url = f"{self.base_url}{endpoint}"  # Construct full URL
-        logger.debug(f"Making request: {method} {full_url}")
+        logger.debug(
+            f"Making request: {method} {full_url}",
+            attempt=getattr(self, "_retry_attempt", 1),
+        )
         try:
             # Use the constructed full_url
             response = await self._client.request(method, full_url, **kwargs)
-            response.raise_for_status()  # Raise exception for 4xx or 5xx status codes
+
+            # Check for specific 5xx errors to retry, raise others immediately
+            if 500 <= response.status_code < 600:
+                logger.warning(
+                    f"Received server error {response.status_code} for {method} {full_url}"
+                )
+                response.raise_for_status()  # Will be caught by tenacity if it's HTTPStatusError
+            elif response.status_code >= 400:
+                # Don't retry client errors (4xx), raise immediately
+                logger.error(
+                    f"Client error {response.status_code} for {method} {full_url}. Not retrying."
+                )
+                response.raise_for_status()  # Raise HTTPStatusError for non-retryable 4xx
+
             # Handle potential empty response for non-GET requests or 204
             if response.status_code == 204:
                 return {}  # Return empty dict for No Content
@@ -178,6 +223,7 @@ class RestServiceClient:
                 method=method,
                 url=full_url,  # Log full_url
                 response_body=e.response.text,
+                exc_info=True,  # Add exc_info for better debugging
             )
             # Try to parse error detail from response
             error_detail = "Unknown error"
@@ -196,6 +242,7 @@ class RestServiceClient:
                 f"Request error occurred: {e}",
                 method=method,
                 url=full_url,  # Log full_url
+                exc_info=True,  # Add exc_info for better debugging
             )
             # Check for specific error types like UnsupportedProtocol
             if isinstance(e, httpx.UnsupportedProtocol):
