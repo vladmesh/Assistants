@@ -19,31 +19,19 @@ The assistant service is the core engine of the Smart Assistant project. It hand
 - Provides built-in support for tool integration and execution.
 - Handles complex conversational flows and state management via checkpoints.
 
-#### OpenAIAssistant (OpenAI Assistants API) - Deprecated/Experimental
-- Previous or experimental implementation using the OpenAI Assistants API.
-- Not actively used in the current primary workflow managed by `AssistantFactory`.
-- Code might still exist (`assistants/openai.py`) but is not the default choice.
-
 ### 2.2 Directory Structure
 
 ```
 assistant_service/src/
 ├── assistants/           # Assistant implementations
-│   ├── base.py          # Base assistant class
 │   ├── factory.py       # Assistant factory
 │   ├── langgraph/       # LangGraph implementation details
 │   │   ├── langgraph_assistant.py  # Main LangGraphAssistant class
 │   │   ├── graph_builder.py      # Logic for building the graph
 │   │   ├── state.py              # Definition of AssistantState
-│   │   ├── nodes/                # Graph node implementations
-│   │   │   ├── init_state.py
-│   │   │   ├── entry_check_facts.py
-│   │   │   ├── load_user_facts.py
-│   │   │   ├── update_state_after_tool.py
-│   │   │   └── ...               # Other nodes (e.g., summarize_history)
+│   │   ├── nodes/                # Graph node implementations (specific node logic might be in graph_builder or assistant class)
 │   │   └── utils/                # Utility functions for the graph
 │   │       └── token_counter.py
-│   └── openai.py        # OpenAI implementation (Deprecated/Experimental)
 ├── tools/               # Tool implementations
 │   ├── base.py          # Base tool class
 │   ├── factory.py       # Tool factory (creates tool instances)
@@ -52,9 +40,6 @@ assistant_service/src/
 │   ├── sub_assistant_tool.py # Sub-assistant wrapper (SubAssistantTool)
 │   ├── time.py          # Time operations
 │   └── web_search.py    # Web search using Tavily
-├── messages/            # Message handling
-│   ├── base.py        # Base message class
-│   └── types.py       # Message types
 ├── services/          # External service clients
 ├── storage/           # Context storage
 ├── config/            # Service configuration
@@ -70,13 +55,11 @@ assistant_service/src/
 #### Graph-Based Processing
 - The `LangGraphAssistant` (in `assistants/langgraph/langgraph_assistant.py`) orchestrates message processing using a state machine defined by a LangGraph.
 - The graph structure is built by the `build_full_graph` function in `assistants/langgraph/graph_builder.py`.
-- The graph consists of several nodes (defined in `assistants/langgraph/nodes/`) that manage state transitions, such as:
-    - `init_state`: Initializes the conversation state.
-    - `check_facts`: Determines if user facts need refreshing and fetches them via `RestServiceClient`.
-    - `load_facts`: Injects fetched facts into the message history.
-    - `assistant`: The main agent logic node that calls the LLM and decides on tool usage.
-    - `tools`: Executes the chosen tool.
-    - `update_state_after_tool`: Processes tool results and updates state flags (e.g., `fact_added_in_last_run`).
+- The graph consists of several nodes that manage state transitions and processing:
+    - `summarize` (Optional): Conditionally summarizes older messages if the context exceeds a limit.
+    - `ensure_limit`: Explicitly truncates message history if it exceeds the maximum token limit, keeping essential messages.
+    - `assistant`: The main agent logic node. It prepares the prompt (including system message and facts), calls the LLM, and determines the next action (respond or use a tool).
+    - `tools`: Executes the chosen tool if the assistant node decides to use one.
 - The state (`AssistantState` defined in `assistants/langgraph/state.py`) is persisted between turns using a checkpointer (e.g., `RestCheckpointSaver`).
 
 #### Tool Integration
@@ -106,38 +89,6 @@ async def create_langchain_tools(
     return tools
 ```
 
-### 3.2 OpenAI Implementation
-
-#### Thread Management
-```python
-class OpenAIAssistant(BaseAssistant):
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-```
-
-#### Tool Registration
-```python
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "calendar_create",
-            "description": "Create a calendar event",
-            "parameters": {...}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": "Search the internet for information on a specific topic",
-            "parameters": {...}
-        }
-    }
-]
-```
-
 ## 4. Message & Context Handling
 
 ### 4.1 Message Types
@@ -148,7 +99,6 @@ tools = [
 
 ### 4.2 Context Management
 - LangGraph: Graph-based state management
-- OpenAI: Thread-based storage
 - Redis: Persistent storage and queues
 
 ## 5. External Integration
@@ -182,14 +132,12 @@ tools = [
 ### 7.1 Settings
 ```python
 class Settings(BaseSettings):
-    openai_api_key: str
     redis_url: str
     log_level: str
     tavily_api_key: Optional[str] = None
 ```
 
 ### 7.2 Environment Variables
-- API keys
 - Service URLs
 - Logging settings
 

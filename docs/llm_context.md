@@ -42,7 +42,7 @@ The project is divided into several independent microservices:
   - Core engine for handling user messages and coordinating various LLM-based functionalities.
   - Manages context, threads, and asynchronous message processing via Redis.
   - Processes standard messages (`HumanMessage`, `ToolMessage`) and internal events (`reminder_triggered`) from the input Redis queue (`REDIS_QUEUE_TO_SECRETARY`).
-  - Utilizes the `create_reminder` tool to interact with `rest_service` for creating reminders.
+  - Utilizes the reminder creation tool (`ReminderTool`) to interact with `rest_service` for creating reminders.
   - Handles triggered reminders by processing them as `ToolMessage`.
   - Supports multiple secretary instances with user-specific configurations.
   - Implements secretary selection and caching through `AssistantFactory`, which also manages tool creation via an internal `ToolFactory`.
