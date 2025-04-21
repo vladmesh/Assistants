@@ -1,45 +1,36 @@
 from datetime import datetime
-from typing import Annotated, Any, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Optional, Sequence
 
-from langgraph.graph.message import AnyMessage
+from langchain_core.messages import BaseMessage
 from typing_extensions import TypedDict
+
+from shared_models import QueueTrigger
+
+# Import our custom reducer
+from .reducers import custom_message_reducer
 
 
 # --- State Definition ---
-def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
-    """Push or pop the state."""
-    if right is None:
-        return left
-    if right == "pop":
-        # Ensure we don't pop from an empty list or the initial 'idle'
-        if len(left) > 1:
-            return left[:-1]
-        return left  # Return as is if only 'idle' or empty
-    return left + [right]
+def update_dialog_stack(
+    new_state: List[str], current_stack: Optional[List[str]]
+) -> List[str]:
+    """Helper to manage the dialog state stack."""
+    if current_stack is None:
+        return new_state
+    # Simple replacement logic for now, could be more complex (push/pop)
+    return new_state
 
 
 class AssistantState(TypedDict):
     """State for the assistant, including messages and dialog tracking."""
 
-    messages: list[AnyMessage]
-    user_id: Optional[str]  # Keep track of the user ID
-    # Add field for external trigger events like reminders
-    triggered_event: Optional[dict] = None
-
-    dialog_state: Annotated[
-        # Add more states if needed, keep simple for now
-        list[Literal["idle", "processing", "waiting_for_tool", "error", "timeout"]],
-        update_dialog_stack,
-    ]
-    last_activity: datetime  # Track last activity for timeout purposes
-
-    # Add fields from memory_plan.md
-    pending_facts: Optional[List[str]] = None
-    facts_loaded: bool = False
-    last_summary_ts: Optional[datetime] = None
-    llm_context_size: Optional[int] = None
-    fact_added_in_last_run: bool = False
-    current_token_count: Optional[int] = None
+    messages: Annotated[Sequence[BaseMessage], custom_message_reducer]
+    user_id: str  # ID of the user for API calls, etc.
+    llm_context_size: int  # Token limit for the main LLM
+    triggered_event: QueueTrigger  # Event that triggered the graph run (e.g., reminder)
+    last_summary_ts: Optional[datetime]  # Timestamp of the last summary
+    log_extra: Optional[Dict[str, Any]]  # Additional context for logging
+    dialog_state: Optional[List[str]]  # Stack for tracking dialog states (optional)
 
 
 # --- End State Definition ---

@@ -2,7 +2,6 @@
 
 import logging
 from typing import Any, Dict, Optional, Type
-from uuid import UUID
 
 from assistants.base_assistant import BaseAssistant
 from config.settings import Settings

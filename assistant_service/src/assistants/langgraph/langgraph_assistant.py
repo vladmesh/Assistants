@@ -2,28 +2,20 @@
 
 import asyncio
 import logging
-import time  # Import time module
-from datetime import datetime, timezone  # Import timezone
-from typing import Annotated, Any, Dict, List, Literal, Optional
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 # Project specific imports
-# Change import path for BaseAssistant to go up one level
-# from assistants.base_assistant import BaseAssistant
 from assistants.base_assistant import BaseAssistant  # Absolute import from src
+from assistants.langgraph.graph_builder import build_full_graph
+from assistants.langgraph.state import AssistantState, update_dialog_stack
 
-# Import the new graph builder function using absolute path from src
-# Need to adjust relative path for graph_builder and state now
-# from assistants.langgraph.graph_builder import build_base_graph
-# from assistants.langgraph.state import AssistantState, update_dialog_stack
-from assistants.langgraph.graph_builder import build_full_graph  # Updated import
-from assistants.langgraph.state import (  # Absolute import from src
-    AssistantState,
-    update_dialog_stack,
-)
+# Import logging utility
+from assistants.langgraph.utils.logging_utils import log_messages_to_file
 
-# --- Tool Imports ---
-# Import specific tool implementation classes directly for now
-# TODO: Refactor using a ToolFactory later
+# Import token counter utility
+from assistants.langgraph.utils.token_counter import count_tokens
 from config.settings import settings  # To get API keys if not in assistant config
 
 # Base classes and core types
@@ -41,59 +33,53 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import (  # Import needed for checkpointer
     BaseCheckpointSaver,
 )
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.graph.state import CompiledGraph
 from langgraph.prebuilt import create_react_agent  # Import create_react_agent
-from langgraph.prebuilt import ToolNode, tools_condition
 from services.rest_service import RestServiceClient  # Import RestServiceClient
-
-# --- End Tool Imports ---
-# Need to adjust relative path for utils
-# from utils.error_handler import handle_assistant_error  # Import error handlers
-# from utils.error_handler import AssistantError, MessageProcessingError
-from utils.error_handler import handle_assistant_error  # Absolute import from src
-from utils.error_handler import (  # Absolute import from src
+from utils.error_handler import (
     AssistantError,
     MessageProcessingError,
+    handle_assistant_error,
 )
 
-# Need to adjust relative path for shared_models
-# from shared_models import TriggerType
-from shared_models import TriggerType  # Absolute import from src
+from shared_models import QueueTrigger, TriggerType
 
-# Remove TypedDict if only used for AssistantState
-# from typing_extensions import TypedDict
-
+from .constants import (
+    FACT_SAVE_SUCCESS_MESSAGE,
+    FACT_SAVE_TOOL_NAME,
+    SYSTEM_PROMPT_NAME,
+    USER_FACTS_NAME,
+)
 
 logger = logging.getLogger(__name__)
-
-# --- State Definition (REMOVED - Now in state.py) ---
 
 
 class LangGraphAssistant(BaseAssistant):
     """
     Assistant implementation using LangGraph with a custom graph structure
     similar to the old BaseLLMChat, supporting checkpointing for memory.
+    Handles fact caching internally.
     """
 
     compiled_graph: CompiledGraph
-    agent_runnable: Any  # The agent created by create_react_agent
-    # Define tools attribute directly
+    agent_runnable: Any
     tools: List[Tool]
-    rest_client: RestServiceClient  # Add rest_client attribute
+    rest_client: RestServiceClient
+    checkpointer: BaseCheckpointSaver
+    llm: ChatOpenAI
+
+    cached_facts: Optional[List[str]] = None
+    needs_fact_refresh: bool = True
 
     def __init__(
         self,
         assistant_id: str,
         name: str,
         config: Dict,
-        # tool_definitions: List[Dict], -> Replaced by tools
         tools: List[Tool],  # Receive initialized tools
         user_id: str,  # Receive user_id
         checkpointer: BaseCheckpointSaver,  # Require checkpointer
         rest_client: RestServiceClient,  # Add rest_client parameter
-        # tool_factory: ToolFactory, -> Removed
         **kwargs,
     ):
         """
@@ -111,10 +97,6 @@ class LangGraphAssistant(BaseAssistant):
             rest_client: REST Service client instance.
             **kwargs: Additional keyword arguments.
         """
-        # Initialize BaseAssistant first
-        # Note: BaseAssistant still saves raw tool_definitions if the base init is kept unchanged
-        # We might want to adjust BaseAssistant later if needed.
-        # For now, pass an empty list or config['tools'] to BaseAssistant
         raw_tool_definitions = config.get(
             "tools", []
         )  # Get raw defs if they exist in config, else empty
@@ -126,15 +108,17 @@ class LangGraphAssistant(BaseAssistant):
         self.checkpointer = checkpointer
         self.rest_client = rest_client  # Store the rest_client
         self.timeout = self.config.get("timeout", 60)  # Default timeout 60 seconds
-        self.system_prompt = self.config.get(
-            "system_prompt", "You are a helpful assistant."
-        )  # Default prompt
+        self.system_prompt = self.config["system_prompt"]
+        self.max_tokens = self.config.get("max_tokens", 2500)
+
+        # --- Ensure internal fact refresh flag is set --- #
+        self.needs_fact_refresh = True
+        self.cached_facts = None
+        # ------------------------------------------------- #
 
         try:
             # 1. Initialize LLM
             self.llm = self._initialize_llm()
-
-            # 2. Initialize Langchain Tools -> REMOVED (Tools are passed in)
 
             if not self.tools:
                 logger.warning(
@@ -151,12 +135,11 @@ class LangGraphAssistant(BaseAssistant):
                 run_node_fn=self._run_assistant_node,
                 tools=self.tools,
                 checkpointer=self.checkpointer,
-                rest_client=self.rest_client,
-                system_prompt_text=self.system_prompt,  # Pass system prompt text
+                summary_llm=self.llm,  # Pass the initialized main LLM as the summary LLM
             )
 
             logger.info(
-                "LangGraphAssistant initialized",  # Removed (Using graph_builder)
+                "LangGraphAssistant initialized (internal fact caching)",
                 extra={
                     "assistant_id": self.assistant_id,
                     "assistant_name": self.name,
@@ -164,6 +147,7 @@ class LangGraphAssistant(BaseAssistant):
                     "tools_count": len(self.tools),
                     "timeout": self.timeout,
                     "rest_client_provided": self.rest_client is not None,
+                    "initial_needs_fact_refresh": self.needs_fact_refresh,
                 },
             )
 
@@ -207,121 +191,254 @@ class LangGraphAssistant(BaseAssistant):
         )
 
     def _create_agent_runnable(self) -> Any:
-        """Creates the core agent runnable (e.g., using create_react_agent)."""
-        try:
-            # Pass system prompt here if the agent creation supports it
-            # Note: create_react_agent in newer versions might take messages including system prompt directly
-            # For now, assuming it uses a prompt argument or infers from LLM binding
-            # Let's use a simple approach: bind the system message to the LLM if possible,
-            # or rely on create_react_agent's default prompt creation which uses system messages.
-            # We need to ensure the system message IS part of the history passed to the agent runnable.
+        """Creates the core agent runnable (e.g., using create_react_agent).
 
-            # Correct way is often to pass messages including system to invoke,
-            # but create_react_agent itself sets up the prompt internally based on messages.
-            # Let's rely on create_react_agent for now. System message will be added to state.
-            # Use self.tools which are now passed during initialization
+        Ensures the system prompt is bound to the LLM before passing to create_react_agent.
+        """
+        try:
+            # Pass the ORIGINAL LLM to create_react_agent
+            # System prompt will be handled by the function passed to the 'prompt' parameter
             return create_react_agent(
-                self.llm,
+                self.llm,  # Pass original LLM
                 self.tools,
-                # messages_modifier=... # Optional: If specific prompt engineering needed
+                # Use the 'prompt' parameter as confirmed by experiment
+                prompt=self._add_system_prompt_modifier,
             )
         except Exception as e:
             raise AssistantError(
                 f"Failed to create agent runnable: {str(e)}", self.name
             ) from e
 
-    # --- Graph Node Definitions ---
+    async def _add_system_prompt_modifier(
+        self, state: AssistantState, used_for_token_count: bool = False
+    ) -> List[BaseMessage]:
+        """Handles system prompt and user fact injection before LLM call.
 
-    async def _run_assistant_node(self, state: AssistantState) -> dict:
-        """The node that runs the core agent logic (using create_react_agent runnable).
-        Also handles triggered events by adding a message to the history.
+        Checks if facts need refresh, fetches/uses cached facts,
+        and constructs the final message list with Prompt, Facts, and History.
+        The ordering of special messages (prompt, facts, summary) is now primarily
+        handled by the custom_message_reducer.
+        Uses self.user_id and self.rest_client directly.
         """
-        start_node_time = time.perf_counter()  # Start node timer
+        user_id = self.user_id
+        log_extra = {"assistant_id": self.assistant_id, "user_id": user_id}
+        logger.debug(
+            "Entering _add_system_prompt_modifier (summary placement handled by reducer)",
+            extra=log_extra,
+        )
 
-        # Safer way to get the current dialog state for logging
+        current_messages = state.get("messages", [])
+
+        if current_messages:
+            last_message = current_messages[-1]
+            if (
+                isinstance(last_message, ToolMessage)
+                and getattr(last_message, "name", None) == FACT_SAVE_TOOL_NAME
+                and last_message.content == FACT_SAVE_SUCCESS_MESSAGE
+            ):
+                logger.info("Fact save detected, triggering refresh.", extra=log_extra)
+                self.needs_fact_refresh = True
+
+        should_fetch = self.needs_fact_refresh or self.cached_facts is None
+        fetched_facts: Optional[List[str]] = None
+
+        if should_fetch:
+            logger.debug("Fetching/refreshing user facts.", extra=log_extra)
+            try:
+                fetched_facts = await self.rest_client.get_user_facts(user_id=user_id)
+                if isinstance(fetched_facts, list):
+                    self.cached_facts = fetched_facts
+                    logger.info(
+                        f"Successfully fetched and cached {len(self.cached_facts)} facts.",
+                        extra=log_extra,
+                    )
+                self.needs_fact_refresh = False
+            except Exception as e:
+                logger.exception(
+                    "Failed to fetch user facts. Using potentially stale cache or empty list.",
+                    extra=log_extra,
+                    exc_info=True,
+                )
+                if self.cached_facts is None:
+                    self.cached_facts = []
+        else:
+            logger.debug("Using cached user facts.", extra=log_extra)
+
+        facts_message_content = "No facts available."
+        if self.cached_facts:
+            facts_list_str = "\n".join([f"- {fact}" for fact in self.cached_facts])
+            facts_message_content = f"Facts about the user:\n{facts_list_str}"
+
+        facts_system_message = SystemMessage(
+            content=facts_message_content, name=USER_FACTS_NAME
+        )
+
+        system_prompt_message = SystemMessage(
+            content=self.system_prompt, name=SYSTEM_PROMPT_NAME
+        )
+
+        history_messages = []
+        for msg in current_messages:
+            # Skip system prompts, facts by the reducer
+            if isinstance(msg, SystemMessage):
+                msg_name = getattr(msg, "name", None)
+                if msg_name in [
+                    SYSTEM_PROMPT_NAME,
+                    USER_FACTS_NAME,
+                ]:
+                    continue
+
+            # If it's not a special message to be skipped, add it to history
+            history_messages.append(msg)
+
+        # The reducer will place prompt and facts correctly.
+        # This modifier now only needs to provide the *base* for the LLM call:
+        # Prompt, Facts, and the filtered History.
+        final_messages = [system_prompt_message, facts_system_message]
+
+        final_messages.extend(history_messages)  # Add the filtered history
+
+        logger.debug(
+            f"Modifier returning {len(final_messages)} messages for LLM (reducer handles final order).",
+            extra=log_extra,
+        )
+
+        if not used_for_token_count:
+            try:
+                total_tokens = count_tokens(final_messages)
+                llm_context_size = self.max_tokens
+                await log_messages_to_file(
+                    assistant_id=self.assistant_id,
+                    user_id=user_id,
+                    messages=final_messages,
+                    total_tokens=total_tokens,
+                    context_limit=llm_context_size,
+                    step_name="Modifier Output (Corrected Order)",  # Updated step name
+                )
+            except Exception as e:
+                logger.error(
+                    f"!!! Failed to call log_messages_to_file: {e}",
+                    exc_info=True,
+                    extra=log_extra,
+                )
+        # --- End File Logging --- #
+
+        return final_messages
+
+    async def _run_assistant_node(self, state: AssistantState) -> Dict[str, Any]:
+        """Runs the agent logic.
+
+        - Calculates and updates `current_token_count` BEFORE invoking the LLM.
+        - Checks for fact tool success to set refresh flag.
+        - Invokes the core agent runnable.
+        - Returns the result, including the calculated token count.
+        """
+        start_node_time = time.perf_counter()
+        user_id = self.user_id
         dialog_stack = state.get("dialog_state")
         current_dialog = dialog_stack[-1] if dialog_stack else "unknown"
-
         log_extra = {
             "assistant_id": self.assistant_id,
-            "user_id": state.get("user_id"),  # Get user_id from state
-            "current_dialog_state": current_dialog,  # Use the safely retrieved value
+            "user_id": user_id,
+            "current_dialog_state": current_dialog,
         }
         logger.debug("Entering _run_assistant_node", extra=log_extra)
 
-        # Check for triggered event FIRST
+        current_messages = state.get("messages", [])
+        if current_messages:
+            last_message = current_messages[-1]
+            if (
+                isinstance(last_message, ToolMessage)
+                and getattr(last_message, "name", None) == FACT_SAVE_TOOL_NAME
+                and last_message.content == FACT_SAVE_SUCCESS_MESSAGE
+            ):
+                logger.info(
+                    "Successful fact save detected in _run_assistant_node. Setting refresh flag.",
+                    extra=log_extra,
+                )
+                self.needs_fact_refresh = True  # SET THE FLAG HERE
+
         triggered_event = state.get("triggered_event")
-        messages_for_agent = list(state["messages"])  # Create a mutable copy
+        messages_for_agent = list(
+            state["messages"]
+        )  # Use original state messages for agent input
         state_update_from_trigger = {}
 
         if triggered_event:
             logger.info(
                 "Processing triggered event in assistant node",
-                extra={**log_extra, "event_type": triggered_event.get("type")},
+                extra={
+                    **log_extra,
+                    "event_type": triggered_event.trigger_type,
+                    "event_payload": triggered_event.payload,
+                },
             )
-            # Add a message representing the trigger to the history
-            # Example: Use ToolMessage for structure if appropriate
-            trigger_message_content = triggered_event.get(
-                "content", "A scheduled event was triggered."
+            trigger_message_content = triggered_event.payload.get(
+                "message", "Trigger event received."
             )
-            # Use a specific tool_call_id or name to identify trigger messages?
-            trigger_tool_id = triggered_event.get("tool_call_id", "event_trigger_0")
-            messages_for_agent.append(
-                ToolMessage(
-                    content=trigger_message_content, tool_call_id=trigger_tool_id
-                )
-            )
-            # Clear the triggered event from the state after processing
+            messages_for_agent.append(HumanMessage(content=trigger_message_content))
             state_update_from_trigger = {"triggered_event": None}
-            logger.debug("Appended trigger event message to history", extra=log_extra)
+            logger.debug(
+                "Appended trigger event message to history (for agent input)",
+                extra=log_extra,
+            )
 
-        if not messages_for_agent:
+        if not messages_for_agent or len(messages_for_agent) == 0:
             logger.warning("Assistant node called with empty messages", extra=log_extra)
-            # Decide how to handle this - maybe return an empty response or error?
-            # For now, let it proceed, agent_runnable might handle it.
-            pass  # Or return {"messages": []} ?
 
-        # Prepare state for the agent runnable
-        # The agent runnable expects a dictionary, usually {'messages': [...]}
-        agent_input = {"messages": messages_for_agent}
+        # for exact token count use _add_system_prompt_modifier
+        try:
+            messages_to_count = await self._add_system_prompt_modifier(state)
+            calculated_token_count = count_tokens(messages_to_count)
+            logger.debug(
+                f"Calculated token count BEFORE invoke: {calculated_token_count}",
+                extra=log_extra,
+            )
+        except Exception as count_exc:
+            logger.exception(
+                "Error calculating token count before invoke",
+                extra=log_extra,
+                exc_info=True,
+            )
+            calculated_token_count = state.get(
+                "current_token_count"
+            )  # Fallback to potentially stale count
 
-        # Log the exact messages being sent to the agent runnable
+        # --- End Token Calculation --- #
+
+        agent_input = {
+            "messages": messages_for_agent
+        }  # Input for agent remains the same as before
         logger.debug(
-            f"Messages passed to agent runnable: {agent_input['messages']}",
+            f"Messages passed to agent runnable input (count may differ due to modifier): {len(agent_input['messages'])}",
             extra=log_extra,
         )
 
         logger.debug("Invoking agent runnable", extra=log_extra)
         try:
-            # Invoke the core agent logic
             agent_output = await self.agent_runnable.ainvoke(agent_input)
-
-            # Agent output is typically a dict containing the new messages
-            # Example: {"messages": [AIMessage(...)]} or {"messages": [ToolMessage(...)]}
+            # IMPORTANT: The agent_output["messages"] contains only the *new* messages from the LLM/tools.
+            # It does NOT include the history that was passed in.
+            # To update the state correctly, we need to combine the existing state messages
+            # with the new messages from the agent output.
+            # LangGraph's add_messages reducer handles this automatically when we return {"messages": new_messages}.
             new_messages = agent_output.get("messages", [])
 
-            # Construct the full updated message list for the state
-            # Since we use set_messages, we need to return the complete history
-            full_updated_messages = messages_for_agent + new_messages
-
-            # Combine agent output with any updates from trigger processing
-            # Replace the potentially partial 'messages' from agent_output with the full list
             final_update = {
-                **agent_output,  # Keep other potential fields from agent_output
-                "messages": full_updated_messages,  # Overwrite with the full list
+                "messages": new_messages,  # Let add_messages handle merging
+                "current_token_count": calculated_token_count,  # Add the calculated count HERE
                 **state_update_from_trigger,
+                "dialog_state": agent_output.get(
+                    "dialog_state", state.get("dialog_state")
+                ),
             }
-
-            # Update last activity time
             final_update["last_activity"] = datetime.now(timezone.utc)
-
             node_duration = time.perf_counter() - start_node_time
             logger.debug(
-                f"_run_assistant_node completed in {node_duration:.4f}s, returning {len(full_updated_messages)} messages",
+                f"_run_assistant_node completed in {node_duration:.4f}s, returning {len(new_messages)} new messages. Updated token count to {calculated_token_count}",
                 extra=log_extra,
             )
             return final_update
-
         except Exception as e:
             node_duration = time.perf_counter() - start_node_time
             logger.exception(
@@ -329,19 +446,18 @@ class LangGraphAssistant(BaseAssistant):
                 extra=log_extra,
                 exc_info=True,
             )
-            # Return state update indicating error, including the original messages + error message
             error_message = SystemMessage(
                 content=f"Error processing request: {e}", name="error_message"
             )
-            # Return the state as it was, plus the error message
+            # Also return the calculated token count even on error, might be useful for debugging
             return {
-                "messages": messages_for_agent
-                + [error_message],  # Keep history + add error
+                "messages": [error_message],  # Let add_messages handle merging
+                "current_token_count": calculated_token_count,
                 "dialog_state": update_dialog_stack(
                     ["error"], state.get("dialog_state")
-                ),  # Push error state
+                ),
                 "last_activity": datetime.now(timezone.utc),
-                **state_update_from_trigger,  # Include trigger update
+                **state_update_from_trigger,
             }
 
     # --- End Graph Node Definitions ---
@@ -350,7 +466,7 @@ class LangGraphAssistant(BaseAssistant):
         self,
         message: Optional[BaseMessage],
         user_id: str,
-        triggered_event: Optional[dict] = None,  # Add triggered_event parameter
+        triggered_event: QueueTrigger = None,  # Add triggered_event parameter
     ) -> str:
         """
         Processes an incoming message or event using the compiled LangGraph,
@@ -362,7 +478,7 @@ class LangGraphAssistant(BaseAssistant):
             "assistant_id": self.assistant_id,
             "user_id": user_id,
             "message_type": type(message).__name__ if message else "None",
-            "triggered_event_type": triggered_event.get("type")
+            "triggered_event_type": triggered_event.trigger_type
             if triggered_event
             else None,
         }
@@ -390,11 +506,9 @@ class LangGraphAssistant(BaseAssistant):
         graph_input: Dict[str, Any] = {
             "messages": input_messages,  # New messages to be processed
             "user_id": user_id,  # Always provide user_id
-            # Add llm_context_size if available on the assistant instance
-            # This assumes llm_context_size is set during assistant init or config
             # TODO: Get llm_context_size from config properly later
             "llm_context_size": self.config.get(
-                "llm_context_size", 4096
+                "llm_context_size", 2600
             ),  # Example default
             # Potentially other initial defaults if needed, but state defaults cover most
         }
@@ -404,7 +518,7 @@ class LangGraphAssistant(BaseAssistant):
             graph_input["triggered_event"] = triggered_event
             logger.debug(
                 "Passing triggered event in graph input state",
-                extra={**log_extra, "event_type": triggered_event.get("type")},
+                extra={**log_extra, "event_type": triggered_event.trigger_type},
             )
         elif not message and not triggered_event:
             logger.warning(
@@ -516,16 +630,33 @@ class LangGraphAssistant(BaseAssistant):
             )
             return ""  # No response generated
 
-    async def get_history(self, user_id: str) -> List[BaseMessage]:
         """Retrieves the message history for the user."""
         thread_id = f"user_{user_id}_assistant_{self.assistant_id}"
         try:
             config = {"configurable": {"thread_id": thread_id}}
-            state = await self.compiled_graph.aget_state(config)
-            return state.messages if state else []
+            # Get the state WITHOUT invoking the graph
+            # IMPORTANT: This retrieves the raw persisted state.
+            # It will NOT contain facts/prompt added dynamically by the modifier.
+            state_snapshot = await self.checkpointer.aget(config)
+            # state = await self.compiled_graph.aget_state(config) # This might run parts of the graph?
+            # return state.messages if state else [] # Incorrect if using raw checkpoint
+            if (
+                state_snapshot
+                and state_snapshot.get("values")
+                and "messages" in state_snapshot["values"]
+            ):
+                return state_snapshot["values"]["messages"]
+            else:
+                logger.debug(
+                    f"No message history found in checkpoint for thread {thread_id}",
+                    extra={"user_id": user_id, "assistant_id": self.assistant_id},
+                )
+                return []
         except Exception as e:
             logger.exception(
-                f"Error retrieving history for thread {thread_id}: {e}", exc_info=True
+                f"Error retrieving history from checkpointer for thread {thread_id}: {e}",
+                extra={"user_id": user_id, "assistant_id": self.assistant_id},
+                exc_info=True,
             )
             return []
 

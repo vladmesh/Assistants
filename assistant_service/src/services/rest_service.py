@@ -7,7 +7,6 @@ from uuid import UUID
 import httpx
 from config.logger import get_logger
 from config.settings import settings
-from pydantic import BaseModel
 
 # Import Pydantic models used for response parsing
 # Use schemas from shared_models.api_schemas instead of old models

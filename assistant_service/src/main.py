@@ -79,7 +79,7 @@ async def main():
         await service.factory.close()
         # Close the redis client which is part of the orchestrator
         # await service.message_queue.close() # Incorrect
-        await service.redis.close()  # Correct: Close the redis client
+        await service.redis.aclose()
         logger.info("Assistant service shut down.")
 
 

@@ -31,7 +31,18 @@ assistant_service/src/
 ├── assistants/           # Assistant implementations
 │   ├── base.py          # Base assistant class
 │   ├── factory.py       # Assistant factory
-│   ├── langgraph.py     # LangGraph implementation
+│   ├── langgraph/       # LangGraph implementation details
+│   │   ├── langgraph_assistant.py  # Main LangGraphAssistant class
+│   │   ├── graph_builder.py      # Logic for building the graph
+│   │   ├── state.py              # Definition of AssistantState
+│   │   ├── nodes/                # Graph node implementations
+│   │   │   ├── init_state.py
+│   │   │   ├── entry_check_facts.py
+│   │   │   ├── load_user_facts.py
+│   │   │   ├── update_state_after_tool.py
+│   │   │   └── ...               # Other nodes (e.g., summarize_history)
+│   │   └── utils/                # Utility functions for the graph
+│   │       └── token_counter.py
 │   └── openai.py        # OpenAI implementation (Deprecated/Experimental)
 ├── tools/               # Tool implementations
 │   ├── base.py          # Base tool class
@@ -56,37 +67,43 @@ assistant_service/src/
 
 ### 3.1 LangGraph Implementation
 
-#### Message Processing
-```python
-class BaseLLMChat(BaseAssistant):
-    def __init__(self, settings: Settings, is_secretary: bool = False):
-        self.settings = settings
-        self.is_secretary = is_secretary
-        self.agent = None
-```
+#### Graph-Based Processing
+- The `LangGraphAssistant` (in `assistants/langgraph/langgraph_assistant.py`) orchestrates message processing using a state machine defined by a LangGraph.
+- The graph structure is built by the `build_full_graph` function in `assistants/langgraph/graph_builder.py`.
+- The graph consists of several nodes (defined in `assistants/langgraph/nodes/`) that manage state transitions, such as:
+    - `init_state`: Initializes the conversation state.
+    - `check_facts`: Determines if user facts need refreshing and fetches them via `RestServiceClient`.
+    - `load_facts`: Injects fetched facts into the message history.
+    - `assistant`: The main agent logic node that calls the LLM and decides on tool usage.
+    - `tools`: Executes the chosen tool.
+    - `update_state_after_tool`: Processes tool results and updates state flags (e.g., `fact_added_in_last_run`).
+- The state (`AssistantState` defined in `assistants/langgraph/state.py`) is persisted between turns using a checkpointer (e.g., `RestCheckpointSaver`).
 
 #### Tool Integration
+- Tools are implemented as classes inheriting from `BaseTool` (in `tools/`).
+- Tool instances are created by `ToolFactory` (in `tools/factory.py`), which receives tool definitions from `rest_service` and injects necessary context (`user_id`, `assistant_id`).
+- The initialized tools are passed to the `LangGraphAssistant` and made available to the `ToolNode` within the graph.
+- Example tool: `UserFactTool` (in `tools/user_fact_tool.py`) is used by the agent to save facts about the user via the REST API.
 ```python
-def initialize_tools(self, secretary_id: str):
-    secretary_tools = await self.rest_client.get_assistant_tools(secretary_id)
+# Example of how ToolFactory might be used by AssistantFactory
+async def create_langchain_tools(
+    self, tool_definitions: List[ToolRead], user_id: str, assistant_id: str
+) -> List[Tool]:
     tools = []
-    for tool_data in secretary_tools:
-        rest_tool = RestServiceTool(**tool_data.dict(), settings=self.settings)
-        tool = rest_tool.to_tool(secretary_id=secretary_id)
-        tools.append(tool)
+    for tool_def in tool_definitions:
+        tool_class = self._get_tool_class(tool_def.tool_type)
+        if tool_class:
+            # ... (logic to prepare args for the specific tool class)
+            tool_instance = tool_class(
+                name=tool_def.name, 
+                description=tool_def.description, 
+                settings=self.settings, 
+                user_id=user_id, 
+                assistant_id=assistant_id,
+                # ... other specific args
+            )
+            tools.append(tool_instance)
     return tools
-
-# Example tool: ReminderTool (tools/reminder_tool.py, default name 'create_reminder')
-# - Args (Validated by ReminderSchema):
-#   - type: str ('one_time'/'recurring')
-#   - payload: str (JSON string with reminder content)
-#   - trigger_at: Optional[str] (ISO format 'YYYY-MM-DD HH:MM' for 'one_time')
-#   - timezone: Optional[str] (e.g., 'Europe/Moscow', required with trigger_at)
-#   - cron_expression: Optional[str] (CRON format for 'recurring')
-# - Context Args (set by ToolFactory):
-#   - user_id: str (required for API call)
-#   - assistant_id: str (required for API call)
-# - Action: Calls POST /api/reminders/ in rest_service using validated data and context args.
 ```
 
 ### 3.2 OpenAI Implementation
@@ -220,7 +237,8 @@ class Settings(BaseSettings):
     - Fetches assistant configuration and tool *definitions* from `rest_service`.
     - Requires `user_id` for context.
     - Uses the internal `ToolFactory` instance (`tool_factory.create_langchain_tools`) to create actual tool instances from the definitions, passing `user_id` and `assistant_id` for context.
-    - Creates the `LangGraphAssistant` instance, providing it with the initialized tools.
+    - Creates the `LangGraphAssistant` instance, providing it with the initialized tools, `RestServiceClient`, and checkpointer.
+    - The `LangGraphAssistant` then internally calls `build_full_graph` to assemble its processing logic.
     - Also used internally by `ToolFactory` to instantiate sub-assistants required by `SubAssistantTool`.
 - `ToolFactory` (internal instance):
     - Responsible for creating instances of specific tool classes (e.g., `ReminderTool`, `SubAssistantTool`) based on configuration from `rest_service`.
