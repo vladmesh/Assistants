@@ -680,7 +680,7 @@ class AssistantFactory:
         while True:
             try:
                 await self._periodic_refresh()  # Call the actual refresh logic
-                await asyncio.sleep(60)  # Wait 60 seconds
+                await asyncio.sleep(600)  # Wait 600 seconds (10 minutes)
             except asyncio.CancelledError:
                 logger.info("Periodic refresh loop cancelled.")
                 break  # Exit loop cleanly

@@ -1,270 +1,218 @@
-## 📦 Итоговая структура проекта
+---
+title: План реализации Memory Pipeline для LangGraphAssistant
+---
+
+## 📦 Итоговая структура проекта (Актуализировано)
 
 ```
 assistant_service/
 ├─ src/
 │  ├─ assistants/
 │  │  ├─ langgraph/
-│  │  │  ├─ graph_builder.py           # сборка графа для LangGraphAssistant
-│  │  │  ├─ langgraph_assistant.py     # сам класс LangGraphAssistant и определение AssistantState
+│  │  │  ├─ graph_builder.py           # сборка графа для LangGraphAssistant (✅)
+│  │  │  ├─ langgraph_assistant.py     # сам класс LangGraphAssistant и определение AssistantState (✅)
+│  │  │  ├─ state.py                   # определение AssistantState (✅)
 │  │  │  ├─ nodes/
-│  │  │  │  ├─ entry_check_facts.py    # узел: решает, нужно ли обновить факты, и вызывает API
-│  │  │  │  ├─ load_user_facts.py      # узел: форматирует факты из state в сообщение
-│  │  │  │  ├─ summarize_history.py    # узел: суммаризует историю
-│  │  │  │  └─ ...                     # будущие узлы
+│  │  │  │  ├─ init_state.py           # узел: инициализация базового состояния (системный промпт) (✅)
+│  │  │  │  ├─ entry_check_facts.py    # узел: решает, нужно ли обновить факты, и вызывает API (✅)
+│  │  │  │  ├─ load_user_facts.py      # узел: форматирует факты из state в сообщение (✅)
+│  │  │  │  ├─ update_state_after_tool.py # узел: обновляет флаги после вызова инструмента (✅)
+│  │  │  │  └─ summarize_history.py    # узел: суммаризует историю (⏳ TODO)
 │  │  │  └─ utils/
-│  │  │     ├─ token_counter.py        # считает токены
-│  │  │     └─ ...                     
-│  │  └─ tools/                        # Инструменты, вызываемые графом
-│  │     └─ get_facts_tool.py         # Инструмент для вызова GET /api/users/{user_id}/facts
+│  │  │     ├─ token_counter.py        # считает токены (✅)
+│  │  │     └─ ...
+│  └─ tools/                          # Инструменты, вызываемые графом
+│     └─ user_fact_tool.py           # Инструмент для *сохранения* фактов (вызывает POST/PATCH API) (✅)
 │  └─ ...
 └─ tests/
-   ├─ test_entry_check_facts.py
-   ├─ test_load_user_facts.py
-   ├─ test_summarize_history.py
-   ├─ test_memory_pipeline_e2e.py
+   ├─ assistants/
+   │  ├─ langgraph/
+   │  │  ├─ test_graph_builder.py   # Тест на базовую сборку графа (✅)
+   │  │  └─ ... (тесты узлов ⏳ TODO)
+   │  ├─ test_langgraph_assistant.py # Закомментированные тесты (требуют исправления)
+   ├─ test_memory_pipeline_e2e.py     # (⏳ TODO)
    └─ ...
 ```
 
-## 📝 Определение состояния (AssistantState)
+## 📝 Определение состояния (AssistantState) (Актуализировано)
 
-- `AssistantState` (определяется как `TypedDict` в `langgraph_assistant.py` или отдельном модуле)
-  - `messages: Annotated[Sequence[BaseMessage], operator.add]`
-  - `pending_facts: list[str]` # Факты, полученные от API, готовые к добавлению в messages
-  - `facts_loaded: bool` # Был ли узел load_user_facts выполнен в этом цикле
-  - `last_summary_ts: Optional[datetime]`
-  - `llm_context_size: int` # Устанавливается при инициализации ассистента
-  - `fact_added_in_last_run: bool` # Флаг, указывающий, был ли добавлен факт в последнем запуске
-  - `current_token_count: Optional[int]` # Кешированное количество токенов
-  - `user_id: str` # ID пользователя, необходим для вызова GetFactsTool
+- `AssistantState` (определяется как `TypedDict` в `state.py`)
+  - `messages: Annotated[Sequence[BaseMessage], operator.add]` (✅)
+  - `pending_facts: list[str]` # Факты, полученные от API, готовые к добавлению в messages (✅)
+  - `facts_loaded: bool` # Был ли узел load_user_facts выполнен в этом цикле (✅)
+  - `last_summary_ts: Optional[datetime]` (⏳ для Итерации 4)
+  - `llm_context_size: int` # Устанавливается при инициализации ассистента (✅)
+  - `fact_added_in_last_run: bool` # Флаг, указывающий, был ли добавлен факт в последнем запуске (✅)
+  - `current_token_count: Optional[int]` # Кешированное количество токенов (✅)
+  - `user_id: str` # ID пользователя, необходим для вызова API фактов (✅)
+  - `log_extra: Dict[str, Any]` # Дополнительная информация для логирования (опционально) (✅)
+  - `dialog_state: List[str]` # Стек состояний диалога (опционально, для отладки) (✅)
+  - `triggered_event: Optional[Dict]` # Событие, вызвавшее запуск графа (✅)
 
-## 📖 Общие рекомендации
+## 📖 Общие рекомендации (Без изменений)
 
 - **Документация узлов:** В начале каждого файла узла (`nodes/*.py`) рекомендуется добавлять docstring, описывающий:
     - Назначение узла.
     - Входные поля `state`, которые он читает.
     - Поля `state`, которые он обновляет.
     - Возможные побочные эффекты.
-- **Инициализация `llm_context_size`:** Рекомендуется устанавливать это поле один раз при создании экземпляра графа (например, через `initial_state_template` в конструкторе `LangGraphAssistant`), а не передавать его при каждом вызове.
-- **Подсчет токенов:** Для оптимизации рекомендуется кэшировать количество токенов в `current_token_count`. Этот счетчик должен обновляться в узлах, которые изменяют список `messages` (`load_user_facts`, `summarize_history`), а также **в основном узле ассистента (`run_node_fn`)** после добавления ответа LLM.
+- **Инициализация `llm_context_size` и `user_id`:** Рекомендуется устанавливать эти поля один раз при создании экземпляра графа (например, через `initial_state_template` или при вызове `ainvoke`), а не передавать их при каждом вызове узлов.
+- **Подсчет токенов:** Для оптимизации рекомендуется кэшировать количество токенов в `current_token_count`. Этот счетчик должен обновляться в узлах, которые изменяют список `messages` (`load_user_facts`, `summarize_history`), а также **в основном узле ассистента (`_run_assistant_node`)** после добавления ответа LLM.
 
 ## 🔄 Итерации
 
-### Итерация 1. Перенос базовой сборки графа
-- Создать `graph_builder.py`.
-- Вынести базовый ReAct-граф в `build_base_graph()`.
-- Тест `tests/test_graph_builder.py`.
+### Итерация 1. Перенос базовой сборки графа (✅ Готово)
+- Создан `graph_builder.py`.
+- Базовый ReAct-граф собирается в `build_full_graph()`.
+- Тест `tests/assistants/langgraph/test_graph_builder.py` подтверждает сборку.
 
-### Итерация 2. Узел проверки и обновления фактов (`entry_check_facts`)
+### Итерация 2. Узел проверки и обновления фактов (`entry_check_facts`) (✅ Готово)
 - **Цель:** В начале каждого цикла проверять, нужно ли обновить факты пользователя, и если да, вызывать GET API.
 - **Компоненты:**
-    - **Инструмент `GetFactsTool`:** (`tools/get_facts_tool.py`, вызывает GET API, возвращает `list[str]`).
-    - **Узел `entry_check_facts_node`:**
-        - Файл: `nodes/entry_check_facts.py`.
-        - **Зависимости:** Должен иметь доступ к вызову `GetFactsTool` (например, через `functools.partial`).
-        - **Логика:**
+    - **Узел `entry_check_facts_node`:** (`nodes/entry_check_facts.py`)
+        - **Реализация:** Использует `RestServiceClient` (переданный при сборке графа) для вызова `rest_client.get_user_facts(user_id=user_id)`.
+        - **Зависимости:** Требует `rest_client` и `user_id` из `state`.
+        - **Логика:** Проверяет флаги `facts_loaded` и `fact_added_in_last_run`. Если нужно обновить, вызывает API.
+        - **Выход:** Обновляет `pending_facts` и сбрасывает `fact_added_in_last_run = False`.
+        - **Пример кода узла:**
 ```python
 # nodes/entry_check_facts.py
-import logging # Рекомендуется использовать logging
-from functools import partial
-# ... другие импорты
-
-logger = logging.getLogger(__name__)
-
-async def entry_check_facts_node(state: AssistantState, get_facts_tool_func: callable) -> dict:
-    """Checks if facts need refreshing (first run or after adding a fact) 
-       and calls the GetFactsTool if needed.
-    """
-    # Обновляем факты, если это первый запуск (facts_loaded=False) ИЛИ если факт был добавлен в прошлом цикле
+# ... импорты ...
+async def entry_check_facts_node(state: AssistantState, rest_client: RestServiceClient) -> Dict[str, Any]:
+    user_id = state.get("user_id")
+    # ... проверка user_id ...
     should_refresh = not state.get("facts_loaded", False) or state.get("fact_added_in_last_run", False)
-    # TODO: Добавить другие условия (например, TTL)
-    
     if should_refresh:
-        logger.info("Refreshing user facts.")
         try:
-            retrieved_facts = await get_facts_tool_func()
-            logger.debug(f"Successfully fetched {len(retrieved_facts)} facts.")
-            return { 
-                "pending_facts": retrieved_facts if isinstance(retrieved_facts, list) else [], 
-                "fact_added_in_last_run": False # Сбрасываем флаг
-            }
+            retrieved_facts = await rest_client.get_user_facts(user_id=user_id)
+            return {"pending_facts": retrieved_facts if isinstance(retrieved_facts, list) else [], "fact_added_in_last_run": False}
         except Exception as e:
-            logger.error(f"Error fetching facts: {e}", exc_info=True)
-            # Можно добавить механизм retry или просто продолжить без фактов
-            return { "pending_facts": [], "fact_added_in_last_run": False }
+            logger.exception(...)
+            return {"pending_facts": [], "fact_added_in_last_run": False}
     else:
-        # Обновление не требуется
-        return { "pending_facts": [], "fact_added_in_last_run": False }
+        return {"pending_facts": [], "fact_added_in_last_run": False}
 ```
-- **Интеграция в граф (`build_full_graph`):**
-```python
-get_facts_tool = next((t for t in tools if t.name == "get_facts_tool"), None)
-if not get_facts_tool:
-    raise ValueError("GetFactsTool is required but not found in provided tools.")
+- **Интеграция в граф (`build_full_graph`):** Узел добавлен, `rest_client` передается через `functools.partial`. Ребро `init_state` -> `check_facts`.
+- **Триггер обновления:** Флаг `fact_added_in_last_run` устанавливается узлом `update_state_after_tool_node` (см. Итерацию 3.1).
+- **Тест:** Модульный тест узла (⏳ TODO).
 
-# Важно: Убедиться, что get_facts_tool._execute корректно получает user_id
-# из state или своего внутреннего контекста
-bound_entry_node = partial(entry_check_facts_node, get_facts_tool_func=get_facts_tool._execute)
-
-builder.add_node("check_facts", bound_entry_node)
-builder.add_edge(START, "check_facts")
-
-builder.add_node("load_facts", load_user_facts_node)
-builder.add_edge("check_facts", "load_facts") 
-```
-- **Обновление `assistant`:** Узел `assistant` (`run_node_fn`) устанавливает `fact_added_in_last_run = True` после успешного *сохранения* факта через `UserFactTool`.
-- **Важно:** Убедиться, что `user_id` доступен в `AssistantState` (рекомендуется устанавливать через `initial_state_template`) и корректно используется `GetFactsTool`.
-- Тест `tests/test_entry_check_facts.py`.
-
-### Итерация 3. Форматирование фактов (`load_user_facts`)
+### Итерация 3. Форматирование фактов (`load_user_facts`) (✅ Готово)
 - Файл: `nodes/load_user_facts.py`.
-- **Задача:** Взять факты из `state["pending_facts"]` и добавить их как `SystemMessage` в `state["messages"]`, обновив `current_token_count`.
-- **Код узла:**
-```python
-# nodes/load_user_facts.py
-async def load_user_facts_node(state: AssistantState) -> dict:
-    """Formats facts from pending_facts into a SystemMessage and adds/replaces it in messages."""
-    pending_facts = state.get("pending_facts", [])
-    if not pending_facts:
-        # Если факты не обновились, просто возвращаем текущий token_count (если он есть)
-        return {"facts_loaded": False, "current_token_count": state.get("current_token_count")} 
-    
-    msg_content = "Факты о пользователе:\n" + "\\n".join(f"- {f}" for f in pending_facts)
-    msg = SystemMessage(content=msg_content, name="user_facts")
-    
-    current_messages = state.get("messages", [])
-    # Удаляем старое сообщение с фактами, если оно было
-    updated_messages = [m for m in current_messages if getattr(m, 'name', None) != 'user_facts']
-    # Вставляем актуальные факты в начало (или после первого системного сообщения, если оно есть)
-    updated_messages.insert(0, msg) 
-    
-    new_token_count = count_tokens(updated_messages)
-    return {
-        "messages": updated_messages,
-        "pending_facts": [], 
-        "facts_loaded": True, 
-        "current_token_count": new_token_count
-    }
-```
-- **Интеграция в граф:** Ребро от `check_facts` к `load_facts` добавлено.
-- Тест `tests/test_load_user_facts.py`.
+- **Задача:** Взять факты из `state["pending_facts"]` и добавить их как `SystemMessage` (с `name="user_facts"`) в `state["messages"]`, обновив `current_token_count`.
+- **Реализация:** Узел существует и выполняет задачу. Корректно обрабатывает наличие/отсутствие `pending_facts`, заменяет старое сообщение с фактами, вставляет новое после системного промпта (если есть), вызывает `count_tokens` и обновляет `current_token_count`, устанавливает `facts_loaded = True`.
+- **Интеграция в граф:** Ребро `check_facts` -> `load_facts`.
+- **Тест:** Модульный тест узла (⏳ TODO).
 
-### Итерация 4. Узел `summarize_history`
-- Файл: `nodes/summarize_history.py`.
-- Использует `state["current_token_count"]` и `state["llm_context_size"]`.
-- **Код узла:**
-```python
-# nodes/summarize_history.py
-async def summarize_history_node(state: AssistantState) -> dict:
-    # ... (получение msgs, max_tokens, token_count)
-    
-    # Проверяем наличие необходимых данных в state
-    token_count = state.get("current_token_count")
-    max_tokens = state.get("llm_context_size")
-    if token_count is None or max_tokens is None:
-         logger.warning("Missing token_count or max_tokens in state, skipping summarization.")
-         return {} # Не можем работать без данных
+### Итерация 3.1. Обработка результата сохранения факта (`update_state_after_tool_node`) (✅ Готово)
+- Файл: `nodes/update_state_after_tool.py`.
+- **Задача:** После выполнения инструмента проверить, был ли это успешный вызов `UserFactTool` (с именем `"save_user_fact"`). Если да, установить флаг `fact_added_in_last_run = True`, чтобы инициировать обновление фактов на следующем шаге.
+- **Реализация:** Узел существует. Проверяет последнее сообщение: если это `ToolMessage` с именем `"save_user_fact"` и контентом `"Факт успешно добавлен."`, то возвращает `{"fact_added_in_last_run": True}`.
+- **Интеграция в граф:** Ребро `tools` -> `update_state_after_tool`. Ребро `update_state_after_tool` -> `assistant`.
+- **Тест:** Модульный тест узла (⏳ TODO).
 
-    if token_count / max_tokens < 0.6:
-        return {} # Контекст недостаточно заполнен
+### Итерация 4. Узел `summarize_history` (⏳ Не начато)
+- Файл: `nodes/summarize_history.py` (создать).
+- **Задача:** Сокращать историю сообщений, если она превышает порог (например, 60% от `llm_context_size`).
+- **Логика:**
+    - Получить `messages`, `current_token_count`, `llm_context_size` из state.
+    - Если `current_token_count / llm_context_size >= 0.6`:
+        - Определить `head` (старые сообщения для суммаризации) и `tail` (недавние сообщения для сохранения).
+        - Вызвать `summary_llm` (отдельная LLM, передаваемая при сборке графа) с `head` для получения краткого содержания (`summary_content`).
+        - Создать `summary_message = SystemMessage(content=summary_content, name="history_summary")`.
+        - Сформировать `new_messages = [summary_message] + tail`.
+        - Пересчитать `new_token_count = count_tokens(new_messages)`.
+        - Вернуть `{ "messages": new_messages, "last_summary_ts": datetime.utcnow(), "current_token_count": new_token_count }`.
+    - Иначе: вернуть `{}`.
+- **Зависимости:** Требует `summary_llm` (инстанс LLM), `llm_context_size`, `current_token_count` из `state`.
+- **Интеграция в граф:** Потребуется условное ребро после `load_facts` (см. Итерацию 5).
+- **Тест:** Модульный тест узла (⏳ TODO).
 
-    # ... (логика head, tail, вызов summary_llm -> summary_message)
-    num_messages_to_keep = 3
-    head, tail = msgs[:-num_messages_to_keep], msgs[-num_messages_to_keep:]
-    # ... (вызов LLM для получения ai_response.content)
-    summary_content = "History summary (...):\\n" + ai_response.content
-    summary_message = SystemMessage(content=summary_content)
-
-    new_messages = [summary_message] + tail
-    new_token_count = count_tokens(new_messages)
-    return {
-        "messages": new_messages,
-        "last_summary_ts": datetime.utcnow(),
-        "current_token_count": new_token_count
-    }
-```
-- **Интеграция в граф:** (Внимание на явное добавление ребра `load_facts` -> `assistant`)
-```python
-builder.add_node("summarize", summarize_history_node)
-
-# Определяем функцию-условие
-def should_summarize(state: AssistantState):
-    token_count = state.get("current_token_count")
-    max_tokens = state.get("llm_context_size")
-    if token_count is None or max_tokens is None:
-        return "assistant" # Не можем решить, идем к ассистенту
-    if token_count / max_tokens >= 0.6:
-        return "summarize"
-    else:
-        return "assistant"
-
-# Используем conditional_edges с функцией, возвращающей имя узла
-builder.add_conditional_edges(
-    "load_facts", 
-    should_summarize, 
-    {
-        "summarize": "summarize",
-        "assistant": "assistant", # Явно указываем путь для False
-    }
-)
-
-# Добавляем ребро после суммаризации
-builder.add_edge("summarize", "assistant")
-```
-- Тест `tests/test_summarize_history.py`.
-
-### Итерация 5. Объединение в `build_full_graph`
+### Итерация 5. Объединение в `build_full_graph` (🔄 Частично готово)
 - Файл: `graph_builder.py`.
-- Функция `build_full_graph` собирает узлы и рёбра, включая явное ветвление после `load_facts`.
+- **Текущая структура:** `START -> init_state -> check_facts -> load_facts -> assistant -> tools -> update_state_after_tool -> assistant / END`.
+- **Задача:** Интегрировать узел `summarize` и условное ветвление.
+- **План изменений:**
+    - Добавить узел `summarize` (`nodes/summarize_history.py`).
+    - Добавить `summary_llm` как аргумент в `build_full_graph`.
+    - Изменить рёбра после `load_facts`:
+        - Добавить условное ребро (`add_conditional_edges`) от `load_facts` к `summarize` (если `should_summarize(state)` -> `True`) или к `assistant` (если `False`).
+        - Добавить ребро от `summarize` к `assistant`.
+    - **Пример целевой структуры (с суммаризацией):**
 ```python
 # graph_builder.py
-# ... (импорты, включая should_summarize из предыдущей итерации)
+# ... (импорты, включая should_summarize)
 
-def build_full_graph(run_node_fn, tools: list[BaseTool], checkpointer):
+def build_full_graph(
+    run_node_fn, 
+    tools: list[BaseTool], 
+    checkpointer, 
+    rest_client: RestServiceClient, 
+    system_prompt_text: str, 
+    summary_llm: BaseChatModel # Добавить LLM для суммаризации
+):
     builder = StateGraph(AssistantState)
 
-    get_facts_tool = next((t for t in tools if t.name == "get_facts_tool"), None)
-    if not get_facts_tool:
-        raise ValueError("GetFactsTool (get_facts_tool) is required but not found.")
-    
-    bound_entry_node = partial(entry_check_facts_node, get_facts_tool_func=get_facts_tool._execute)
+    # --- Узлы ---
+    # init_state
+    bound_init_node = functools.partial(init_state_node, system_prompt_text=system_prompt_text)
+    builder.add_node("init_state", bound_init_node)
+    # check_facts
+    bound_entry_node = functools.partial(entry_check_facts_node, rest_client=rest_client)
     builder.add_node("check_facts", bound_entry_node)
-    builder.add_edge(START, "check_facts")
-
+    # load_facts
     builder.add_node("load_facts", load_user_facts_node)
+    # summarize (НОВЫЙ)
+    bound_summarize_node = functools.partial(summarize_history_node, summary_llm=summary_llm)
+    builder.add_node("summarize", bound_summarize_node)
+    # assistant
+    builder.add_node("assistant", run_node_fn)
+    # tools
+    agent_tools = tools # Передаем все инструменты, которые агент может вызывать
+    builder.add_node("tools", ToolNode(tools=agent_tools))
+    # update_state_after_tool
+    builder.add_node("update_state_after_tool", update_state_after_tool_node)
+
+    # --- Рёбра ---
+    builder.add_edge(START, "init_state")
+    builder.add_edge("init_state", "check_facts")
     builder.add_edge("check_facts", "load_facts")
 
-    builder.add_node("summarize", summarize_history_node)
+    # УСЛОВНОЕ РЕБРО для суммаризации (НОВОЕ)
     builder.add_conditional_edges(
         "load_facts",
-        should_summarize,
-        {"summarize": "summarize", "assistant": "assistant"},
+        should_summarize, # Функция, проверяющая state["current_token_count"] / state["llm_context_size"]
+        {
+            "summarize": "summarize", # Идти на суммаризацию
+            "assistant": "assistant", # Идти сразу к ассистенту
+        }
     )
+    # Ребро после суммаризации (НОВОЕ)
     builder.add_edge("summarize", "assistant")
 
-    builder.add_node("assistant", run_node_fn)
-    agent_tools = [t for t in tools if t.name != "get_facts_tool"]
-    builder.add_node("tools", ToolNode(tools=agent_tools))
-    
-    builder.add_conditional_edges("assistant", tools_condition, {"tools": "tools", END: END})
-    builder.add_edge("tools", "assistant")
+    # Цикл агент-инструменты
+    builder.add_conditional_edges(
+        "assistant",
+        tools_condition, # Встроенное условие LangGraph
+        {"tools": "tools", END: END}
+    )
+    builder.add_edge("tools", "update_state_after_tool")
+    builder.add_edge("update_state_after_tool", "assistant")
 
     return builder.compile(checkpointer=checkpointer)
 ```
-- В `LangGraphAssistant`:
-    - Убедиться, что `GetFactsTool` создается и передается в `build_full_graph`.
-    - Установить `initial_state_template` с `llm_context_size` и `user_id`.
-    - **Важно:** Функция `run_node_fn` (узел `assistant`) должна обновлять и возвращать `current_token_count` после добавления ответа LLM.
+- **Тест:** Обновить `test_build_full_graph_compiles` для проверки новой структуры (когда будет реализована).
 
-### Итерация 6. End-to-end тесты
-- Файл `tests/test_memory_pipeline_e2e.py`.
-- Обновить/добавить тесты:
-    - Проверка вызова `GetFactsTool` при первом запуске (`facts_loaded=False`).
-    - Проверка вызова `GetFactsTool` при `fact_added_in_last_run=True`.
-    - Проверка *не* вызова `GetFactsTool` при `fact_added_in_last_run=False` и `facts_loaded=True`.
-    - Проверка корректной вставки/замены `SystemMessage` с фактами.
-    - Проверка обновления `current_token_count` в узлах `load_facts`, `summarize_history`, `assistant`.
-    - **Тест:** `pending_facts=[]` (после `check_facts`) -> граф проходит до `assistant` без ошибок.
-    - **Тест:** Пограничный случай `token_count / llm_context_size == 0.6` -> переход к `summarize`.
-    - **Тест:** Случай ошибки при вызове `GetFactsTool` -> граф продолжает работу без фактов.
+### Итерация 6. End-to-end тесты (⏳ Не начато)
+- Файл `tests/test_memory_pipeline_e2e.py` (создать/обновить).
+- **Целевые тесты:**
+    - Проверка вызова `rest_client.get_user_facts` узлом `entry_check_facts` при первом запуске (`facts_loaded=False`).
+    - Проверка *не* вызова `get_user_facts` при `fact_added_in_last_run=False` и `facts_loaded=True`.
+    - Проверка вызова `get_user_facts` при `fact_added_in_last_run=True`.
+    - Проверка корректной вставки/замены `SystemMessage` с фактами узлом `load_facts`.
+    - Проверка корректной установки флага `fact_added_in_last_run=True` узлом `update_state_after_tool` после успешного вызова `"save_user_fact"`.
+    - Проверка обновления `current_token_count` в узлах `load_facts`, `summarize_history` (когда будет), `assistant`.
+    - **Тест:** Пограничный случай `token_count / llm_context_size == 0.6` -> переход к `summarize` (когда будет).
+    - **Тест:** Случай ошибки при вызове `get_user_facts` -> граф продолжает работу без фактов.
+    - **Тест:** Полный цикл с суммаризацией (когда будет).
+- **Примечание:** Закомментированные тесты в `test_langgraph_assistant.py` требуют отдельного анализа и исправления.
 

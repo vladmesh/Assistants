@@ -2,93 +2,133 @@
 
 import functools
 import logging
-from typing import Any, Callable, List
+from typing import List, Literal
 
-from assistants.langgraph.nodes.entry_check_facts import entry_check_facts_node
-from assistants.langgraph.nodes.init_state import init_state_node
-from assistants.langgraph.nodes.load_user_facts import load_user_facts_node
-from assistants.langgraph.nodes.update_state_after_tool import (
-    update_state_after_tool_node,
+# Import the new node
+from assistants.langgraph.nodes.ensure_context_limit import ensure_context_limit_node
+from assistants.langgraph.nodes.summarize_history import (  # Keep summarize imports
+    should_summarize,
+    summarize_history_node,
 )
+
+# Project specific imports
 from assistants.langgraph.state import AssistantState
+from langchain_core.language_models.chat_models import BaseChatModel  # For summary_llm
+
+# Langchain core and specific components
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.state import CompiledGraph
+from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, tools_condition
-from services.rest_service import RestServiceClient
 
 logger = logging.getLogger(__name__)
 
 
+def route_after_assistant(state: AssistantState) -> Literal["tools", END]:
+    """Determines the next step after the main assistant node runs.
+    If tools are called, go to 'tools'. Otherwise, END.
+    Summary check is now handled after tools.
+    """
+    log_extra = state.get("log_extra", {})
+    messages = state.get("messages", [])
+    msg_types = [type(m).__name__ for m in messages]
+    logger.info(
+        f"[route_after_assistant] ENTERED. Msgs: {len(messages)}, Types: {msg_types}"
+    )
+    logger.debug("Routing after assistant node.", extra=log_extra)
+    if tools_condition(state) == "tools":
+        logger.debug("Routing -> tools", extra=log_extra)
+        return "tools"
+
+    logger.debug("Routing -> END", extra=log_extra)
+    return END
+
+    # --- End New Condition Function ---
+
+
 def build_full_graph(
-    run_node_fn: Callable[[AssistantState], dict],
+    run_node_fn,  # The main agent execution function (LangGraphAssistant._run_assistant_node)
     tools: List[BaseTool],
     checkpointer: BaseCheckpointSaver,
-    rest_client: RestServiceClient,
-    system_prompt_text: str,
+    summary_llm: BaseChatModel,  # Keep for summary node
 ) -> CompiledGraph:
+    """Builds the complete LangGraph state machine (v2.3 - with ensure_context_limit).
+
+    Includes:
+    - Conditional history summarization (checked at START and after TOOLS)
+    - GUARANTEED context limit enforcement via ensure_context_limit node.
+    - Main agent loop (LLM call + Tool execution)
     """
-    Builds the full agent graph structure including initialization, fact handling, and agent logic.
+    builder = StateGraph(AssistantState)
 
-    Args:
-        run_node_fn: The asynchronous function representing the main agent logic node.
-        tools: A list of initialized Langchain tools for the agent.
-        checkpointer: The checkpoint saver instance for persisting state.
-        rest_client: The REST client instance needed for the fact check node.
-        system_prompt_text: The text content for the main system prompt.
+    # --- Nodes --- #
+    logger.debug("Defining graph nodes...")
 
-    Returns:
-        The compiled LangGraph.
-    """
-    logger.debug("Building full graph with init_state, fact checking and loading")
-    graph_builder = StateGraph(AssistantState)
-
-    # 1. Add init_state node
-    bound_init_node = functools.partial(
-        init_state_node, system_prompt_text=system_prompt_text
+    # 1. summarize: Optional node to summarize history
+    bound_summarize_node = functools.partial(
+        summarize_history_node, summary_llm=summary_llm
     )
-    graph_builder.add_node("init_state", bound_init_node)
+    builder.add_node("summarize", bound_summarize_node)
+    logger.debug("Added node: summarize")
 
-    # 2. Add entry node: check_facts
-    bound_entry_node = functools.partial(
-        entry_check_facts_node, rest_client=rest_client
-    )
-    graph_builder.add_node("check_facts", bound_entry_node)
+    # 2. ensure_limit: Node to enforce token limits via truncation if needed
+    builder.add_node("ensure_limit", ensure_context_limit_node)
+    logger.debug("Added node: ensure_limit")
 
-    # 3. Add node: load_facts
-    graph_builder.add_node("load_facts", load_user_facts_node)
+    # 3. assistant: The core node running the agent logic (LLM call)
+    builder.add_node("assistant", run_node_fn)
+    logger.debug("Added node: assistant")
 
-    # 4. Add node: assistant
-    graph_builder.add_node("assistant", run_node_fn)
+    # 4. tools: Node that executes tools chosen by the assistant
+    builder.add_node("tools", ToolNode(tools=tools))
+    logger.debug("Added node: tools")
 
-    # 5. Add node: tools
-    tool_node = ToolNode(tools=tools)
-    graph_builder.add_node("tools", tool_node)
-
-    # 6. Define Edges
-    graph_builder.add_edge(START, "init_state")  # Entry point to init_state
-    graph_builder.add_edge("init_state", "check_facts")  # After init, check facts
-    graph_builder.add_edge("check_facts", "load_facts")  # After checking, load facts
-    graph_builder.add_edge(
-        "load_facts", "assistant"
-    )  # After loading facts, go to assistant
-
-    # Conditional edges from assistant (tool calling)
-    graph_builder.add_conditional_edges(
-        "assistant",
-        tools_condition,
+    # --- Edges --- #
+    logger.debug("Defining graph edges...")
+    builder.add_conditional_edges(
+        START,
+        should_summarize,  # Check summary need immediately
         {
-            "tools": "tools",
-            END: END,
+            "summarize": "summarize",
+            "assistant": "ensure_limit",  # If no summary needed, still check limit before assistant
         },
     )
-    # Edge back from tools to assistant
-    graph_builder.add_node("update_state_after_tool", update_state_after_tool_node)
-    graph_builder.add_edge("tools", "update_state_after_tool")
-    graph_builder.add_edge("update_state_after_tool", "assistant")
+    logger.debug(
+        "Added conditional edge: START -> should_summarize (targets: summarize, ensure_limit)"
+    )
 
-    # 7. Compile graph
-    graph = graph_builder.compile(checkpointer=checkpointer)
-    logger.debug("Full graph compiled with init_state")
-    return graph
+    # summarize -> ensure_limit (Always check limit after attempting summary)
+    builder.add_edge("summarize", "ensure_limit")
+    logger.debug("Added edge: summarize -> ensure_limit")
+
+    # ensure_limit -> assistant (Always go to assistant after ensuring limit)
+    builder.add_edge("ensure_limit", "assistant")
+    logger.debug("Added edge: ensure_limit -> assistant")
+
+    # assistant -> tools or END
+    builder.add_conditional_edges(
+        "assistant",
+        route_after_assistant,
+        {"tools": "tools", END: END},
+    )
+    logger.debug(
+        "Added conditional edge: assistant -> route_after_assistant (targets: tools, END)"
+    )
+
+    # tools -> summarize or ensure_limit
+    builder.add_conditional_edges(
+        "tools",
+        should_summarize,  # Check summary need after tools run
+        {
+            "summarize": "summarize",
+            "assistant": "ensure_limit",  # If no summary needed, still check limit before assistant
+        },
+    )
+    logger.debug(
+        "Added conditional edge: tools -> should_summarize (targets: summarize, ensure_limit)"
+    )
+
+    # --- Compile Graph --- #
+    logger.info("Compiling LangGraph with ensure_context_limit node (v2.3).")
+    return builder.compile(checkpointer=checkpointer)

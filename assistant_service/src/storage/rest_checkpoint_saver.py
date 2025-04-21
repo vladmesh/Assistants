@@ -112,7 +112,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
     ) -> None:
         """Synchronous wrapper for aput_writes. (Minimal implementation)"""
         # For now, this is a no-op as intermediate writes aren't persisted via REST.
-        pass
 
     # --- Keep the original async methods ---
 

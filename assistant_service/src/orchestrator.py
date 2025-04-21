@@ -299,7 +299,7 @@ class AssistantOrchestrator:
             response_text = await secretary.process_message(
                 message=None,
                 user_id=str(user_id),
-                triggered_event=trigger_event_data,
+                triggered_event=trigger,
             )
             process_message_duration = time.perf_counter() - process_message_start_time
             log_extra["process_message_duration_ms"] = round(
@@ -549,11 +549,6 @@ class AssistantOrchestrator:
                             if "assistant_response_message" in locals()
                             else str(response_payload),
                             exc_info=True,
-                        )
-                    else:
-                        logger.error(
-                            "Cannot send response, user_id is missing",
-                            payload=response_payload,
                         )
 
                 logger.debug("Incrementing processed_count")

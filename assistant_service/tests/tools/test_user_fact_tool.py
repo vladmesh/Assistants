@@ -139,7 +139,7 @@ async def test_execute_success(user_fact_tool: UserFactTool, mocker: MockerFixtu
         "tools.user_fact_tool.httpx.AsyncClient", return_value=mock_async_client
     )
 
-    result = await user_fact_tool._execute(fact=TEST_FACT)
+    result = await user_fact_tool._arun(fact=TEST_FACT)
 
     assert result == "Факт успешно добавлен."
 
@@ -156,7 +156,7 @@ async def test_execute_success(user_fact_tool: UserFactTool, mocker: MockerFixtu
 async def test_execute_no_user_id(user_fact_tool_no_user: UserFactTool):
     """Test execution without user_id."""
     with pytest.raises(ToolError, match="User ID is required"):
-        await user_fact_tool_no_user._execute(fact=TEST_FACT)
+        await user_fact_tool_no_user._arun(fact=TEST_FACT)
 
 
 @pytest.mark.asyncio
@@ -165,7 +165,7 @@ async def test_execute_invalid_user_id_format(
 ):
     """Test execution with invalid user_id format."""
     with pytest.raises(ToolError, match="Invalid User ID format"):
-        await user_fact_tool_invalid_user._execute(fact=TEST_FACT)
+        await user_fact_tool_invalid_user._arun(fact=TEST_FACT)
 
 
 @pytest.mark.asyncio
@@ -186,7 +186,7 @@ async def test_execute_api_error(user_fact_tool: UserFactTool, mocker: MockerFix
     with pytest.raises(
         ToolError, match=r"Ошибка API при добавлении факта \(404\): Not Found"
     ):
-        await user_fact_tool._execute(fact=TEST_FACT)
+        await user_fact_tool._arun(fact=TEST_FACT)
     mock_async_client.post.assert_awaited_once()
 
 
@@ -205,13 +205,13 @@ async def test_execute_network_error(
         "tools.user_fact_tool.httpx.AsyncClient", return_value=mock_async_client
     )
     with pytest.raises(ToolError, match="Сетевая ошибка при добавлении факта:"):
-        await user_fact_tool._execute(fact=TEST_FACT)
+        await user_fact_tool._arun(fact=TEST_FACT)
     mock_async_client.post.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_execute_no_settings_url(user_fact_tool_no_url: UserFactTool):
     """Test execution when REST Service URL is not configured."""
-    # The error should occur when get_client is called internally by _execute
+    # The error should occur when get_client is called internally by _arun
     with pytest.raises(ToolError, match="REST Service URL not configured"):
-        await user_fact_tool_no_url._execute(fact=TEST_FACT)
+        await user_fact_tool_no_url._arun(fact=TEST_FACT)
