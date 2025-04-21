@@ -35,8 +35,6 @@ class AssistantOrchestrator:
         self.settings = settings
         self.rest_client = RestServiceClient()
         self.factory = AssistantFactory(settings)
-        # Remove the orchestrator-level cache
-        # self.secretaries: Dict[int, BaseAssistant] = {}
 
         logger.info(
             "Assistant service initialized",

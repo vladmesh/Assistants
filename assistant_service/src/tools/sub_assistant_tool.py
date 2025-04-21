@@ -12,22 +12,6 @@ logger = get_logger(__name__)
 class SubAssistantTool(BaseTool):
     """Tool wrapper for BaseLLMChat."""
 
-    # NAME and DESCRIPTION removed - they come from the database via ToolFactory
-    # NAME: ClassVar[str] = "sub_assistant"
-    # DESCRIPTION: ClassVar[str] = (
-    #     "Инструмент для делегирования задач специализированному ассистенту.\n"
-    #     "Используйте его, когда нужно выполнить специфическую задачу,\n"
-    #     "требующую глубокого понимания контекста.\n"
-    #     "\n"
-    #     "Примеры использования:\n"
-    #     "- Анализ сложных текстов\n"
-    #     "- Генерация специализированного контента\n"
-    #     "- Решение узкоспециализированных задач\n"
-    #     "\n"
-    #     "Параметры:\n"
-    #     "- message: Текст запроса для специализированного ассистента\n"
-    # )
-
     # Keep args_schema as a class attribute for Langchain
     args_schema: type[SubAssistantSchema] = SubAssistantSchema
     # Revert sub_assistant to simple type hint

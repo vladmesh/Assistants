@@ -1,7 +1,6 @@
 """REST service client for interacting with the REST API"""
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -17,11 +16,6 @@ from tenacity import (
 
 # Import Pydantic models used for response parsing
 # Use schemas from shared_models.api_schemas instead of old models
-# from shared_models import AssistantModel  # Renamed from Assistant
-# from shared_models import CreateReminderRequest  # Renamed from ReminderCreate
-# from shared_models import ReminderModel  # Renamed from Reminder
-# from shared_models import ToolModel  # Renamed from Tool
-# from shared_models import UserModel  # Renamed from TelegramUser
 from shared_models.api_schemas import (
     AssistantRead,
     ReminderCreate,
@@ -31,8 +25,6 @@ from shared_models.api_schemas import (
     UserSecretaryLinkRead,
 )
 from shared_models.api_schemas.user_fact import UserFactRead
-
-# from shared_models.api_models import UserSecretaryAssignment # Remove import of UserSecretaryAssignment
 
 logger = get_logger(__name__)
 

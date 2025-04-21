@@ -15,15 +15,10 @@ from tools.time_tool import TimeToolWrapper
 from tools.user_fact_tool import UserFactTool  # Import the new tool
 from tools.web_search_tool import WebSearchTool
 
-# from shared_models import ToolModel # Remove old import
 from shared_models.api_schemas import ToolRead  # Import new schema
 
 if TYPE_CHECKING:
     from assistants.factory import AssistantFactory  # Import for type hinting
-
-# Import other tools as needed
-# from tools.rest_service_tool import RestServiceTool # Example if needed
-
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +36,6 @@ class ToolFactory:
             logger.warning(
                 "AssistantFactory not provided to ToolFactory. SubAssistantTool cannot be created."
             )
-        # Client is now initialized within tools lazily or passed via BaseTool kwargs
-        # self.rest_client = RestServiceClient()
 
     async def create_langchain_tools(
         self, tool_definitions: List[ToolRead], user_id: str, assistant_id: str
@@ -162,12 +155,3 @@ class ToolFactory:
                 # Do not append the tool if initialization failed
 
         return tools
-
-    # async def close(self):
-    #     # If RestServiceClient was used, close it here
-    #     # await self.rest_client.close()
-    #     pass # No client to close at factory level now
-
-    # Future method placeholders if needed
-    # def create_openai_functions(self, tool_definitions: List[Dict], ...) -> List[Dict]:
-    #     pass

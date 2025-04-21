@@ -114,9 +114,7 @@ class UserFactTool(BaseTool):
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
             logger.info(f"Successfully executed {self.name} tool", extra=log_extra)
-            # Optionally return the ID of the created fact if the API returns it and it's useful
-            # created_fact = response.json()
-            # return f"Факт успешно добавлен. ID факта: {created_fact.get('id')}"
+
             return "Факт успешно добавлен."
 
         except httpx.HTTPStatusError as e:

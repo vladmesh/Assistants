@@ -1,7 +1,5 @@
-import asyncio
 import logging
-import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from assistants.langgraph.constants import HISTORY_SUMMARY_NAME
 from assistants.langgraph.state import AssistantState
@@ -14,9 +12,7 @@ logger.setLevel(logging.INFO)
 # Конфигурация
 TRIM_THRESHOLD_PERCENT = 0.90  # допустимая пропорция от лимита
 MIN_CONTENT_LEN = 50  # минимальная длина контента
-CHUNK_REDUCTION_FACTOR = (
-    0.10  # доля отрезаемая за итерацию   # пауза после каждого усечения
-)
+CHUNK_REDUCTION_FACTOR = 0.10  # доля отрезаемая за итерацию
 
 
 def _create_truncated_message(orig: BaseMessage, content: str) -> BaseMessage:
@@ -61,7 +57,6 @@ async def ensure_context_limit_node(state: AssistantState) -> Dict[str, Any]:
         logger.info("[ensure] лимит не превышен, выход")
         return {"messages": []}
 
-    # --- Шаг 1. Удаляем старые не‑важные сообщения ---
     # Собираем ID для сохранения: summary и последнего
     summary_msgs = [
         m
@@ -103,7 +98,6 @@ async def ensure_context_limit_node(state: AssistantState) -> Dict[str, Any]:
 
     updates: List[Any] = [RemoveMessage(id=rid) for rid in removed_ids]
 
-    # --- Шаг 2. Усечение summary по ID, если всё ещё превышает ---
     if current_tokens > target_tokens and summary_msgs:
         logger.info("[ensure] удаление не помогло, усекаем summary")
         # находим заново индекс summary в trimmed списке
@@ -174,7 +168,6 @@ async def ensure_context_limit_node(state: AssistantState) -> Dict[str, Any]:
                     )
                 break  # Found and processed summary, exit outer loop
 
-    # --- Шаг 3. Усечение последнего сообщения по ID, если всё ещё превышает ---
     if current_tokens > target_tokens and working:
         logger.info("[ensure] усечение summary не помогло, усекаем последнее")
         last_original = working[-1]

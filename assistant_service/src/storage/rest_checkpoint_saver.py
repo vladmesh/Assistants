@@ -22,14 +22,11 @@ from langgraph.checkpoint.serde.base import SerializerProtocol
 from pydantic.json import pydantic_encoder  # Import pydantic_encoder
 
 # Use the standard LangGraph Pickler
-# DEFAULT_SERIALIZER = Pickler()
 
 
 # Define custom exception for checkpoint errors
 class CheckpointError(Exception):
     """Custom exception for checkpoint loading/saving errors."""
-
-    pass
 
 
 # Inherit from BaseCheckpointSaver instead of AsyncCheckpointSaver
