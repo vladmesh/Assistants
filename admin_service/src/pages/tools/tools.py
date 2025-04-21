@@ -1,5 +1,8 @@
 """Tools page of the admin panel"""
 
+from enum import Enum
+from uuid import UUID
+
 import pandas as pd
 import streamlit as st
 from rest_client import RestServiceClient, ToolCreate, ToolUpdate
@@ -86,51 +89,42 @@ def show_tools_page(rest_client: RestServiceClient):
                                 st.rerun()
 
     # Секция создания нового инструмента
-    with st.expander("➕ Создать новый под-ассистент", expanded=False):
-        with st.form("create_tool_form"):
-            name = st.text_input("Имя")
-            description = st.text_area("Описание")
-            is_active = st.checkbox("Активен", value=True)
-
-            # Выбор ассистента для под-ассистента
-            assistant_options = {a.name: a for a in assistants if a.is_active}
-            if not assistant_options:
-                st.error(
-                    "Нет доступных активных ассистентов для создания под-ассистента"
-                )
+    st.subheader("Create New Tool")
+    with st.form("create_tool_form"):
+        name = st.text_input("Name")
+        tool_type = st.selectbox("Type", options=[t.value for t in ToolType])
+        description = st.text_area("Description")
+        assistant_id_str = st.text_input(
+            "Assistant ID (for sub_assistant type)",
+            help="Only required if tool_type is 'sub_assistant'",
+        )
+        submitted = st.form_submit_button("Create Tool")
+        if submitted:
+            if not name or not description:
+                st.error("Name and Description are required fields.")
             else:
-                selected_assistant = st.selectbox(
-                    "Выберите ассистента",
-                    options=list(assistant_options.keys()),
-                )
+                assistant_id = None
+                if tool_type == ToolType.SUB_ASSISTANT.value and assistant_id_str:
+                    try:
+                        assistant_id = UUID(assistant_id_str)
+                    except ValueError:
+                        st.error("Invalid Assistant ID format.")
+                        assistant_id = None  # Reset to None if invalid
 
-            # Добавляем поле для input_schema
-            input_schema = st.text_area(
-                "Схема входных данных (JSON)",
-                value='{"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"]}',
-                help="JSON схема для описания входных данных инструмента",
-            )
-
-            submit_button = st.form_submit_button("Создать под-ассистент")
-
-            if submit_button:
-                if not name or not description or not input_schema:
-                    st.error("Пожалуйста, заполните все обязательные поля")
-                elif not assistant_options:
-                    st.error(
-                        "Невозможно создать под-ассистента без доступных ассистентов"
-                    )
-                else:
-                    with st.spinner("Создаем под-ассистент..."):
-                        selected_assistant_obj = assistant_options[selected_assistant]
-                        new_tool = ToolCreate(
-                            name=name,
-                            tool_type="sub_assistant",
-                            description=description,
-                            input_schema=input_schema,
-                            assistant_id=selected_assistant_obj.id,
-                            is_active=is_active,
+                if tool_type != ToolType.SUB_ASSISTANT.value or assistant_id:
+                    try:
+                        # Create the tool
+                        run_async(
+                            rest_client.create_tool(
+                                name=name,
+                                tool_type=ToolType(tool_type),
+                                description=description,
+                                assistant_id=assistant_id,
+                            )
                         )
-                        created_tool = run_async(rest_client.create_tool(new_tool))
-                        st.success(f"Под-ассистент {created_tool.name} успешно создан")
+                        st.success("Tool created successfully!")
                         st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to create tool: {e}")
+                elif tool_type == ToolType.SUB_ASSISTANT.value and not assistant_id:
+                    st.error("Assistant ID is required for sub_assistant type.")

@@ -8,6 +8,7 @@ from .assistant import (
 )
 from .base import BaseModel
 from .calendar import CalendarCredentials
+from .checkpoint import Checkpoint
 
 # from .cron import (
 #     CronJob,
@@ -25,6 +26,7 @@ __all__ = [
     "BaseModel",
     "TelegramUser",
     "CalendarCredentials",
+    "Checkpoint",
     "Assistant",
     "AssistantType",
     "Tool",

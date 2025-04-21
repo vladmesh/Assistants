@@ -18,22 +18,8 @@ class ToolBase(BaseSchema):
     name: str
     tool_type: ToolType
     description: Optional[str] = None
-    input_schema: Optional[dict] = None  # Store as dict
     assistant_id: Optional[UUID] = None  # For sub_assistant type
     is_active: bool = True
-
-    @field_validator("input_schema", mode="before")
-    @classmethod
-    def parse_input_schema(cls, v):
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                raise ValueError("Invalid JSON string for input_schema")
-        # Allow None or dict
-        if v is not None and not isinstance(v, dict):
-            raise TypeError("input_schema must be a dict, a valid JSON string, or None")
-        return v
 
 
 class ToolCreate(ToolBase):
@@ -44,24 +30,8 @@ class ToolUpdate(BaseSchema):  # Allow partial updates
     name: Optional[str] = None
     tool_type: Optional[ToolType] = None
     description: Optional[str] = None
-    input_schema: Optional[dict] = Field(
-        default=None
-    )  # Use Field to allow None explicitly on update
     assistant_id: Optional[UUID] = None
     is_active: Optional[bool] = None
-
-    @field_validator("input_schema", mode="before")
-    @classmethod
-    def parse_update_input_schema(cls, v):
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                raise ValueError("Invalid JSON string for input_schema")
-        # Allow None or dict
-        if v is not None and not isinstance(v, dict):
-            raise TypeError("input_schema must be a dict, a valid JSON string, or None")
-        return v
 
 
 class ToolRead(ToolBase, TimestampSchema):

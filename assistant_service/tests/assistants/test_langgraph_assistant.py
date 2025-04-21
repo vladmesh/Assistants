@@ -137,7 +137,6 @@ def time_tool_def():
         "description": "Get current time",
         "tool_type": "time",  # Assuming ToolType enum includes 'time'
         "is_active": True,
-        "input_schema": None,  # ToolRead expects dict or None
         "assistant_id": None,
         "created_at": datetime.now(timezone.utc),  # ToolRead includes timestamps
         "updated_at": datetime.now(timezone.utc),

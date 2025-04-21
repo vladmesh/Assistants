@@ -17,7 +17,6 @@ class RestServiceTool(BaseModel):
     tool_type: str
     description: str
     assistant_id: Optional[str] = None  # ID of sub-assistant for sub_assistant type
-    input_schema: Optional[str] = None
     is_active: bool = True
     settings: Optional[Settings] = None
 
