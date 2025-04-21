@@ -57,4 +57,3 @@ class BaseAssistant(ABC):
         """
 
     # Optional: Add other common abstract methods if needed in the future
-    # e.g., async def close(self): pass

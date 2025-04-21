@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
@@ -13,7 +14,6 @@ from langchain_core.messages import (
     HumanMessage,
     RemoveMessage,
     SystemMessage,
-    ToolMessage,
 )
 
 logger = logging.getLogger(__name__)
@@ -195,6 +195,7 @@ async def summarize_history_node(
                 f"[summarize_history_node] Skipping message without ID: {type(msg).__name__}"
             )
             continue
+        iteration += 1
 
         potential_chunk = chunk + [msg]
         potential_chunk_json = _make_json_chunk(potential_chunk)
@@ -285,7 +286,9 @@ async def summarize_history_node(
     # --- End of New Logic (Step 4) ---
 
     # Combine initial deletes (old summaries + heads) with the new summary message
-    summary_msg = SystemMessage(content=new_summary, name=HISTORY_SUMMARY_NAME)
+    summary_msg = SystemMessage(
+        content=new_summary, name=HISTORY_SUMMARY_NAME, id=str(uuid.uuid4())
+    )
     updates = initial_deletes + [summary_msg]
     try:
         remove_msg_ids = [

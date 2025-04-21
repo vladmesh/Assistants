@@ -294,8 +294,6 @@ class AssistantFactory:
                     checkpointer=self.checkpointer,  # Pass the checkpointer
                     rest_client=self.rest_client,  # Pass the factory's rest_client
                 )
-            # elif assistant_type == AssistantType.OPENAI: # Example for another type
-            #     # ... code for OpenAI assistant ...
             else:
                 # Use f-string for cleaner logging
                 raise ValueError(

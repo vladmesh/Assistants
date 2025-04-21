@@ -36,13 +36,9 @@ from langgraph.checkpoint.base import (  # Import needed for checkpointer
 from langgraph.graph.state import CompiledGraph
 from langgraph.prebuilt import create_react_agent  # Import create_react_agent
 from services.rest_service import RestServiceClient  # Import RestServiceClient
-from utils.error_handler import (
-    AssistantError,
-    MessageProcessingError,
-    handle_assistant_error,
-)
+from utils.error_handler import AssistantError, MessageProcessingError
 
-from shared_models import QueueTrigger, TriggerType
+from shared_models import QueueTrigger
 
 from .constants import (
     FACT_SAVE_SUCCESS_MESSAGE,
@@ -638,8 +634,7 @@ class LangGraphAssistant(BaseAssistant):
             # IMPORTANT: This retrieves the raw persisted state.
             # It will NOT contain facts/prompt added dynamically by the modifier.
             state_snapshot = await self.checkpointer.aget(config)
-            # state = await self.compiled_graph.aget_state(config) # This might run parts of the graph?
-            # return state.messages if state else [] # Incorrect if using raw checkpoint
+
             if (
                 state_snapshot
                 and state_snapshot.get("values")

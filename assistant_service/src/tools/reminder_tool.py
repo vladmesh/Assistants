@@ -243,8 +243,3 @@ class ReminderTool(BaseTool):
                 tool_name=self.name,
                 error_code="UNEXPECTED_ERROR",
             )
-
-    # Remove the old _datetime_to_cron method as it's no longer needed here
-    # def _datetime_to_cron(self, dt: datetime) -> str:
-    #     """Преобразует datetime в CRON-выражение"""
-    #     return f"{dt.minute} {dt.hour} {dt.day} {dt.month} *"
