@@ -12,7 +12,7 @@ from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata, Checkpoint
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 # Правильный путь импорта для RestCheckpointSaver
-from src.storage.rest_checkpoint_saver import RestCheckpointSaver
+from src.storage.rest_checkpoint_saver import CheckpointError, RestCheckpointSaver
 
 # --- Fixtures ---
 
@@ -171,8 +171,8 @@ class TestRestCheckpointSaver:
         )
 
         with pytest.raises(
-            IOError,
-            match=f"Failed to save checkpoint for thread {test_config['configurable']['thread_id']}",
+            CheckpointError,
+            match=f"Failed to save checkpoint due to request error",
         ):
             await checkpoint_saver.aput(
                 test_config, test_checkpoint_data, test_metadata
@@ -198,8 +198,8 @@ class TestRestCheckpointSaver:
         mock_async_client.post.return_value = mock_response
 
         with pytest.raises(
-            IOError,
-            match=f"Failed to save checkpoint for thread {test_config['configurable']['thread_id']}",
+            CheckpointError,
+            match=f"Failed to save checkpoint due to HTTP error 500",
         ):
             await checkpoint_saver.aput(
                 test_config, test_checkpoint_data, test_metadata
@@ -285,8 +285,11 @@ class TestRestCheckpointSaver:
             "Network error", request=None
         )
 
-        result_tuple = await checkpoint_saver.aget_tuple(test_config)
-        assert result_tuple is None
+        # Test should raise CheckpointError for network issues
+        with pytest.raises(
+            CheckpointError, match="Failed to fetch checkpoint due to request error"
+        ):
+            await checkpoint_saver.aget_tuple(test_config)
 
     async def test_aget_tuple_bad_base64(
         self, checkpoint_saver, test_config, test_metadata, mock_async_client
@@ -304,8 +307,11 @@ class TestRestCheckpointSaver:
         mock_response.json = MagicMock(return_value=response_json)
         mock_async_client.get.return_value = mock_response
 
-        result_tuple = await checkpoint_saver.aget_tuple(test_config)
-        assert result_tuple is None
+        # Test should raise CheckpointError for decoding/deserialization issues
+        with pytest.raises(
+            CheckpointError, match="Failed to decode/deserialize checkpoint"
+        ):
+            await checkpoint_saver.aget_tuple(test_config)
 
     async def test_aget_tuple_no_thread_id(self, checkpoint_saver):
         """Test loading with config missing thread_id."""

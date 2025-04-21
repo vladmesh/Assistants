@@ -21,6 +21,26 @@ from routers import (  # user_secretary_links, # Removed non-existent router
 )
 
 
+# Define a filter to exclude /health endpoint logs
+class HealthCheckFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Uvicorn access logs typically have scope info in args
+        # Check if the path in the access log record is /health
+        # Example format: ('127.0.0.1:12345', 'GET', '/health', '1.1', 200)
+        # Note: Args positions might vary based on Uvicorn version/config
+        try:
+            if len(record.args) >= 3 and isinstance(record.args[2], str):
+                return record.args[2] != "/health"
+        except IndexError:
+            pass  # Or log a warning if needed
+        return True
+
+
+# Get the Uvicorn access logger and add the filter
+logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
+# --- End Logging Configuration ---
+
+
 # Инициализация приложения
 @asynccontextmanager
 async def lifespan(app: FastAPI):
