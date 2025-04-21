@@ -3,6 +3,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from models.assistant import Assistant, AssistantType
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -112,7 +113,18 @@ async def delete_assistant(db: AsyncSession, assistant_id: UUID) -> bool:
         logger.warning(f"Attempted to delete non-existent assistant ID: {assistant_id}")
         return False
 
-    await db.delete(db_assistant)
-    await db.commit()
-    logger.info(f"Assistant deleted with ID: {assistant_id}")
-    return True
+    try:
+        await db.delete(db_assistant)
+        await db.commit()
+        logger.info(f"Assistant deleted with ID: {assistant_id}")
+        return True
+    except IntegrityError:
+        await db.rollback()  # Rollback the transaction
+        logger.warning(
+            f"Could not delete assistant {assistant_id} due to foreign key constraint.",
+            exc_info=True,  # Log traceback for debugging
+        )
+        # Raise a specific error to be caught by the router
+        raise ValueError(
+            f"Assistant {assistant_id} cannot be deleted because it is referenced by other records (e.g., tools, user links, reminders)."
+        )

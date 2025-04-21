@@ -3,8 +3,10 @@
 
 import pandas as pd
 import streamlit as st
-from rest_client import AssistantCreate, AssistantUpdate, RestServiceClient
+from rest_client import RestServiceClient
 from utils.async_utils import run_async
+
+from shared_models.api_schemas import AssistantCreate, AssistantUpdate
 
 
 def show_assistants_page(rest_client: RestServiceClient):
@@ -176,7 +178,7 @@ def show_assistants_page(rest_client: RestServiceClient):
         with st.form("edit_assistant_form"):
             new_name = st.text_input("Имя", value=assistant.name)
             new_description = st.text_area(
-                "Описание", value=assistant.description or ""
+                "Описание", value=getattr(assistant, "description", None) or ""
             )
             new_is_secretary = st.checkbox(
                 "Является секретарем", value=assistant.is_secretary
