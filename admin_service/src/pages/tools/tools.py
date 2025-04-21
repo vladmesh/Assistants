@@ -5,8 +5,11 @@ from uuid import UUID
 
 import pandas as pd
 import streamlit as st
-from rest_client import RestServiceClient, ToolCreate, ToolUpdate
+from rest_client import RestServiceClient
 from utils.async_utils import run_async
+
+from shared_models.api_schemas import ToolCreate, ToolUpdate
+from shared_models.enums import ToolType
 
 
 def show_tools_page(rest_client: RestServiceClient):

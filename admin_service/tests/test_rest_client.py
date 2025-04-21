@@ -1,9 +1,17 @@
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+import pytest_asyncio
+from httpx import AsyncClient, Response
 
-from src.rest_client import RestServiceClient, User
+from shared_models.api_schemas import AssistantRead, TelegramUserRead
+from src.rest_client import RestServiceClient
+
+# Use the correct names in tests
+User = TelegramUserRead
+Assistant = AssistantRead
 
 
 class MockResponse:
@@ -23,9 +31,22 @@ class MockResponse:
 
 @pytest.fixture
 def mock_users():
+    now = datetime.now(timezone.utc).isoformat()
     return [
-        {"id": 1, "telegram_id": 123456789, "username": "user1"},
-        {"id": 2, "telegram_id": 987654321, "username": "user2"},
+        {
+            "id": 1,
+            "telegram_id": 123456789,
+            "username": "user1",
+            "created_at": now,
+            "updated_at": now,
+        },
+        {
+            "id": 2,
+            "telegram_id": 987654321,
+            "username": "user2",
+            "created_at": now,
+            "updated_at": now,
+        },
     ]
 
 
@@ -51,7 +72,7 @@ async def test_get_users_success(rest_client, mock_users):
         assert users[1].telegram_id == 987654321
         assert users[1].username == "user2"
 
-        mock_get.assert_called_once_with("http://test-rest:8000/api/users/all/")
+        mock_get.assert_called_once_with("http://test-rest:8000/api/users/")
 
 
 @pytest.mark.asyncio
@@ -65,7 +86,7 @@ async def test_get_users_error(rest_client):
         with pytest.raises(httpx.HTTPStatusError):
             await rest_client.get_users()
 
-        mock_get.assert_called_once_with("http://test-rest:8000/api/users/all/")
+        mock_get.assert_called_once_with("http://test-rest:8000/api/users/")
 
 
 @pytest.mark.asyncio

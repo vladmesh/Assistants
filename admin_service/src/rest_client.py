@@ -1,90 +1,24 @@
 """REST client for the admin panel"""
 
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import httpx
 from config.settings import settings
-from pydantic import BaseModel
 
+from shared_models.api_schemas import (
+    AssistantCreate,
+    AssistantRead,
+    AssistantReadSimple,
+    AssistantUpdate,
+    TelegramUserRead,
+    ToolCreate,
+    ToolRead,
+    ToolUpdate,
+)
 
-class User(BaseModel):
-    """User model."""
-
-    id: int
-    telegram_id: int
-    username: Optional[str] = None
-
-
-class Assistant(BaseModel):
-    """Assistant model."""
-
-    id: UUID
-    name: str
-    is_secretary: bool
-    model: str
-    instructions: str
-    assistant_type: str
-    openai_assistant_id: Optional[str] = None
-    is_active: bool
-    description: Optional[str] = None
-
-
-class AssistantCreate(BaseModel):
-    """Model for creating a new assistant"""
-
-    name: str
-    is_secretary: bool = False
-    model: str
-    instructions: str
-    description: Optional[str] = None
-    assistant_type: str = "llm"
-    openai_assistant_id: Optional[str] = None
-
-
-class AssistantUpdate(BaseModel):
-    """Model for updating an assistant"""
-
-    name: Optional[str] = None
-    is_secretary: Optional[bool] = None
-    model: Optional[str] = None
-    instructions: Optional[str] = None
-    description: Optional[str] = None
-    assistant_type: Optional[str] = None
-    openai_assistant_id: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class Tool(BaseModel):
-    """Tool model."""
-
-    id: UUID
-    name: str
-    tool_type: str
-    description: str
-    input_schema: Optional[str] = None
-    assistant_id: Optional[UUID] = None
-    is_active: bool = True
-
-
-class ToolCreate(BaseModel):
-    """Model for creating a new tool"""
-
-    name: str
-    tool_type: str
-    description: Optional[str] = None
-    assistant_id: Optional[UUID] = None
-    is_active: bool = True
-
-
-class ToolUpdate(BaseModel):
-    """Model for updating a tool"""
-
-    name: Optional[str] = None
-    tool_type: Optional[str] = None
-    description: Optional[str] = None
-    assistant_id: Optional[UUID] = None
-    is_active: Optional[bool] = None
+logger = logging.getLogger(__name__)
 
 
 class RestServiceClient:
@@ -105,19 +39,19 @@ class RestServiceClient:
         """Close the HTTP client."""
         await self._client.aclose()
 
-    async def get_users(self) -> List[User]:
+    async def get_users(self) -> List[TelegramUserRead]:
         """Get list of all users."""
-        response = await self._client.get(f"{self.base_url}/api/users/all/")
+        response = await self._client.get(f"{self.base_url}/api/users/")
         response.raise_for_status()
-        return [User(**user) for user in response.json()]
+        return [TelegramUserRead(**user) for user in response.json()]
 
-    async def get_assistants(self) -> List[Assistant]:
+    async def get_assistants(self) -> List[AssistantRead]:
         """Get list of all assistants."""
         response = await self._client.get(f"{self.base_url}/api/assistants/")
         response.raise_for_status()
-        return [Assistant(**assistant) for assistant in response.json()]
+        return [AssistantRead(**assistant) for assistant in response.json()]
 
-    async def get_assistant(self, assistant_id: UUID) -> Assistant:
+    async def get_assistant(self, assistant_id: UUID) -> AssistantRead:
         """Get assistant by ID
 
         Args:
@@ -130,9 +64,9 @@ class RestServiceClient:
             f"{self.base_url}/api/assistants/{assistant_id}"
         )
         response.raise_for_status()
-        return Assistant(**response.json())
+        return AssistantRead(**response.json())
 
-    async def create_assistant(self, assistant: AssistantCreate) -> Assistant:
+    async def create_assistant(self, assistant: AssistantCreate) -> AssistantReadSimple:
         """Create a new assistant
 
         Args:
@@ -146,11 +80,11 @@ class RestServiceClient:
             json=assistant.model_dump(exclude_none=True),
         )
         response.raise_for_status()
-        return Assistant(**response.json())
+        return AssistantReadSimple(**response.json())
 
     async def update_assistant(
         self, assistant_id: UUID, assistant: AssistantUpdate
-    ) -> Assistant:
+    ) -> AssistantRead:
         """Update an existing assistant
 
         Args:
@@ -165,7 +99,7 @@ class RestServiceClient:
             json=assistant.model_dump(exclude_none=True),
         )
         response.raise_for_status()
-        return Assistant(**response.json())
+        return AssistantRead(**response.json())
 
     async def delete_assistant(self, assistant_id: UUID) -> None:
         """Delete an assistant
@@ -205,7 +139,7 @@ class RestServiceClient:
         secretary_assistants = [a for a in assistants if a.is_secretary and a.is_active]
         return users, secretary_assistants
 
-    async def get_user_secretary(self, user_id: int) -> Optional[Assistant]:
+    async def get_user_secretary(self, user_id: int) -> Optional[AssistantRead]:
         """Get secretary assistant for user.
 
         Args:
@@ -218,26 +152,36 @@ class RestServiceClient:
             response = await self._client.get(
                 f"{self.base_url}/api/users/{user_id}/secretary"
             )
+            # Check for 404 first via exception handling below
             response.raise_for_status()
-            return Assistant(**response.json())
+            # Explicitly check if response body is valid JSON data
+            json_data = response.json()
+            if json_data:
+                return AssistantRead(**json_data)
+            else:
+                # Handle cases where response is 200 OK but body is null or empty
+                logger.warning(
+                    f"Received success status but null/empty body for user {user_id} secretary."
+                )
+                return None
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return None
             raise
 
-    async def get_tools(self) -> List[Tool]:
+    async def get_tools(self) -> List[ToolRead]:
         """Get list of all tools."""
         response = await self._client.get(f"{self.base_url}/api/tools/")
         response.raise_for_status()
-        return [Tool(**tool) for tool in response.json()]
+        return [ToolRead(**tool) for tool in response.json()]
 
-    async def get_assistant_tools(self, assistant_id: UUID) -> List[Tool]:
+    async def get_assistant_tools(self, assistant_id: UUID) -> List[ToolRead]:
         """Get list of tools for an assistant."""
         response = await self._client.get(
             f"{self.base_url}/api/assistants/{assistant_id}/tools"
         )
         response.raise_for_status()
-        return [Tool(**tool) for tool in response.json()]
+        return [ToolRead(**tool) for tool in response.json()]
 
     async def add_tool_to_assistant(self, assistant_id: UUID, tool_id: UUID) -> None:
         """Add tool to assistant."""
@@ -255,7 +199,7 @@ class RestServiceClient:
         )
         response.raise_for_status()
 
-    async def create_tool(self, tool: ToolCreate) -> Tool:
+    async def create_tool(self, tool: ToolCreate) -> ToolRead:
         """Create a new tool
 
         Args:
@@ -264,22 +208,14 @@ class RestServiceClient:
         Returns:
             Created Tool object
         """
-        # Преобразуем UUID в строку для JSON сериализации
-        tool_data = tool.model_dump(exclude_none=True)
-        if tool_data.get("assistant_id"):
-            tool_data["assistant_id"] = str(tool_data["assistant_id"])
-
-        # Добавляем отладочный вывод
-        print(f"Sending tool data: {tool_data}")
-
         response = await self._client.post(
             f"{self.base_url}/api/tools/",
-            json=tool_data,
+            json=tool.model_dump(exclude_none=True),
         )
         response.raise_for_status()
-        return Tool(**response.json())
+        return ToolRead(**response.json())
 
-    async def update_tool(self, tool_id: UUID, tool: ToolUpdate) -> Tool:
+    async def update_tool(self, tool_id: UUID, tool: ToolUpdate) -> ToolRead:
         """Update an existing tool
 
         Args:
@@ -294,4 +230,4 @@ class RestServiceClient:
             json=tool.model_dump(exclude_none=True),
         )
         response.raise_for_status()
-        return Tool(**response.json())
+        return ToolRead(**response.json())

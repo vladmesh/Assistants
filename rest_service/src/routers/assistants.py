@@ -8,13 +8,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from models.assistant import Assistant  # Keep model import for response_model
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import AssistantCreate, AssistantRead, AssistantUpdate
+from shared_models.api_schemas import (
+    AssistantCreate,
+    AssistantRead,
+    AssistantReadSimple,
+    AssistantUpdate,
+)
 
 logger = structlog.get_logger()
 router = APIRouter()
 
 
-@router.get("/assistants/", response_model=List[AssistantRead])
+@router.get("/assistants/", response_model=List[AssistantReadSimple])
 async def list_assistants(
     session: AsyncSession = Depends(get_session),
     skip: int = 0,
@@ -46,7 +51,9 @@ async def get_assistant(
 
 
 @router.post(
-    "/assistants/", response_model=AssistantRead, status_code=status.HTTP_201_CREATED
+    "/assistants/",
+    response_model=AssistantReadSimple,
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_assistant(
     assistant_in: AssistantCreate, session: AsyncSession = Depends(get_session)
@@ -121,15 +128,31 @@ async def delete_assistant(
 ) -> None:
     """Delete an assistant"""
     logger.info("Attempting to delete assistant", assistant_id=str(assistant_id))
-    deleted = await assistant_crud.delete_assistant(
-        db=session, assistant_id=assistant_id
-    )
-    if not deleted:
+    try:
+        deleted = await assistant_crud.delete_assistant(
+            db=session, assistant_id=assistant_id
+        )
+        if not deleted:
+            logger.warning(
+                "Assistant not found for deletion", assistant_id=str(assistant_id)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found"
+            )
+        logger.info("Assistant deleted successfully", assistant_id=str(assistant_id))
+        return None  # Return None for 204 No Content
+    except ValueError as e:
+        # Catch the ValueError raised by CRUD on IntegrityError
         logger.warning(
-            "Assistant not found for deletion", assistant_id=str(assistant_id)
+            f"Deletion conflict for assistant {assistant_id}: {e}", exc_info=True
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        # Catch any other unexpected errors
+        logger.exception(
+            f"Unexpected error deleting assistant {assistant_id}", exc_info=True
         )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during deletion.",
         )
-    logger.info("Assistant deleted successfully", assistant_id=str(assistant_id))
-    return None  # Return None for 204 No Content

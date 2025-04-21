@@ -46,6 +46,7 @@ class AssistantBase(BaseSchema):
     is_secretary: bool = False
     model: str
     instructions: Optional[str] = None
+    description: Optional[str] = None
     assistant_type: AssistantType = AssistantType.LLM
     openai_assistant_id: Optional[str] = None  # Specific to OpenAI Assistants
     is_active: bool = True
@@ -60,6 +61,7 @@ class AssistantUpdate(BaseSchema):  # Allow partial updates
     is_secretary: Optional[bool] = None
     model: Optional[str] = None
     instructions: Optional[str] = None
+    description: Optional[str] = None
     assistant_type: Optional[AssistantType] = None
     openai_assistant_id: Optional[str] = None
     is_active: Optional[bool] = None
@@ -68,6 +70,12 @@ class AssistantUpdate(BaseSchema):  # Allow partial updates
 class AssistantRead(AssistantBase, TimestampSchema):
     id: UUID
     tools: List[ToolRead] = []  # Include linked tools in read schema
+
+
+# A simpler version for creation response, without tools
+class AssistantReadSimple(AssistantBase, TimestampSchema):
+    id: UUID
+    description: Optional[str] = None
 
 
 # ========= AssistantToolLink Schemas ==========

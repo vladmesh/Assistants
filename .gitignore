@@ -53,3 +53,6 @@ dist/
 
 .repomix-output.txt
 qdrant_data/
+
+scripts/assistants_template.yaml
+scripts/init_db.py
