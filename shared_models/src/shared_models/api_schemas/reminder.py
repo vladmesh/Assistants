@@ -46,5 +46,4 @@ class ReminderUpdate(BaseSchema):  # Allow partial updates
 
 class ReminderRead(ReminderBase, TimestampSchema):
     id: UUID
-    created_by_assistant_id: UUID
     last_triggered_at: Optional[datetime] = None

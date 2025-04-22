@@ -21,6 +21,7 @@ from .reminder import Reminder, ReminderStatus, ReminderType
 from .user import TelegramUser
 from .user_fact import UserFact
 from .user_secretary import UserSecretaryLink
+from .user_summary import UserSummary
 
 __all__ = [
     "BaseModel",
@@ -37,4 +38,5 @@ __all__ = [
     "Reminder",
     "ReminderType",
     "ReminderStatus",
+    "UserSummary",
 ]

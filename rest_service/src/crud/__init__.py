@@ -1,5 +1,6 @@
 # This file makes Python treat the 'crud' directory as a package.
 
+from . import user_fact, user_secretary, user_summary
 from .assistant import (  # noqa: F401
     create_assistant,
     delete_assistant,
@@ -56,3 +57,15 @@ from .user_secretary import get_active_secretary_for_user
 from .user_secretary import (
     get_secretary_assignment as get_user_secretary_link,  # Renamed/Aliased
 )
+
+__all__ = [
+    "assistant",
+    "tool",
+    "user",
+    "reminder",
+    "calendar",
+    "checkpoint",
+    "user_fact",
+    "user_secretary",
+    "user_summary",
+]
