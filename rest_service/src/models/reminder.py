@@ -24,7 +24,6 @@ class Reminder(BaseModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: int = Field(foreign_key="telegramuser.id", index=True)
     assistant_id: UUID = Field(foreign_key="assistant.id", index=True)
-    created_by_assistant_id: UUID = Field(foreign_key="assistant.id", index=True)
     type: ReminderType = Field(sa_column=Column(String, nullable=False))
     trigger_at: Optional[datetime] = Field(default=None, index=True)  # для одноразовых
     cron_expression: Optional[str] = Field(default=None)  # для периодических
@@ -37,12 +36,7 @@ class Reminder(BaseModel, table=True):
     # Relationships
     user: "TelegramUser" = Relationship(back_populates="reminders")  # noqa: F821
     assistant: "Assistant" = Relationship(
-        back_populates="reminders",
         sa_relationship_kwargs={"foreign_keys": "Reminder.assistant_id"},
-    )  # noqa: F821
-    created_by_assistant: "Assistant" = Relationship(
-        back_populates="created_reminders",
-        sa_relationship_kwargs={"foreign_keys": "Reminder.created_by_assistant_id"},
     )  # noqa: F821
 
     @field_validator("type")

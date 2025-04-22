@@ -1,6 +1,5 @@
-import enum
 from datetime import UTC, datetime
-from typing import Annotated, List, Optional
+from typing import TYPE_CHECKING, Annotated, List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import Column, String
@@ -10,7 +9,11 @@ from sqlmodel import Field, Relationship
 from shared_models.enums import AssistantType, ToolType
 
 from .base import BaseModel
-from .reminder import Reminder
+
+if TYPE_CHECKING:
+    from .reminder import Reminder
+    from .user_secretary import UserSecretaryLink
+    from .user_summary import UserSummary
 
 
 class AssistantToolLink(BaseModel, table=True):
@@ -45,7 +48,6 @@ class Assistant(BaseModel, table=True):
 
     # Relationships
     tools: List["Tool"] = Relationship(
-        back_populates="assistants",
         link_model=AssistantToolLink,
         sa_relationship_kwargs={
             "foreign_keys": [AssistantToolLink.assistant_id],
@@ -56,20 +58,15 @@ class Assistant(BaseModel, table=True):
             ),
         },
     )
-    user_links: List["UserSecretaryLink"] = Relationship(  # noqa: F821
+    user_links: List["UserSecretaryLink"] = Relationship(
         back_populates="secretary", sa_relationship_kwargs={"lazy": "selectin"}
     )
-    reminders: List[Reminder] = Relationship(
-        back_populates="assistant",
+    user_summaries: List["UserSummary"] = Relationship(back_populates="secretary")
+    reminders: List["Reminder"] = Relationship(
         sa_relationship_kwargs={
-            "foreign_keys": "Reminder.assistant_id",
-        },
-    )
-    created_reminders: List[Reminder] = Relationship(
-        back_populates="created_by_assistant",
-        sa_relationship_kwargs={
-            "foreign_keys": "Reminder.created_by_assistant_id",
-        },
+            "foreign_keys": "[Reminder.assistant_id]",
+            "cascade": "all, delete-orphan",
+        }
     )
 
     def validate_type(self) -> None:
@@ -91,20 +88,6 @@ class Tool(BaseModel, table=True):
         default=None, foreign_key="assistant.id", index=True
     )  # Для sub_assistant, ссылка на ассистента, которого вызывает данный инструмент
     is_active: bool = Field(default=True, index=True)
-
-    # Relationships
-    assistants: List[Assistant] = Relationship(
-        back_populates="tools",
-        link_model=AssistantToolLink,
-        sa_relationship_kwargs={
-            "foreign_keys": [AssistantToolLink.tool_id],
-            "primaryjoin": "Tool.id == AssistantToolLink.tool_id",
-            "secondaryjoin": (
-                "and_(Assistant.id == foreign(AssistantToolLink.assistant_id), "
-                "AssistantToolLink.is_active == True)"
-            ),
-        },
-    )
 
     def validate_type(self) -> None:
         """Проверяет корректность типа инструмента"""

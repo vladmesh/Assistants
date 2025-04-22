@@ -29,6 +29,7 @@ from .user_secretary import (
     UserSecretaryLinkCreate,
     UserSecretaryLinkRead,
 )
+from .user_summary import UserSummaryBase, UserSummaryCreateUpdate, UserSummaryRead
 
 __all__ = [
     # Base
@@ -72,4 +73,8 @@ __all__ = [
     "UserFactBase",
     "UserFactCreate",
     "UserFactRead",
+    # UserSummary
+    "UserSummaryBase",
+    "UserSummaryCreateUpdate",
+    "UserSummaryRead",
 ]

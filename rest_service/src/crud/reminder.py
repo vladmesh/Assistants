@@ -104,7 +104,6 @@ async def create_reminder(db: AsyncSession, reminder_in: ReminderCreate) -> Remi
     db_reminder = Reminder(
         user_id=reminder_in.user_id,
         assistant_id=reminder_in.assistant_id,
-        created_by_assistant_id=reminder_in.assistant_id,  # Assuming creator is the assistant
         type=reminder_type,
         trigger_at=trigger_at_naive_utc,
         cron_expression=reminder_in.cron_expression,

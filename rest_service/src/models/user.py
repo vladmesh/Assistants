@@ -1,11 +1,16 @@
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import BigInteger, Column
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 from .base import BaseModel
 from .calendar import CalendarCredentials
 from .reminder import Reminder
+
+if TYPE_CHECKING:
+    from .user_fact import UserFact
+    from .user_secretary import UserSecretaryLink
+    from .user_summary import UserSummary
 
 
 class TelegramUser(BaseModel, table=True):
@@ -27,3 +32,5 @@ class TelegramUser(BaseModel, table=True):
         back_populates="user", sa_relationship_kwargs={"lazy": "selectin"}
     )
     reminders: List[Reminder] = Relationship(back_populates="user")
+    user_facts: List["UserFact"] = Relationship(back_populates="user")
+    summaries: List["UserSummary"] = Relationship(back_populates="user")
