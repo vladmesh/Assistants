@@ -6,6 +6,7 @@ from typing import List, Literal
 
 # Import the new node
 from assistants.langgraph.nodes.ensure_context_limit import ensure_context_limit_node
+from assistants.langgraph.nodes.run_assistant import run_assistant_node
 from assistants.langgraph.nodes.summarize_history import (  # Keep summarize imports
     should_summarize,
     summarize_history_node,
@@ -17,6 +18,7 @@ from assistants.langgraph.prompt_context_cache import PromptContextCache  # NEW
 # Project specific imports
 from assistants.langgraph.state import AssistantState
 from langchain_core.language_models.chat_models import BaseChatModel  # For summary_llm
+from langchain_core.runnables import Runnable
 
 # Langchain core and specific components
 from langchain_core.tools import BaseTool
@@ -50,13 +52,14 @@ def route_after_assistant(state: AssistantState) -> Literal["tools", END]:
 
 
 def build_full_graph(
-    run_node_fn,  # The main agent execution function (LangGraphAssistant._run_assistant_node)
     tools: List[BaseTool],
     checkpointer: BaseCheckpointSaver,
     summary_llm: BaseChatModel,  # Keep for summary node
     rest_client: RestServiceClient,  # Still needed for summarize_history_node (saving)
     prompt_context_cache: PromptContextCache,  # NEW: Pass shared cache
-    system_prompt_template: str,  # NEW: Pass template string
+    system_prompt_template: str,
+    agent_runnable: Runnable,
+    timeout: int = 30,
 ) -> CompiledGraph:
     """Builds the complete LangGraph state machine (v2.5 - shared cache for token checks).
 
@@ -85,8 +88,11 @@ def build_full_graph(
     )
     builder.add_node("ensure_limit", bound_ensure_limit_node)
 
-    # 3. assistant: The core node running the agent logic (LLM call)
-    builder.add_node("assistant", run_node_fn)
+    # 3. run_assistant: The core node running the agent logic (LLM call)
+    bound_run_assistant_node = functools.partial(
+        run_assistant_node, agent_runnable=agent_runnable, timeout=timeout
+    )
+    builder.add_node("assistant", bound_run_assistant_node)
 
     # 4. tools: Node that executes tools chosen by the assistant
     builder.add_node("tools", ToolNode(tools=tools))
