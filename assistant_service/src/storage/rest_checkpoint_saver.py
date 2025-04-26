@@ -135,8 +135,7 @@ class RestCheckpointSaver(BaseCheckpointSaver):
         """Get a checkpoint tuple from the REST service."""
         thread_id = config.get("configurable", {}).get("thread_id")
         if not thread_id:
-            print("Error: thread_id missing in config.")
-            return None
+            raise ValueError("thread_id missing in config.")
 
         url = f"{self.base_url}/api/checkpoints/{thread_id}"
         try:
@@ -270,7 +269,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             }
             response = await self.client.post(url, json=payload)
             response.raise_for_status()
-            print(f"Successfully saved checkpoint for thread_id: {thread_id}")
             return config
         except httpx.HTTPStatusError as e:  # Catch HTTP errors separately
             # Log the specific HTTP error

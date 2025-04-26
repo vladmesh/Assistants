@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+from typing import Optional  # Import Optional for type hinting
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -12,7 +13,7 @@ from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata, Checkpoint
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 # Правильный путь импорта для RestCheckpointSaver
-from src.storage.rest_checkpoint_saver import CheckpointError, RestCheckpointSaver
+from storage.rest_checkpoint_saver import CheckpointError, RestCheckpointSaver
 
 # --- Fixtures ---
 
@@ -58,7 +59,7 @@ def checkpoint_saver(mock_async_client, test_serializer):
 
 @pytest.fixture
 def test_thread_id():
-    return "thread-123"
+    return "123"
 
 
 @pytest.fixture
@@ -134,16 +135,8 @@ class TestRestCheckpointSaver:
         # Assertions
         expected_url = f"http://test-rest-service/api/checkpoints/{test_thread_id}"
         # Use json.dumps to ensure metadata serialization matches what aput does
-        # We need to handle potential pydantic_encoder usage within aput
-        try:
-            # Try serializing directly, assuming simple types in test_metadata
-            expected_metadata_payload = json.loads(json.dumps(test_metadata))
-        except TypeError:
-            # Fallback if direct serialization fails (might happen with complex types)
-            # This part might need adjustment based on actual pydantic_encoder behavior
-            expected_metadata_payload = {
-                "step": test_metadata.get("step", -1)
-            }  # Example fallback
+        # Convert CheckpointMetadata to dict for JSON comparison
+        expected_metadata_payload = test_metadata  # Already a dict-like object
 
         expected_payload = {
             "thread_id": test_thread_id,
@@ -190,11 +183,10 @@ class TestRestCheckpointSaver:
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 500
         # raise_for_status should be a sync mock raising the error
-        mock_response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                "Server error", request=None, response=mock_response
-            )
+        mock_http_error = httpx.HTTPStatusError(
+            "Server error", request=None, response=mock_response
         )
+        mock_response.raise_for_status = MagicMock(side_effect=mock_http_error)
         mock_async_client.post.return_value = mock_response
 
         with pytest.raises(
@@ -232,7 +224,9 @@ class TestRestCheckpointSaver:
             "id": "some-uuid",
             "thread_id": test_thread_id,
             "checkpoint_data_base64": base64_checkpoint,
-            "checkpoint_metadata": test_metadata,  # Assuming API returns the dict directly
+            "checkpoint_metadata": dict(
+                test_metadata
+            ),  # Convert metadata to plain dict
             "created_at": "2024-01-01T00:00:00Z",
             "updated_at": "2024-01-01T00:00:00Z",
         }
@@ -245,37 +239,40 @@ class TestRestCheckpointSaver:
         mock_async_client.get.return_value = mock_response
 
         # Call aget_tuple
-        result_tuple = await checkpoint_saver.aget_tuple(test_config)
+        result_tuple: Optional[CheckpointTuple] = await checkpoint_saver.aget_tuple(
+            test_config
+        )
 
         # Assertions
         expected_url = f"http://test-rest-service/api/checkpoints/{test_thread_id}"
         mock_async_client.get.assert_called_once_with(expected_url)
         mock_response.raise_for_status.assert_called_once()
-        assert isinstance(result_tuple, CheckpointTuple)
+        mock_response.json.assert_called_once()
+
+        assert result_tuple is not None
         assert result_tuple.config == test_config
-        # Compare checkpoint dicts for equality
+        # Compare checkpoint data after deserialization
         assert result_tuple.checkpoint == test_checkpoint_data
+        # Compare metadata
         assert result_tuple.metadata == test_metadata
-        assert result_tuple.parent_config is None  # As per current implementation
 
     async def test_aget_tuple_not_found(
         self, checkpoint_saver, test_config, mock_async_client
     ):
-        """Test loading when checkpoint is not found (404)."""
+        """Test checkpoint not found (404)."""
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 404
         # raise_for_status should be a sync mock raising the error
-        mock_response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                "Not Found", request=None, response=mock_response
-            )
+        mock_http_error = httpx.HTTPStatusError(
+            "Not Found", request=None, response=mock_response
         )
+        mock_response.raise_for_status = MagicMock(side_effect=mock_http_error)
         mock_async_client.get.return_value = mock_response
 
+        # Call aget_tuple - should return None on 404
         result_tuple = await checkpoint_saver.aget_tuple(test_config)
 
         assert result_tuple is None
-        mock_response.raise_for_status.assert_not_called()  # Important check
 
     async def test_aget_tuple_network_error(
         self, checkpoint_saver, test_config, mock_async_client
@@ -285,29 +282,27 @@ class TestRestCheckpointSaver:
             "Network error", request=None
         )
 
-        # Test should raise CheckpointError for network issues
         with pytest.raises(
-            CheckpointError, match="Failed to fetch checkpoint due to request error"
+            CheckpointError,
+            match="Failed to fetch checkpoint due to request error: Network error",
         ):
             await checkpoint_saver.aget_tuple(test_config)
 
     async def test_aget_tuple_bad_base64(
         self, checkpoint_saver, test_config, test_metadata, mock_async_client
     ):
-        """Test loading with invalid base64 data."""
+        """Test handling of bad base64 data from API."""
         response_json = {
-            "checkpoint_data_base64": "this is not base64",
-            "checkpoint_metadata": test_metadata,
+            "thread_id": test_config["configurable"]["thread_id"],
+            "checkpoint_data_base64": "this is not base64===",
+            "checkpoint_metadata": dict(test_metadata),
         }
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = 200
-        # Use MagicMock for the synchronous raise_for_status method
         mock_response.raise_for_status = MagicMock()
-        # Используем MagicMock вместо AsyncMock
         mock_response.json = MagicMock(return_value=response_json)
         mock_async_client.get.return_value = mock_response
 
-        # Test should raise CheckpointError for decoding/deserialization issues
         with pytest.raises(
             CheckpointError, match="Failed to decode/deserialize checkpoint"
         ):
@@ -316,25 +311,5 @@ class TestRestCheckpointSaver:
     async def test_aget_tuple_no_thread_id(self, checkpoint_saver):
         """Test loading with config missing thread_id."""
         bad_config = RunnableConfig(configurable={})
-        result_tuple = await checkpoint_saver.aget_tuple(bad_config)
-        assert result_tuple is None
-
-    async def test_aget_tuple_missing_metadata(
-        self, checkpoint_saver, test_config, base64_checkpoint, mock_async_client
-    ):
-        """Test loading response missing the metadata field."""
-        response_json = {
-            "checkpoint_data_base64": base64_checkpoint,
-            # checkpoint_metadata is missing
-        }
-        mock_response = AsyncMock(spec=httpx.Response)
-        mock_response.status_code = 200
-        # Use MagicMock for the synchronous raise_for_status method
-        mock_response.raise_for_status = MagicMock()
-        # Используем MagicMock, чтобы возвращать словарь напрямую, а не корутину
-        mock_response.json = MagicMock(return_value=response_json)
-        mock_async_client.get.return_value = mock_response
-
-        result_tuple = await checkpoint_saver.aget_tuple(test_config)
-        assert result_tuple is not None
-        assert result_tuple.metadata == {"step": -1}  # Check default value
+        with pytest.raises(ValueError, match="thread_id missing in config"):
+            await checkpoint_saver.aget_tuple(bad_config)

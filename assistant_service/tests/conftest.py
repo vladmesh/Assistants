@@ -3,34 +3,20 @@ from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from openai import OpenAI
 
-# Load environment variables from .env.test file
+# Load environment variables from .env.test file at the tests/ level
+# Assuming .env.test will be located alongside this conftest.py
 test_env_path = Path(__file__).parent / ".env.test"
 if test_env_path.exists():
     load_dotenv(test_env_path)
 else:
-    # Fallback to main .env if test env not found
-    load_dotenv()
-
-
-@pytest.fixture
-def llm():
-    """Фикстура для LangChain ChatOpenAI модели"""
-    return ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.7)
-
-
-@pytest.fixture
-def openai_client():
-    """Фикстура для нативного OpenAI клиента"""
-    return OpenAI()
-
-
-@pytest.fixture
-def openai_assistant_id():
-    """ID ассистента OpenAI для тестов"""
-    return os.getenv("OPENAI_ASSISTANT_ID")
+    # Fallback to main .env in the project root if test env not found here
+    # Go up two levels from assistant_service/tests/ to project root
+    project_root_env = Path(__file__).parent.parent.parent / ".env"
+    if project_root_env.exists():
+        load_dotenv(project_root_env)
+    else:
+        print(f"Warning: No .env file found at {test_env_path} or {project_root_env}")
 
 
 def pytest_configure(config):
@@ -58,3 +44,13 @@ def pytest_addoption(parser):
         default=False,
         help="run tests that use external APIs",
     )
+
+
+# Basic event loop fixture, often needed for async tests
+@pytest.fixture(scope="session")
+def event_loop():
+    import asyncio
+
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()

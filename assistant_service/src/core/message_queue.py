@@ -10,7 +10,8 @@ from config.settings import Settings
 logger = get_logger(__name__)
 
 
-class MessageQueue:
+class OLDMessageQueue:
+    # DEPRECATED
     """Redis-based message queue for handling assistant messages."""
 
     def __init__(self, settings: Settings):

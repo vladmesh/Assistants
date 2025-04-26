@@ -48,12 +48,13 @@ async def add_tool_to_assistant(
         raise ValueError("Tool not found")
 
     # Check if the link already exists
-    existing_link = await db.exec(
+    result = await db.exec(
         select(AssistantToolLink)
         .where(AssistantToolLink.assistant_id == link_in.assistant_id)
         .where(AssistantToolLink.tool_id == link_in.tool_id)
     )
-    if existing_link.scalar_one_or_none():
+    existing_link = result.one_or_none()
+    if existing_link:
         logger.warning(
             f"Tool {link_in.tool_id} already linked to assistant {link_in.assistant_id}"
         )

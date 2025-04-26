@@ -294,6 +294,12 @@ class AssistantFactory:
                     checkpointer=self.checkpointer,  # Pass the checkpointer
                     rest_client=self.rest_client,  # Pass the factory's rest_client
                 )
+                # ****** NEW: Load initial data AFTER creating instance ******
+                logger.info(
+                    f"Loading initial data for LangGraphAssistant {assistant_uuid} user {user_id}"
+                )
+                await assistant_instance._load_initial_data()
+                # ***********************************************************
             else:
                 # Use f-string for cleaner logging
                 raise ValueError(
