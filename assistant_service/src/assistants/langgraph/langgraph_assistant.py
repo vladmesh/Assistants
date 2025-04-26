@@ -1,8 +1,6 @@
 # assistant_service/src/assistants/langgraph/langgraph_assistant.py
-
 import asyncio
 import logging
-import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -35,12 +33,7 @@ from shared_models import QueueTrigger
 # Import the specific schema needed
 from shared_models.api_schemas.user_fact import UserFactRead
 
-from .constants import (
-    FACT_SAVE_SUCCESS_MESSAGE,
-    FACT_SAVE_TOOL_NAME,
-    SYSTEM_PROMPT_NAME,
-    USER_FACTS_NAME,
-)
+from .constants import FACT_SAVE_SUCCESS_MESSAGE, FACT_SAVE_TOOL_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -128,13 +121,14 @@ class LangGraphAssistant(BaseAssistant):
 
             # 4. Build and compile the full graph
             self.compiled_graph = build_full_graph(
-                run_node_fn=self._run_assistant_node,
                 tools=self.tools,
                 checkpointer=self.checkpointer,
                 summary_llm=self.llm,  # Summary LLM still needed for summary node logic
                 rest_client=self.rest_client,  # REST client needed for summary node SAVE logic
                 prompt_context_cache=self.prompt_context_cache,  # Pass cache object
                 system_prompt_template=self.system_prompt_template,  # Pass template
+                agent_runnable=self.agent_runnable,
+                timeout=self.timeout,
             )
 
             logger.info(
@@ -434,65 +428,6 @@ class LangGraphAssistant(BaseAssistant):
             logger.warning(f"Failed to log messages to file: {log_e}", extra=log_extra)
 
         return final_messages
-
-    async def _run_assistant_node(self, state: AssistantState) -> Dict[str, Any]:
-        """Executes the core agent logic using the pre-configured agent_runnable."""
-        log_extra = {"assistant_id": self.assistant_id, "user_id": self.user_id}
-        print("Entering _run_assistant_node")
-
-        # The self.agent_runnable implicitly calls _add_system_prompt_modifier
-        # The state passed here ALREADY has messages filtered by the reducer.
-        try:
-            # Timeout logic implementation
-            start_time = time.monotonic()
-            task = asyncio.create_task(self.agent_runnable.ainvoke(state))
-            done, pending = await asyncio.wait(
-                [task], timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED
-            )
-
-            if task in done:
-                result = task.result()
-                elapsed_time = time.monotonic() - start_time
-                return result
-            else:
-                # Timeout occurred
-                task.cancel()
-                try:
-                    await task  # Wait for cancellation to propagate
-                except asyncio.CancelledError:
-                    logger.error(
-                        f"Agent runnable invocation timed out after {self.timeout}s.",
-                        extra=log_extra,
-                    )
-                    raise MessageProcessingError(
-                        f"Assistant processing timed out after {self.timeout}s.",
-                        assistant_name=self.name,
-                    )
-                except Exception as e:
-                    # Log unexpected errors during cancellation
-                    logger.exception(
-                        f"Unexpected error during agent task cancellation: {e}",
-                        exc_info=True,
-                        extra=log_extra,
-                    )
-                    raise MessageProcessingError(
-                        f"Error during agent node timeout handling: {e}",
-                        assistant_name=self.name,
-                    ) from e
-
-        except Exception as e:
-            # Catch errors from ainvoke itself or timeout handling
-            if not isinstance(e, MessageProcessingError):  # Avoid double wrapping
-                logger.exception(
-                    "Error during agent runnable invocation or timeout handling.",
-                    exc_info=True,
-                    extra=log_extra,
-                )
-                raise MessageProcessingError(
-                    f"Error in agent node: {e}", assistant_name=self.name
-                ) from e
-            else:
-                raise e  # Re-raise MessageProcessingError
 
     async def process_message(
         self,
