@@ -11,6 +11,9 @@ from assistants.langgraph.nodes.summarize_history import (  # Keep summarize imp
     summarize_history_node,
 )
 
+# Import state and cache types
+from assistants.langgraph.prompt_context_cache import PromptContextCache  # NEW
+
 # Project specific imports
 from assistants.langgraph.state import AssistantState
 from langchain_core.language_models.chat_models import BaseChatModel  # For summary_llm
@@ -21,6 +24,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from services.rest_service import RestServiceClient
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +32,7 @@ logger = logging.getLogger(__name__)
 def route_after_assistant(state: AssistantState) -> Literal["tools", END]:
     """Determines the next step after the main assistant node runs.
     If tools are called, go to 'tools'. Otherwise, END.
-    Summary check is now handled after tools.
+    Summary check is now handled before assistant node.
     """
     log_extra = state.get("log_extra", {})
     messages = state.get("messages", [])
@@ -44,91 +48,88 @@ def route_after_assistant(state: AssistantState) -> Literal["tools", END]:
     logger.debug("Routing -> END", extra=log_extra)
     return END
 
-    # --- End New Condition Function ---
-
 
 def build_full_graph(
     run_node_fn,  # The main agent execution function (LangGraphAssistant._run_assistant_node)
     tools: List[BaseTool],
     checkpointer: BaseCheckpointSaver,
     summary_llm: BaseChatModel,  # Keep for summary node
+    rest_client: RestServiceClient,  # Still needed for summarize_history_node (saving)
+    prompt_context_cache: PromptContextCache,  # NEW: Pass shared cache
+    system_prompt_template: str,  # NEW: Pass template string
 ) -> CompiledGraph:
-    """Builds the complete LangGraph state machine (v2.3 - with ensure_context_limit).
+    """Builds the complete LangGraph state machine (v2.5 - shared cache for token checks).
 
     Includes:
-    - Conditional history summarization (checked at START and after TOOLS)
-    - GUARANTEED context limit enforcement via ensure_context_limit node.
+    - Conditional history summarization (saves via REST)
+    - GUARANTEED context limit enforcement (uses shared cache for token check)
     - Main agent loop (LLM call + Tool execution)
     """
     builder = StateGraph(AssistantState)
 
     # --- Nodes --- #
-    logger.debug("Defining graph nodes...")
 
-    # 1. summarize: Optional node to summarize history
+    # 1. summarize: Node to summarize history and save via REST
+    # Still needs summary_llm and rest_client
     bound_summarize_node = functools.partial(
-        summarize_history_node, summary_llm=summary_llm
+        summarize_history_node, summary_llm=summary_llm, rest_client=rest_client
     )
     builder.add_node("summarize", bound_summarize_node)
-    logger.debug("Added node: summarize")
 
     # 2. ensure_limit: Node to enforce token limits via truncation if needed
-    builder.add_node("ensure_limit", ensure_context_limit_node)
-    logger.debug("Added node: ensure_limit")
+    # NEW: Pass cache and template for accurate token calculation
+    bound_ensure_limit_node = functools.partial(
+        ensure_context_limit_node,
+        prompt_context_cache=prompt_context_cache,
+        system_prompt_template=system_prompt_template,
+    )
+    builder.add_node("ensure_limit", bound_ensure_limit_node)
 
     # 3. assistant: The core node running the agent logic (LLM call)
     builder.add_node("assistant", run_node_fn)
-    logger.debug("Added node: assistant")
 
     # 4. tools: Node that executes tools chosen by the assistant
     builder.add_node("tools", ToolNode(tools=tools))
-    logger.debug("Added node: tools")
 
     # --- Edges --- #
-    logger.debug("Defining graph edges...")
+
+    # --- Conditional Edge Function (should_summarize) --- #
+    # NEW: Bind cache and template to should_summarize for accurate check
+    bound_should_summarize_condition = functools.partial(
+        should_summarize,
+        prompt_context_cache=prompt_context_cache,
+        system_prompt_template=system_prompt_template
+        # Note: rest_client is NOT needed here if cache is used for check
+    )
+    # --------------------------------------------------- #
+
     builder.add_conditional_edges(
         START,
-        should_summarize,  # Check summary need immediately
+        bound_should_summarize_condition,  # Use bound condition function
         {
             "summarize": "summarize",
-            "assistant": "ensure_limit",  # If no summary needed, still check limit before assistant
+            "assistant": "ensure_limit",
         },
     )
-    logger.debug(
-        "Added conditional edge: START -> should_summarize (targets: summarize, ensure_limit)"
-    )
 
-    # summarize -> ensure_limit (Always check limit after attempting summary)
     builder.add_edge("summarize", "ensure_limit")
-    logger.debug("Added edge: summarize -> ensure_limit")
 
-    # ensure_limit -> assistant (Always go to assistant after ensuring limit)
     builder.add_edge("ensure_limit", "assistant")
-    logger.debug("Added edge: ensure_limit -> assistant")
 
-    # assistant -> tools or END
     builder.add_conditional_edges(
         "assistant",
         route_after_assistant,
         {"tools": "tools", END: END},
     )
-    logger.debug(
-        "Added conditional edge: assistant -> route_after_assistant (targets: tools, END)"
-    )
 
-    # tools -> summarize or ensure_limit
     builder.add_conditional_edges(
         "tools",
-        should_summarize,  # Check summary need after tools run
+        bound_should_summarize_condition,  # Use bound condition function again
         {
             "summarize": "summarize",
-            "assistant": "ensure_limit",  # If no summary needed, still check limit before assistant
+            "assistant": "ensure_limit",
         },
-    )
-    logger.debug(
-        "Added conditional edge: tools -> should_summarize (targets: summarize, ensure_limit)"
     )
 
     # --- Compile Graph --- #
-    logger.info("Compiling LangGraph with ensure_context_limit node (v2.3).")
     return builder.compile(checkpointer=checkpointer)

@@ -8,9 +8,6 @@ services:
       - PYTHONPATH=/src
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_ASSISTANT_ID=${OPENAI_ASSISTANT_ID}
-      - OPEN_API_SECRETAR_ID=test_secretary_id
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0

@@ -23,6 +23,8 @@ from shared_models.api_schemas import (
     TelegramUserRead,
     ToolRead,
     UserSecretaryLinkRead,
+    UserSummaryCreateUpdate,
+    UserSummaryRead,
 )
 from shared_models.api_schemas.user_fact import UserFactRead
 
@@ -423,7 +425,7 @@ class RestServiceClient:
         """Fetch all active user-secretary assignments."""
         url = f"{self.base_url}/api/user-secretaries/assignments"
 
-    async def get_user_facts(self, user_id: str) -> List[str]:
+    async def get_user_facts(self, user_id: int) -> List[UserFactRead]:
         """Get facts for a specific user.
 
         Args:
@@ -448,7 +450,7 @@ class RestServiceClient:
                 logger.debug(
                     f"Successfully parsed {len(fact_strings)} facts for user {user_id}."
                 )
-                return fact_strings
+                return facts_list
             else:
                 logger.error(
                     f"Received unexpected data format for user facts: {type(data)}",
@@ -478,3 +480,81 @@ class RestServiceClient:
             raise RestServiceError(
                 f"Unexpected error processing facts for user {user_id}"
             ) from e
+
+    async def get_user_summary(
+        self, user_id: int, secretary_id: UUID
+    ) -> Optional[UserSummaryRead]:
+        """Get the latest summary for a user-secretary pair."""
+        try:
+            logger.debug(
+                f"Fetching summary for user_id={user_id}, secretary_id={secretary_id}"
+            )
+            endpoint = f"/api/user-summaries/{user_id}/{secretary_id}/latest"
+            data = await self._request("GET", endpoint)
+            if data:  # Check if data is not empty
+                return UserSummaryRead(**data)
+            else:
+                # If _request returns {} on 404 or empty response
+                logger.warning(
+                    f"No summary found for user_id={user_id}, secretary_id={secretary_id} (API returned empty)"
+                )
+                return None
+        except RestServiceError as e:
+            if "404" in str(e):
+                logger.warning(
+                    f"Summary not found (404) for user_id={user_id}, secretary_id={secretary_id}"
+                )
+                return None  # Explicitly return None on 404
+            logger.error(
+                f"Failed to get summary for user {user_id}, secretary {secretary_id}: {e}",
+                exc_info=True,
+            )
+            raise  # Re-raise other REST errors
+        except Exception as e:
+            logger.exception(
+                f"Unexpected error getting summary for user {user_id}, secretary {secretary_id}",
+                exc_info=True,
+            )
+            raise RestServiceError(
+                f"Unexpected error getting summary for user {user_id}, secretary {secretary_id}"
+            ) from e
+
+    async def create_or_update_user_summary(
+        self, user_id: int, secretary_id: UUID, summary_text: str
+    ) -> UserSummaryRead:
+        """Creates or updates the summary for a user-secretary pair."""
+        try:
+            logger.debug(
+                f"Creating/updating summary for user_id={user_id}, secretary_id={secretary_id}"
+            )
+            endpoint = f"/api/user-summaries/{user_id}/{secretary_id}"
+            # Prepare payload according to UserSummaryCreateUpdate schema
+            payload = {"summary_text": summary_text}
+            data = await self._request("POST", endpoint, json=payload)
+            return UserSummaryRead(**data)
+        except RestServiceError as e:
+            logger.error(
+                f"Failed to create/update summary for user {user_id}, secretary {secretary_id}: {e}",
+                exc_info=True,
+            )
+            raise  # Re-raise REST errors
+        except Exception as e:
+            logger.exception(
+                f"Unexpected error creating/updating summary for user {user_id}, secretary {secretary_id}",
+                exc_info=True,
+            )
+            raise RestServiceError(
+                f"Unexpected error creating/updating summary for user {user_id}, secretary {secretary_id}"
+            ) from e
+
+    async def close_session(self):
+        """Closes the underlying HTTPX client session."""
+        if hasattr(self, "_client") and self._client and not self._client.is_closed:
+            await self._client.aclose()
+            logger.info("RestServiceClient HTTP session closed.")
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close_session()

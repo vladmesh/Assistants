@@ -39,4 +39,5 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY assistant_service/src/ /src/
 COPY assistant_service/tests/ /tests/
 
-CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"] 
+CMD ["pytest", "-v", "--cache-clear", "--cov=src", "--cov-report=term-missing", "/tests/"] 
+#CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "-k", "test_listen_for_human_message", "/tests"]

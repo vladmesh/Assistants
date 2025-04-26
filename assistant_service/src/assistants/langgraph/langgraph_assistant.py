@@ -5,27 +5,19 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 # Project specific imports
 from assistants.base_assistant import BaseAssistant  # Absolute import from src
 from assistants.langgraph.graph_builder import build_full_graph
-from assistants.langgraph.state import AssistantState, update_dialog_stack
-
-# Import logging utility
+from assistants.langgraph.prompt_context_cache import PromptContextCache
+from assistants.langgraph.state import AssistantState
 from assistants.langgraph.utils.logging_utils import log_messages_to_file
-
-# Import token counter utility
 from assistants.langgraph.utils.token_counter import count_tokens
 from config.settings import settings  # To get API keys if not in assistant config
 
 # Base classes and core types
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-)
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
 
@@ -39,6 +31,9 @@ from services.rest_service import RestServiceClient  # Import RestServiceClient
 from utils.error_handler import AssistantError, MessageProcessingError
 
 from shared_models import QueueTrigger
+
+# Import the specific schema needed
+from shared_models.api_schemas.user_fact import UserFactRead
 
 from .constants import (
     FACT_SAVE_SUCCESS_MESSAGE,
@@ -64,8 +59,10 @@ class LangGraphAssistant(BaseAssistant):
     checkpointer: BaseCheckpointSaver
     llm: ChatOpenAI
 
-    cached_facts: Optional[List[str]] = None
-    needs_fact_refresh: bool = True
+    # --- NEW: Shared Cache Object and Template --- #
+    prompt_context_cache: PromptContextCache
+    system_prompt_template: str = ""  # Will be filled in __init__
+    # ---------------------------------------------
 
     def __init__(
         self,
@@ -104,13 +101,16 @@ class LangGraphAssistant(BaseAssistant):
         self.checkpointer = checkpointer
         self.rest_client = rest_client  # Store the rest_client
         self.timeout = self.config.get("timeout", 60)  # Default timeout 60 seconds
-        self.system_prompt = self.config["system_prompt"]
+        self.system_prompt_template = self.config[
+            "system_prompt"
+        ]  # NEW: Store as template
         self.max_tokens = self.config.get("max_tokens", 2500)
+        self.assistant_id_uuid = UUID(assistant_id)  # Store UUID version
 
-        # --- Ensure internal fact refresh flag is set --- #
-        self.needs_fact_refresh = True
-        self.cached_facts = None
-        # ------------------------------------------------- #
+        # --- Initialize Shared Cache --- #
+        self.prompt_context_cache = PromptContextCache()
+        # Initial flags are True by default in the cache object
+        # ------------------------------- #
 
         try:
             # 1. Initialize LLM
@@ -131,19 +131,22 @@ class LangGraphAssistant(BaseAssistant):
                 run_node_fn=self._run_assistant_node,
                 tools=self.tools,
                 checkpointer=self.checkpointer,
-                summary_llm=self.llm,  # Pass the initialized main LLM as the summary LLM
+                summary_llm=self.llm,  # Summary LLM still needed for summary node logic
+                rest_client=self.rest_client,  # REST client needed for summary node SAVE logic
+                prompt_context_cache=self.prompt_context_cache,  # Pass cache object
+                system_prompt_template=self.system_prompt_template,  # Pass template
             )
 
             logger.info(
-                "LangGraphAssistant initialized (internal fact caching)",
+                "LangGraphAssistant initialized (with PromptContextCache)",
                 extra={
                     "assistant_id": self.assistant_id,
                     "assistant_name": self.name,
                     "user_id": self.user_id,
                     "tools_count": len(self.tools),
                     "timeout": self.timeout,
-                    "rest_client_provided": self.rest_client is not None,
-                    "initial_needs_fact_refresh": self.needs_fact_refresh,
+                    "initial_needs_fact_refresh": self.prompt_context_cache.needs_fact_refresh,
+                    "initial_needs_summary_refresh": self.prompt_context_cache.needs_summary_refresh,
                 },
             )
 
@@ -171,15 +174,6 @@ class LangGraphAssistant(BaseAssistant):
             raise ValueError(
                 f"OpenAI API key is not configured for assistant {self.assistant_id}."
             )
-
-        logger.debug(
-            "Initializing LLM",
-            extra={
-                "assistant_id": self.assistant_id,
-                "model_name": model_name,
-                "temperature": temperature,
-            },
-        )
         return ChatOpenAI(
             model=model_name,
             temperature=temperature,
@@ -189,157 +183,119 @@ class LangGraphAssistant(BaseAssistant):
     def _create_agent_runnable(self) -> Any:
         """Creates the core agent runnable (e.g., using create_react_agent).
 
-        Ensures the system prompt is bound to the LLM before passing to create_react_agent.
+        Ensures the system prompt modifier is used.
         """
         try:
-            # Pass the ORIGINAL LLM to create_react_agent
-            # System prompt will be handled by the function passed to the 'prompt' parameter
+            # Pass the ORIGINAL LLM and use the 'prompt' parameter for our modifier
             return create_react_agent(
                 self.llm,  # Pass original LLM
                 self.tools,
-                # Use the 'prompt' parameter as confirmed by experiment
-                prompt=self._add_system_prompt_modifier,
+                prompt=self._add_system_prompt_modifier,  # Pass our modifier function
             )
         except Exception as e:
             raise AssistantError(
                 f"Failed to create agent runnable: {str(e)}", self.name
             ) from e
 
-    async def _add_system_prompt_modifier(
-        self, state: AssistantState, used_for_token_count: bool = False
-    ) -> List[BaseMessage]:
-        """Handles system prompt and user fact injection before LLM call.
+    # --- NEW: Method to load initial data ---
+    async def _load_initial_data(self):
+        """Fetches initial summary and facts and updates the shared cache."""
+        try:
+            user_id_int = int(self.user_id)
+        except ValueError:
+            logger.error(
+                f"Invalid user_id format: {self.user_id}. Cannot load initial data."
+            )
+            # Reset cache state on error
+            self.prompt_context_cache = PromptContextCache()
+            return
 
-        Checks if facts need refresh, fetches/uses cached facts,
-        and constructs the final message list with Prompt, Facts, and History.
-        The ordering of special messages (prompt, facts, summary) is now primarily
-        handled by the custom_message_reducer.
-        Uses self.user_id and self.rest_client directly.
-        """
-        user_id = self.user_id
-        log_extra = {"assistant_id": self.assistant_id, "user_id": user_id}
-        logger.debug(
-            "Entering _add_system_prompt_modifier (summary placement handled by reducer)",
-            extra=log_extra,
+        log_extra = {"assistant_id": self.assistant_id, "user_id": self.user_id}
+        logger.info("Loading initial summary and facts into cache...", extra=log_extra)
+
+        results = await asyncio.gather(
+            self.rest_client.get_user_summary(
+                user_id=user_id_int, secretary_id=self.assistant_id_uuid
+            ),
+            self.rest_client.get_user_facts(user_id=user_id_int),
+            return_exceptions=True,
         )
 
-        current_messages = state.get("messages", [])
-
-        if current_messages:
-            last_message = current_messages[-1]
-            if (
-                isinstance(last_message, ToolMessage)
-                and getattr(last_message, "name", None) == FACT_SAVE_TOOL_NAME
-                and last_message.content == FACT_SAVE_SUCCESS_MESSAGE
-            ):
-                logger.info("Fact save detected, triggering refresh.", extra=log_extra)
-                self.needs_fact_refresh = True
-
-        should_fetch = self.needs_fact_refresh or self.cached_facts is None
-        fetched_facts: Optional[List[str]] = None
-
-        if should_fetch:
-            logger.debug("Fetching/refreshing user facts.", extra=log_extra)
-            try:
-                fetched_facts = await self.rest_client.get_user_facts(user_id=user_id)
-                if isinstance(fetched_facts, list):
-                    self.cached_facts = fetched_facts
-                    logger.info(
-                        f"Successfully fetched and cached {len(self.cached_facts)} facts.",
-                        extra=log_extra,
-                    )
-                self.needs_fact_refresh = False
-            except Exception as e:
-                logger.exception(
-                    "Failed to fetch user facts. Using potentially stale cache or empty list.",
-                    extra=log_extra,
-                    exc_info=True,
-                )
-                if self.cached_facts is None:
-                    self.cached_facts = []
+        # Process Summary Result
+        summary_result = results[0]
+        loaded_summary = None
+        if isinstance(summary_result, Exception):
+            logger.error(
+                f"Failed to load initial summary: {summary_result}",
+                exc_info=isinstance(summary_result, Exception),
+                extra=log_extra,
+            )
+            self.prompt_context_cache.require_summary_refresh()  # Ensure retry
+        elif summary_result and hasattr(summary_result, "summary_text"):
+            loaded_summary = summary_result.summary_text
+            logger.info("Successfully loaded initial summary.", extra=log_extra)
         else:
-            logger.debug("Using cached user facts.", extra=log_extra)
+            logger.info(
+                "No initial summary found or unexpected format.", extra=log_extra
+            )
+        # Update cache (even if None, resets flag)
+        self.prompt_context_cache.update_summary(loaded_summary)
 
-        facts_message_content = "No facts available."
-        if self.cached_facts:
-            facts_list_str = "\n".join([f"- {fact}" for fact in self.cached_facts])
-            facts_message_content = f"Facts about the user:\n{facts_list_str}"
-
-        facts_system_message = SystemMessage(
-            content=facts_message_content, name=USER_FACTS_NAME
-        )
-
-        system_prompt_message = SystemMessage(
-            content=self.system_prompt, name=SYSTEM_PROMPT_NAME
-        )
-
-        history_messages = []
-        for msg in current_messages:
-            # Skip system prompts, facts by the reducer
-            if isinstance(msg, SystemMessage):
-                msg_name = getattr(msg, "name", None)
-                if msg_name in [
-                    SYSTEM_PROMPT_NAME,
-                    USER_FACTS_NAME,
-                ]:
-                    continue
-
-            # If it's not a special message to be skipped, add it to history
-            history_messages.append(msg)
-
-        # The reducer will place prompt and facts correctly.
-        # This modifier now only needs to provide the *base* for the LLM call:
-        # Prompt, Facts, and the filtered History.
-        final_messages = [system_prompt_message, facts_system_message]
-
-        final_messages.extend(history_messages)  # Add the filtered history
-
-        logger.debug(
-            f"Modifier returning {len(final_messages)} messages for LLM (reducer handles final order).",
-            extra=log_extra,
-        )
-
-        if not used_for_token_count:
+        # Process Facts Result
+        facts_result = results[1]
+        loaded_fact_texts: Optional[List[str]] = None
+        if isinstance(facts_result, Exception):
+            logger.error(
+                f"Failed to load initial facts: {facts_result}",
+                exc_info=isinstance(facts_result, Exception),
+                extra=log_extra,
+            )
+            self.prompt_context_cache.require_fact_refresh()  # Ensure retry
+        elif isinstance(facts_result, list) and all(
+            isinstance(f, UserFactRead) for f in facts_result
+        ):
             try:
-                total_tokens = count_tokens(final_messages)
-                llm_context_size = self.max_tokens
-                await log_messages_to_file(
-                    assistant_id=self.assistant_id,
-                    user_id=user_id,
-                    messages=final_messages,
-                    total_tokens=total_tokens,
-                    context_limit=llm_context_size,
-                    step_name="Modifier Output (Corrected Order)",  # Updated step name
+                loaded_fact_texts = [
+                    fact.fact for fact in facts_result if hasattr(fact, "fact")
+                ]
+                logger.info(
+                    f"Successfully loaded {len(loaded_fact_texts)} initial facts.",
+                    extra=log_extra,
                 )
             except Exception as e:
                 logger.error(
-                    f"!!! Failed to call log_messages_to_file: {e}",
+                    f"Error processing loaded facts: {e}",
                     exc_info=True,
                     extra=log_extra,
                 )
-        # --- End File Logging --- #
+                self.prompt_context_cache.require_fact_refresh()  # Ensure retry on processing error
+        else:
+            logger.info("No initial facts found or unexpected format.", extra=log_extra)
+        # Update cache (even if None, resets flag)
+        self.prompt_context_cache.update_facts(loaded_fact_texts)
 
-        return final_messages
-
-    async def _run_assistant_node(self, state: AssistantState) -> Dict[str, Any]:
-        """Runs the agent logic.
-
-        - Calculates and updates `current_token_count` BEFORE invoking the LLM.
-        - Checks for fact tool success to set refresh flag.
-        - Invokes the core agent runnable.
-        - Returns the result, including the calculated token count.
+    # --- MODIFIED: Prompt Modifier ---
+    async def _add_system_prompt_modifier(
+        self,
+        state: AssistantState,  # state still contains filtered messages thanks to reducer
+    ) -> List[BaseMessage]:
         """
-        start_node_time = time.perf_counter()
-        user_id = self.user_id
-        dialog_stack = state.get("dialog_state")
-        current_dialog = dialog_stack[-1] if dialog_stack else "unknown"
-        log_extra = {
-            "assistant_id": self.assistant_id,
-            "user_id": user_id,
-            "current_dialog_state": current_dialog,
-        }
-        logger.debug("Entering _run_assistant_node", extra=log_extra)
+        Dynamically creates the SystemMessage using the shared cache,
+        refreshing data via REST if flags indicate necessity.
+        """
+        try:
+            user_id_int = int(self.user_id)
+        except ValueError:
+            logger.error(
+                f"Invalid user_id format in modifier: {self.user_id}. Cannot refresh data."
+            )
+            user_id_int = None
 
+        log_extra = {"assistant_id": self.assistant_id, "user_id": self.user_id}
+
+        refresh_tasks = []
+
+        # --- Check if Refresh Needed (using shared cache flags) --- #
         current_messages = state.get("messages", [])
         if current_messages:
             last_message = current_messages[-1]
@@ -349,315 +305,320 @@ class LangGraphAssistant(BaseAssistant):
                 and last_message.content == FACT_SAVE_SUCCESS_MESSAGE
             ):
                 logger.info(
-                    "Successful fact save detected in _run_assistant_node. Setting refresh flag.",
+                    "Fact save tool used, triggering fact refresh via cache flag.",
                     extra=log_extra,
                 )
-                self.needs_fact_refresh = True  # SET THE FLAG HERE
+                self.prompt_context_cache.require_fact_refresh()  # Set flag on shared cache
 
-        triggered_event = state.get("triggered_event")
-        messages_for_agent = list(
-            state["messages"]
-        )  # Use original state messages for agent input
-        state_update_from_trigger = {}
-
-        if triggered_event:
-            logger.info(
-                "Processing triggered event in assistant node",
-                extra={
-                    **log_extra,
-                    "event_type": triggered_event.trigger_type,
-                    "event_payload": triggered_event.payload,
-                },
+        if self.prompt_context_cache.needs_summary_refresh and user_id_int is not None:
+            logger.info("Scheduling summary refresh for cache...", extra=log_extra)
+            refresh_tasks.append(
+                self.rest_client.get_user_summary(
+                    user_id=user_id_int, secretary_id=self.assistant_id_uuid
+                )
             )
-            trigger_message_content = triggered_event.payload.get(
-                "message", "Trigger event received."
-            )
-            messages_for_agent.append(HumanMessage(content=trigger_message_content))
-            state_update_from_trigger = {"triggered_event": None}
-            logger.debug(
-                "Appended trigger event message to history (for agent input)",
-                extra=log_extra,
-            )
+        else:
+            refresh_tasks.append(None)  # Placeholder
 
-        if not messages_for_agent or len(messages_for_agent) == 0:
-            logger.warning("Assistant node called with empty messages", extra=log_extra)
+        if self.prompt_context_cache.needs_fact_refresh and user_id_int is not None:
+            logger.info("Scheduling fact refresh for cache...", extra=log_extra)
+            refresh_tasks.append(self.rest_client.get_user_facts(user_id=user_id_int))
+        else:
+            refresh_tasks.append(None)  # Placeholder
 
-        # for exact token count use _add_system_prompt_modifier
-        try:
-            messages_to_count = await self._add_system_prompt_modifier(state)
-            calculated_token_count = count_tokens(messages_to_count)
-            logger.debug(
-                f"Calculated token count BEFORE invoke: {calculated_token_count}",
-                extra=log_extra,
+        # --- Execute Refresh Tasks and Update Cache --- #
+        if any(task is not None for task in refresh_tasks):
+            results = await asyncio.gather(
+                *[task for task in refresh_tasks if task is not None],
+                return_exceptions=True,
             )
-        except Exception as count_exc:
-            logger.exception(
-                "Error calculating token count before invoke",
-                extra=log_extra,
-                exc_info=True,
-            )
-            calculated_token_count = state.get(
-                "current_token_count"
-            )  # Fallback to potentially stale count
+            result_idx = 0
 
-        # --- End Token Calculation --- #
+            # Process Summary Result (if refresh was scheduled)
+            if refresh_tasks[0] is not None:
+                summary_result = results[result_idx]
+                refreshed_summary = None
+                if isinstance(summary_result, Exception):
+                    logger.error(
+                        f"Failed to refresh summary: {summary_result}",
+                        exc_info=True,
+                        extra=log_extra,
+                    )
+                    self.prompt_context_cache.require_summary_refresh()  # Ensure retry
+                elif summary_result and hasattr(summary_result, "summary_text"):
+                    refreshed_summary = summary_result.summary_text
+                    logger.info("Summary cache refreshed.", extra=log_extra)
+                else:
+                    logger.info("No summary found during refresh.", extra=log_extra)
+                # Update cache (even if None, resets flag)
+                self.prompt_context_cache.update_summary(refreshed_summary)
+                result_idx += 1
 
-        agent_input = {
-            "messages": messages_for_agent
-        }  # Input for agent remains the same as before
-        logger.debug(
-            f"Messages passed to agent runnable input (count may differ due to modifier): {len(agent_input['messages'])}",
-            extra=log_extra,
+            # Process Facts Result (MODIFIED to handle UserFactRead)
+            if refresh_tasks[1] is not None:
+                facts_result = results[result_idx]
+                refreshed_fact_texts: Optional[List[str]] = None
+                if isinstance(facts_result, Exception):
+                    logger.error(
+                        f"Failed to refresh facts: {facts_result}",
+                        exc_info=True,
+                        extra=log_extra,
+                    )
+                    self.prompt_context_cache.require_fact_refresh()  # Ensure retry
+                elif isinstance(facts_result, list) and all(
+                    isinstance(f, UserFactRead) for f in facts_result
+                ):
+                    try:
+                        refreshed_fact_texts = [
+                            fact.fact for fact in facts_result if hasattr(fact, "fact")
+                        ]
+                        logger.info(
+                            f"Fact cache refreshed. Cached {len(refreshed_fact_texts)} facts.",
+                            extra=log_extra,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing refreshed facts: {e}",
+                            exc_info=True,
+                            extra=log_extra,
+                        )
+                        self.prompt_context_cache.require_fact_refresh()  # Ensure retry
+                else:
+                    logger.warning(
+                        "No facts found or unexpected format during refresh.",
+                        extra=log_extra,
+                    )
+                # Update cache with the list of fact *strings*
+                self.prompt_context_cache.update_facts(refreshed_fact_texts)
+
+        # --- Format System Prompt (using shared cache data) --- #
+        facts_str = (
+            "\n".join(f"- {fact}" for fact in self.prompt_context_cache.facts)
+            if self.prompt_context_cache.facts
+            else "Нет известных фактов."
+        )
+        summary_str = (
+            self.prompt_context_cache.summary
+            if self.prompt_context_cache.summary
+            else "Нет предыдущей истории диалога (саммари)."
         )
 
-        logger.debug("Invoking agent runnable", extra=log_extra)
         try:
-            agent_output = await self.agent_runnable.ainvoke(agent_input)
-            # IMPORTANT: The agent_output["messages"] contains only the *new* messages from the LLM/tools.
-            # It does NOT include the history that was passed in.
-            # To update the state correctly, we need to combine the existing state messages
-            # with the new messages from the agent output.
-            # LangGraph's add_messages reducer handles this automatically when we return {"messages": new_messages}.
-            new_messages = agent_output.get("messages", [])
-
-            final_update = {
-                "messages": new_messages,  # Let add_messages handle merging
-                "current_token_count": calculated_token_count,  # Add the calculated count HERE
-                **state_update_from_trigger,
-                "dialog_state": agent_output.get(
-                    "dialog_state", state.get("dialog_state")
-                ),
-            }
-            final_update["last_activity"] = datetime.now(timezone.utc)
-            node_duration = time.perf_counter() - start_node_time
-            logger.debug(
-                f"_run_assistant_node completed in {node_duration:.4f}s, returning {len(new_messages)} new messages. Updated token count to {calculated_token_count}",
+            formatted_prompt = self.system_prompt_template.format(
+                summary_previous=summary_str, user_facts=facts_str
+            )
+        except KeyError as e:
+            logger.error(
+                f"Missing key in system_prompt_template: {e}. Using template as is.",
                 extra=log_extra,
             )
-            return final_update
+            formatted_prompt = self.system_prompt_template  # Fallback
+
+        system_message = SystemMessage(content=formatted_prompt)
+
+        # --- Combine with filtered history --- #
+        final_messages: List[BaseMessage] = [system_message] + list(current_messages)
+
+        try:
+            total_tokens = count_tokens(final_messages)
+            await log_messages_to_file(
+                assistant_id=self.assistant_id,
+                user_id=self.user_id,
+                messages=final_messages,
+                total_tokens=total_tokens,
+                context_limit=self.max_tokens,
+                log_file_path=f"src/logs/message_logs/message_log_{self.user_id}.log",
+                step_name="_add_system_prompt_modifier",
+            )
+        except Exception as log_e:
+            logger.warning(f"Failed to log messages to file: {log_e}", extra=log_extra)
+
+        return final_messages
+
+    async def _run_assistant_node(self, state: AssistantState) -> Dict[str, Any]:
+        """Executes the core agent logic using the pre-configured agent_runnable."""
+        log_extra = {"assistant_id": self.assistant_id, "user_id": self.user_id}
+        print("Entering _run_assistant_node")
+
+        # The self.agent_runnable implicitly calls _add_system_prompt_modifier
+        # The state passed here ALREADY has messages filtered by the reducer.
+        try:
+            # Timeout logic implementation
+            start_time = time.monotonic()
+            task = asyncio.create_task(self.agent_runnable.ainvoke(state))
+            done, pending = await asyncio.wait(
+                [task], timeout=self.timeout, return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if task in done:
+                result = task.result()
+                elapsed_time = time.monotonic() - start_time
+                return result
+            else:
+                # Timeout occurred
+                task.cancel()
+                try:
+                    await task  # Wait for cancellation to propagate
+                except asyncio.CancelledError:
+                    logger.error(
+                        f"Agent runnable invocation timed out after {self.timeout}s.",
+                        extra=log_extra,
+                    )
+                    raise MessageProcessingError(
+                        f"Assistant processing timed out after {self.timeout}s.",
+                        assistant_name=self.name,
+                    )
+                except Exception as e:
+                    # Log unexpected errors during cancellation
+                    logger.exception(
+                        f"Unexpected error during agent task cancellation: {e}",
+                        exc_info=True,
+                        extra=log_extra,
+                    )
+                    raise MessageProcessingError(
+                        f"Error during agent node timeout handling: {e}",
+                        assistant_name=self.name,
+                    ) from e
+
         except Exception as e:
-            node_duration = time.perf_counter() - start_node_time
-            logger.exception(
-                f"Error during agent invocation in _run_assistant_node ({node_duration:.4f}s)",
-                extra=log_extra,
-                exc_info=True,
-            )
-            error_message = SystemMessage(
-                content=f"Error processing request: {e}", name="error_message"
-            )
-            # Also return the calculated token count even on error, might be useful for debugging
-            return {
-                "messages": [error_message],  # Let add_messages handle merging
-                "current_token_count": calculated_token_count,
-                "dialog_state": update_dialog_stack(
-                    ["error"], state.get("dialog_state")
-                ),
-                "last_activity": datetime.now(timezone.utc),
-                **state_update_from_trigger,
-            }
-
-    # --- End Graph Node Definitions ---
+            # Catch errors from ainvoke itself or timeout handling
+            if not isinstance(e, MessageProcessingError):  # Avoid double wrapping
+                logger.exception(
+                    "Error during agent runnable invocation or timeout handling.",
+                    exc_info=True,
+                    extra=log_extra,
+                )
+                raise MessageProcessingError(
+                    f"Error in agent node: {e}", assistant_name=self.name
+                ) from e
+            else:
+                raise e  # Re-raise MessageProcessingError
 
     async def process_message(
         self,
         message: Optional[BaseMessage],
         user_id: str,
         triggered_event: QueueTrigger = None,  # Add triggered_event parameter
+        log_extra: Optional[Dict[str, Any]] = None,  # Accept log_extra
     ) -> str:
-        """
-        Processes an incoming message or event using the compiled LangGraph,
-        handling state persistence via the checkpointer.
-        """
-        thread_id = f"user_{user_id}_assistant_{self.assistant_id}"
-        start_time = time.perf_counter()  # Start timer
-        log_extra = {
+        """Processes a single message using the compiled LangGraph graph."""
+        if self.user_id != user_id:
+            logger.error(
+                f"Mismatch user_id: assistant instance for {self.user_id} received message for {user_id}"
+            )
+            raise ValueError("User ID mismatch")
+
+        # Prepare log context
+        combined_log_extra = {
             "assistant_id": self.assistant_id,
-            "user_id": user_id,
-            "message_type": type(message).__name__ if message else "None",
-            "triggered_event_type": triggered_event.trigger_type
-            if triggered_event
-            else None,
+            "user_id": self.user_id,
         }
-        logger.debug(f"Entering process_message", extra=log_extra)
+        if log_extra:
+            combined_log_extra.update(log_extra)
 
-        # Ensure checkpointer is available
-        if not self.checkpointer:
-            logger.error("Checkpointer is not configured.", extra=log_extra)
-            raise AssistantError("Checkpointer is not configured.", self.name)
+        logger.info(
+            f"Processing message: {type(message).__name__ if message else 'None'} for user {user_id}",
+            extra=combined_log_extra,
+        )
 
-        # Create a configuration dictionary for the specific user thread
-        config = {"configurable": {"thread_id": thread_id}}
-
-        # --- Input Preparation ---
-        input_messages = []
         if message:
-            input_messages.append(message)
-            logger.debug(
-                "Processing standard message",
-                extra={**log_extra, "message_type": type(message).__name__},
-            )
-
-        # Prepare the input dictionary for ainvoke
-        # Include the new messages AND essential initial state values
-        graph_input: Dict[str, Any] = {
-            "messages": input_messages,  # New messages to be processed
-            "user_id": user_id,  # Always provide user_id
-            # TODO: Get llm_context_size from config properly later
-            "llm_context_size": self.config.get(
-                "llm_context_size", 2600
-            ),  # Example default
-            # Potentially other initial defaults if needed, but state defaults cover most
-        }
-
-        # Add triggered event if present
-        if triggered_event:
-            graph_input["triggered_event"] = triggered_event
-            logger.debug(
-                "Passing triggered event in graph input state",
-                extra={**log_extra, "event_type": triggered_event.trigger_type},
-            )
-        elif not message and not triggered_event:
-            logger.warning(
-                "process_message called with no message or event", extra=log_extra
-            )
-            return ""
-
-        # --- Graph Invocation ---
-        final_state = None
-        try:
-            # Pass the merged input. LangGraph loads checkpoint and merges this input over it.
-            # Keys in graph_input (like messages) overwrite loaded state.
-            # Keys not in graph_input (like previous history if checkpoint exists) are kept.
-            final_state = await self.compiled_graph.ainvoke(graph_input, config=config)
-
-            end_time = time.perf_counter()
-            duration = end_time - start_time
-            # Safely get the final dialog state for logging
-            final_dialog_stack = (
-                final_state.get("dialog_state") if final_state else None
-            )
-            final_dialog = final_dialog_stack[-1] if final_dialog_stack else "unknown"
+            # log_messages_to_file([message], f"input_{user_id}.log") # TEMP: Commented out due to TypeError
+            pass  # Added pass to avoid empty block
+        elif triggered_event:
             logger.info(
-                f"Graph execution finished in {duration:.4f}s",
-                extra={
-                    **log_extra,
-                    "final_dialog_state": final_dialog,
-                },  # Use safe value
+                f"Processing triggered event: {triggered_event}",
+                extra=combined_log_extra,
             )
-
-        # --- Error Handling ---
-        except asyncio.TimeoutError:
-            duration = time.perf_counter() - start_time
-            logger.error(
-                f"Graph execution timed out after {duration:.4f}s", extra=log_extra
-            )
-            # Update state in checkpoint to reflect timeout? Requires checkpointer access here.
-            # Maybe return a specific timeout message
-            return "Assistant timed out."
-        except MessageProcessingError as e:
-            # This indicates an error within our processing logic (nodes, etc.)
-            duration = time.perf_counter() - start_time
-            # Safely get final dialog state for logging here too
-            final_dialog_stack_mpe = (
-                final_state.get("dialog_state") if final_state else None
-            )
-            final_dialog_mpe = (
-                final_dialog_stack_mpe[-1] if final_dialog_stack_mpe else "unknown"
-            )
-            logger.error(
-                f"Message processing error after {duration:.4f}s: {e}",
-                extra={
-                    **log_extra,
-                    "final_dialog_state": final_dialog_mpe,
-                },  # Use safe value
-                exc_info=True,
-            )
-            # Potentially update state to 'error' in checkpoint
-            return f"Error processing message: {e}"
-        except Exception as e:
-            # Catch-all for unexpected errors during graph execution
-            duration = time.perf_counter() - start_time
-            # Safely get final dialog state for logging, even if final_state is None or empty
-            final_dialog_stack_exc = (
-                final_state.get("dialog_state") if final_state else None
-            )
-            final_dialog_exc = (
-                final_dialog_stack_exc[-1] if final_dialog_stack_exc else "unknown"
-            )
-
-            logger.exception(
-                f"Unexpected error during graph execution after {duration:.4f}s: {e}",
-                extra={
-                    **log_extra,
-                    "final_dialog_state": final_dialog_exc,
-                },  # Use safe value again
-                exc_info=True,
-            )
-            # Potentially update state to 'error' in checkpoint
-            return f"An unexpected error occurred: {e}"
-
-        # --- Response Extraction ---
-        if final_state and final_state.get("messages"):
-            last_message = final_state["messages"][-1]
-            if isinstance(last_message, AIMessage):
-                response_content = last_message.content
-                end_time = time.perf_counter()  # End timer
-                duration = end_time - start_time
-                log_extra["duration_ms"] = round((duration) * 1000)
-                logger.info(
-                    f"Successfully processed message for user {user_id}",
-                    response_preview=f"{str(response_content)[:100]}...",
-                    extra=log_extra,
-                )
-                return response_content
-            else:
-                # The graph ended on a non-AI message (ToolMessage, SystemMessage, HumanMessage?)
-                # This might indicate an issue or an unexpected end state.
-                logger.warning(
-                    f"Graph ended with non-AIMessage: {type(last_message).__name__}",
-                    extra=log_extra,
-                )
-                # Return empty string or a default message?
-                return ""  # Or "Processing complete."
         else:
             logger.warning(
-                "Graph execution finished with no messages in final state",
-                extra=log_extra,
+                "process_message called with no message or trigger event.",
+                extra=combined_log_extra,
             )
-            return ""  # No response generated
+            raise ValueError(
+                "process_message requires either a message or a triggered_event"
+            )
 
-        """Retrieves the message history for the user."""
-        thread_id = f"user_{user_id}_assistant_{self.assistant_id}"
+        # Prepare thread config for the specific user
+        thread_config = {"configurable": {"thread_id": self.user_id}}
+
+        # Initial state dictionary construction
+        initial_state: Dict[str, Any] = {
+            "user_id": self.user_id,
+            "llm_context_size": self.max_tokens,
+            "triggered_event": triggered_event,
+            "log_extra": combined_log_extra,  # Pass combined log context
+        }
+
+        # Add message(s) to the state if provided
+        input_messages = [message] if message else []
+
         try:
-            config = {"configurable": {"thread_id": thread_id}}
-            # Get the state WITHOUT invoking the graph
-            # IMPORTANT: This retrieves the raw persisted state.
-            # It will NOT contain facts/prompt added dynamically by the modifier.
-            state_snapshot = await self.checkpointer.aget(config)
+            final_state = None
+            final_state = await self.compiled_graph.ainvoke(
+                input={"messages": input_messages, **initial_state},
+                config=thread_config,
+            )
 
-            if (
-                state_snapshot
-                and state_snapshot.get("values")
-                and "messages" in state_snapshot["values"]
-            ):
-                return state_snapshot["values"]["messages"]
-            else:
-                logger.debug(
-                    f"No message history found in checkpoint for thread {thread_id}",
-                    extra={"user_id": user_id, "assistant_id": self.assistant_id},
+            if not final_state or "messages" not in final_state:
+                raise MessageProcessingError(
+                    "Graph execution finished but final state is missing or invalid.",
+                    self.name,
                 )
-                return []
+
+            final_messages = final_state["messages"]
+
+            # Extract the last message as the response
+            last_message = final_messages[-1]
+            if isinstance(last_message, AIMessage):
+                response_content = last_message.content
+                logger.info(
+                    f"Successfully processed message. Response: {response_content[:100]}...",
+                    extra=combined_log_extra,
+                )
+                return response_content
+            elif isinstance(last_message, ToolMessage):
+                logger.info(
+                    "Processing finished with a ToolMessage (likely from fact save/reminder trigger processing). No response sent to user.",
+                    extra=combined_log_extra,
+                )
+                return ""  # Return empty string, no direct user response
+            else:
+                raise MessageProcessingError(
+                    f"Graph execution finished with unexpected message type: {type(last_message).__name__}",
+                    self.name,
+                )
+
+        except MessageProcessingError as e:
+            logger.error(
+                f"Message processing error: {e}",
+                exc_info=True,
+                extra=combined_log_extra,
+            )
+            raise  # Re-raise specific error
         except Exception as e:
             logger.exception(
-                f"Error retrieving history from checkpointer for thread {thread_id}: {e}",
-                extra={"user_id": user_id, "assistant_id": self.assistant_id},
+                f"Unexpected error during graph invocation for user {user_id}",
                 exc_info=True,
+                extra=combined_log_extra,
             )
-            return []
+            raise MessageProcessingError(
+                f"Unexpected error processing message: {e}", self.name
+            ) from e
 
     async def close(self):
-        """Placeholder for cleanup, if needed."""
-        logger.info(f"Closing LangGraphAssistant {self.assistant_id}")
+        """Cleans up resources, like closing the REST client session."""
+        if self.rest_client:
+            await self.rest_client.close_session()
+            logger.info(
+                "REST client session closed.", extra={"assistant_id": self.assistant_id}
+            )
+
+    # Add __aenter__ and __aexit__ for async context management
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
 
 
 # TODO:

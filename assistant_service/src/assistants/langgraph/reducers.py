@@ -1,45 +1,27 @@
 import logging
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence
 
-from assistants.langgraph.constants import (
-    HISTORY_SUMMARY_NAME,
-    SYSTEM_PROMPT_NAME,
-    USER_FACTS_NAME,
-)
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 from langgraph.graph.message import add_messages
 
 logger = logging.getLogger(__name__)
 
 
-def _filter_system_messages_and_get_summary(
+def _filter_all_system_messages(
     messages: Sequence[BaseMessage],
-) -> Tuple[Optional[SystemMessage], List[BaseMessage]]:
-    """Filters system messages, logs them, and extracts the first history summary."""
-    first_history_summary: Optional[SystemMessage] = None
+) -> List[BaseMessage]:
+    """Filters out ALL system messages, logging their details before discarding."""
     potentially_valid_messages: List[BaseMessage] = []
     for msg in messages:
         if isinstance(msg, SystemMessage):
-            msg_name = getattr(msg, "name", None)
+            msg_name = getattr(msg, "name", "None")
             msg_id = getattr(msg, "id", "N/A")
-            if msg_name == SYSTEM_PROMPT_NAME:
-                logger.warning(f"Discarding sys prompt (id={msg_id})")
-            elif msg_name == USER_FACTS_NAME:
-                logger.warning(f"Discarding user facts (id={msg_id})")
-            elif msg_name == HISTORY_SUMMARY_NAME:
-                if first_history_summary is None:
-                    logger.debug(f"Found first history summary (id={msg_id})")
-                    first_history_summary = msg  # Keep track, add later
-                else:
-                    logger.warning(f"Discarding extra history summary (id={msg_id})")
-            else:  # Assume other SystemMessages are errors
-                logger.error(
-                    f"Discarding likely error SystemMessage (id={msg_id}, name={msg_name})"
-                )
+            logger.warning(
+                f"Discarding SystemMessage (id={msg_id}, name={msg_name}) in reducer."
+            )
         else:
-            # Keep Human, AI, Tool for now
             potentially_valid_messages.append(msg)
-    return first_history_summary, potentially_valid_messages
+    return potentially_valid_messages
 
 
 def _is_ai_message_calling_tool(ai_message: BaseMessage, tool_call_id: str) -> bool:
@@ -125,48 +107,30 @@ def custom_message_reducer(
 
     Orchestrates filtering and validation steps:
     1. Combines messages.
-    2. Filters system messages and gets the first summary.
+    2. Filters out ALL system messages.
     3. Checks for a critical orphaned ToolMessage at the end.
     4. Validates AIMessage->ToolMessage pairs, removing orphans.
-    5. Prepends the summary.
     """
-    # --- Added None checks ---
     left = current_state_messages if current_state_messages is not None else []
     right = new_messages if new_messages is not None else []
-    # --------------------------
 
-    # 1. Combine messages using the checked variables
     combined_messages = add_messages(left, right)
     if not combined_messages:
         return []
 
-    # 2. Filter system messages, identify first summary
-    (
-        first_history_summary,
-        potentially_valid_messages,
-    ) = _filter_system_messages_and_get_summary(combined_messages)
+    potentially_valid_messages = _filter_all_system_messages(combined_messages)
 
-    # 3. Check critical case: last message is orphaned ToolMessage
     logged_last_orphan_error = _log_critical_last_orphan_tool_message(
         potentially_valid_messages
     )
 
-    # 4. Validate ToolMessages based on strict preceding AIMessage
     final_validated_messages = _validate_and_filter_tool_message_pairs(
         potentially_valid_messages, logged_last_orphan_error
     )
 
-    # 5. Prepend the first history summary if found
-    final_messages: List[BaseMessage] = []
-    if first_history_summary:
-        final_messages.append(first_history_summary)
-        logger.debug(
-            f"Prepended history summary (id={getattr(first_history_summary, 'id', 'N/A')})"
-        )
-
-    final_messages.extend(final_validated_messages)
+    final_messages = final_validated_messages
 
     logger.debug(
-        f"Custom reducer produced {len(final_messages)} messages after all filtering and validation."
+        f"Custom reducer produced {len(final_messages)} messages after filtering system messages and validating tools."
     )
     return final_messages

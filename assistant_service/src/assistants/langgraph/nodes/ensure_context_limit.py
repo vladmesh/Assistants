@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-from assistants.langgraph.constants import HISTORY_SUMMARY_NAME
+from assistants.langgraph.prompt_context_cache import PromptContextCache
 from assistants.langgraph.state import AssistantState
 from assistants.langgraph.utils.token_counter import count_tokens
 from langchain_core.messages import BaseMessage, RemoveMessage, SystemMessage
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Конфигурация
-TRIM_THRESHOLD_PERCENT = 0.90  # допустимая пропорция от лимита
+TRIM_THRESHOLD_PERCENT = 1.0  # допустимая пропорция от лимита
 MIN_CONTENT_LEN = 50  # минимальная длина контента
 CHUNK_REDUCTION_FACTOR = 0.10  # доля отрезаемая за итерацию
 
@@ -27,210 +27,207 @@ def _create_truncated_message(orig: BaseMessage, content: str) -> BaseMessage:
     return type(orig)(**kwargs)
 
 
-async def ensure_context_limit_node(state: AssistantState) -> Dict[str, Any]:
+def ensure_context_limit_node(
+    state: AssistantState,
+    prompt_context_cache: PromptContextCache,
+    system_prompt_template: str,
+) -> Dict[str, Any]:
     """
-    1) Удаляем старые сообщения по RemoveMessage
-    2) Усечённые версии summary + last message по ID
+    Ensures the message history fits within the token limit, considering the
+    space needed for the dynamically generated SystemMessage.
+
+    1. Calculates the available token limit for history.
+    2. If history exceeds the limit, removes oldest messages first.
+    3. If removing isn't enough, truncates the now-oldest remaining message.
+    4. Returns RemoveMessage instructions and potentially one updated (truncated) message.
     """
     messages = state.get("messages", [])
     context_limit = state.get("llm_context_size", 0)
-    safety_margin = 0.9  # Use 90% of limit
+    log_extra = state.get("log_extra", {})
+    safety_margin = 0.95  # Use 95% - slightly less aggressive than summary check
     effective_limit = int(context_limit * safety_margin) if context_limit > 0 else 0
 
-    # Log entry
     incoming_types = [type(m).__name__ for m in messages]
     logger.info(
-        f"[ensure_limit] ENTERED. Msgs: {len(messages)}, Types: {incoming_types}, Limit: {context_limit}, Effective: {effective_limit}"
+        f"[ensure_limit] ENTERED (v2 - using cache). Msgs: {len(messages)}, Types: {incoming_types}, "
+        f"Total_Limit: {context_limit}, Effective_Limit: {effective_limit}"
     )
 
     if not messages or effective_limit <= 0:
         logger.warning("[ensure_limit] No messages or invalid limit, skipping.")
         return {"messages": []}
 
-    target_tokens = int(effective_limit * TRIM_THRESHOLD_PERCENT)
-    # --- Calculate tokens ONCE initially ---
-    current_tokens = count_tokens(messages)
-    logger.info(f"[ensure] токенов: {current_tokens} > {target_tokens}?")
+    # --- Calculate System Prompt Tokens --- #
+    # Use cached data directly
+    cached_summary = prompt_context_cache.summary
+    cached_facts = prompt_context_cache.facts
+    facts_str = (
+        "\n".join(f"- {fact}" for fact in cached_facts)
+        if cached_facts
+        else "Нет известных фактов."
+    )
+    summary_str = (
+        cached_summary
+        if cached_summary
+        else "Нет предыдущей истории диалога (саммари)."
+    )
 
-    # Если всё в лимите — ни о чём не сообщаем
-    if current_tokens <= target_tokens:
-        logger.info("[ensure] лимит не превышен, выход")
-        return {"messages": []}
+    try:
+        formatted_prompt_content = system_prompt_template.format(
+            summary_previous=summary_str, user_facts=facts_str
+        )
+        temp_system_message = SystemMessage(content=formatted_prompt_content)
+        system_prompt_tokens = count_tokens([temp_system_message])
+        logger.info(
+            f"[ensure_limit] Estimated system prompt tokens: {system_prompt_tokens}"
+        )
+    except Exception as e:
+        logger.error(
+            f"[ensure_limit] Error formatting/counting temp system prompt: {e}. Assuming 0.",
+            extra=log_extra,
+        )
+        system_prompt_tokens = 0
+    # ----------------------------------- #
 
-    # Собираем ID для сохранения: summary и последнего
-    summary_msgs = [
-        m
-        for m in messages
-        if isinstance(m, SystemMessage) and m.name == HISTORY_SUMMARY_NAME
-    ]
-    preserved_ids = set(m.id for m in summary_msgs if hasattr(m, "id"))
-    if messages:
-        last = messages[-1]
-        if hasattr(last, "id"):
-            preserved_ids.add(last.id)
-    logger.info(f"[ensure] сохраняем IDs: {preserved_ids}")
+    # --- Calculate Available History Limit --- #
+    history_token_limit = effective_limit - system_prompt_tokens
+    if history_token_limit <= 0:
+        logger.error(
+            f"[ensure_limit] Effective limit {effective_limit} is less than or equal to system prompt tokens {system_prompt_tokens}. Cannot fit history.",
+            extra=log_extra,
+        )
+        # Remove ALL history? Or raise error? Let's remove all for now.
+        remove_all_ids = [
+            m.id for m in messages if hasattr(m, "id") and m.id is not None
+        ]
+        logger.warning(
+            f"[ensure_limit] Removing all {len(remove_all_ids)} history messages.",
+            extra=log_extra,
+        )
+        return {"messages": [RemoveMessage(id=rid) for rid in remove_all_ids]}
 
-    # Рабочая копия списка
-    working = messages.copy()
+    target_tokens = int(history_token_limit * TRIM_THRESHOLD_PERCENT)
+    logger.info(
+        f"[ensure_limit] Target tokens for history: {target_tokens} (after reserving {system_prompt_tokens} for system prompt)"
+    )
+    # ------------------------------------- #
+
+    # --- Check Current History Tokens --- #
+    # We only count tokens of messages currently in the state (history)
+    current_history_tokens = count_tokens(messages)
+    logger.info(
+        f"[ensure_limit] Current history tokens: {current_history_tokens} > Target history tokens: {target_tokens}?"
+    )
+
+    if current_history_tokens <= target_tokens:
+        logger.info(
+            "[ensure_limit] History token limit not exceeded, no action needed."
+        )
+        return {"messages": []}  # Return empty list, indicating no changes
+    # --------------------------------- #
+
+    # --- Limit Exceeded: Apply Truncation/Removal --- #
+    logger.warning(
+        f"[ensure_limit] History limit exceeded ({current_history_tokens} > {target_tokens}). Applying removal/truncation."
+    )
+    working = messages.copy()  # Work on a copy
     removed_ids = set()
-    i = 0
-    # --- Recalculate tokens for the loop condition ---
-    current_tokens = count_tokens(working)  # Initial count for the loop
-    while current_tokens > target_tokens and i < len(working):
-        msg = working[i]
-        mid = getattr(msg, "id", None)
-        should_pop = False  #
-        if mid in preserved_ids:
-            i += 1
+    updates: List[Any] = []
+
+    # 1. Remove oldest messages until limit is met
+    current_tokens_in_loop = count_tokens(working)  # Use pre-calculated count
+    while (
+        current_tokens_in_loop > target_tokens and working
+    ):  # Check if list is not empty
+        msg_to_remove = working.pop(0)  # Remove from the start (oldest)
+        msg_id = getattr(msg_to_remove, "id", None)
+        if msg_id:
+            removed_ids.add(msg_id)
+            logger.info(f"[ensure_limit] Removing oldest message ID {msg_id}")
         else:
-            should_pop = True
-            if mid:
-                removed_ids.add(mid)
-                logger.info(f"[ensure] removed id={mid}")
-            # i не инкрементируем — список съехал
+            logger.warning("[ensure_limit] Removed oldest message but it had no ID.")
+        # Recalculate tokens *after* removal
+        current_tokens_in_loop = count_tokens(working)
+        logger.info(
+            f"[ensure_limit] After removing oldest, remaining tokens: {current_tokens_in_loop}"
+        )
 
-        if should_pop:
-            working.pop(i)
-            # --- Recalculate tokens AFTER modification ---
-            current_tokens = count_tokens(working)
-            logger.info(f"[ensure] after pop, tokens={current_tokens}")
-        #
+    # Add RemoveMessage instructions for all removed IDs
+    updates.extend([RemoveMessage(id=rid) for rid in removed_ids])
+    logger.info(f"[ensure_limit] Added {len(removed_ids)} RemoveMessage instructions.")
 
-    updates: List[Any] = [RemoveMessage(id=rid) for rid in removed_ids]
+    # 2. If still over limit after removing messages, truncate the oldest *remaining* message
+    current_tokens_after_removal = (
+        current_tokens_in_loop  # Use the count from the end of the previous loop
+    )
+    if current_tokens_after_removal > target_tokens and working:
+        logger.warning(
+            f"[ensure_limit] Still over limit ({current_tokens_after_removal} > {target_tokens}) after removal. Truncating oldest remaining message."
+        )
+        message_to_truncate = working[0]  # Oldest remaining message
+        original_content = getattr(message_to_truncate, "content", "") or ""
+        content_to_truncate = original_content
+        truncated_during_loop = False
 
-    if current_tokens > target_tokens and summary_msgs:
-        logger.info("[ensure] удаление не помогло, усекаем summary")
-        # находим заново индекс summary в trimmed списке
-        for idx, m in enumerate(working):
-            if (
-                hasattr(m, "id")
-                and m.id in preserved_ids
-                and isinstance(m, SystemMessage)
-                and m.name == HISTORY_SUMMARY_NAME
-            ):
-                original_msg = m  # Keep original message for comparison later
-                current_msg_in_working = m  # This will be modified
-                original_content = m.content or ""
-                content_to_truncate = original_content
+        # Use count_tokens on the *whole* working list inside the loop
+        current_tokens_in_trunc_loop = (
+            current_tokens_after_removal  # Start with the known count
+        )
 
-                current_tokens = count_tokens(working)  # Initial count for inner loop
-                truncated_during_loop = False  # Flag to check if truncation happened
-
-                logger.debug(
-                    f"[ensure] Summary While Check: current_tokens={current_tokens}, target={target_tokens}, "
-                    f"len(content_to_truncate)={len(content_to_truncate)}, MIN_CONTENT_LEN={MIN_CONTENT_LEN}"
-                )
-                while len(content_to_truncate) > MIN_CONTENT_LEN:  # Check length only
-                    cut = max(
-                        int(len(content_to_truncate) * CHUNK_REDUCTION_FACTOR), 100
-                    )
-                    content_to_truncate = content_to_truncate[:-cut]
-                    # Create the new message based on the *original* message object `m`
-                    truncated_msg_obj = _create_truncated_message(
-                        m, content_to_truncate + "..."
-                    )
-                    working[idx] = truncated_msg_obj  # Update the working list
-                    current_msg_in_working = truncated_msg_obj  # Update the reference
-                    # --- Recalculate tokens AFTER truncation ---
-                    current_tokens = count_tokens(working)
-                    logger.info(
-                        f"[ensure] trunc summary id={m.id} to len={len(content_to_truncate)}, tokens={current_tokens}"
-                    )
-                    truncated_during_loop = True
-                    # --- Check token limit INSIDE the loop ---
-                    if current_tokens <= target_tokens:
-                        logger.debug(
-                            f"[ensure] Token limit reached ({current_tokens} <= {target_tokens}), breaking summary truncation loop."
-                        )
-                        break
-
-                logger.debug(
-                    f"[ensure] Summary Check Before Append: truncated={truncated_during_loop}, "
-                    f"current_content_preview='{current_msg_in_working.content[:50]}...', "
-                    f"original_content_preview='{original_content[:50]}...', "
-                    f"updates_len_before={len(updates)}"
-                )
-                # Add to updates only if content actually changed compared to original
-                if (
-                    truncated_during_loop
-                    and current_msg_in_working.content != original_content
-                ):
-                    logger.info(
-                        f"[ensure] Appending truncated summary id={current_msg_in_working.id} to updates."
-                    )
-                    updates.append(current_msg_in_working)
-                    logger.debug(
-                        f"[ensure] Updates len after summary append: {len(updates)}, last appended: {updates[-1].id}"
-                    )
-                else:
-                    logger.info(
-                        "[ensure] Truncated summary not appended (conditions not met)."
-                    )
-                break  # Found and processed summary, exit outer loop
-
-    if current_tokens > target_tokens and working:
-        logger.info("[ensure] усечение summary не помогло, усекаем последнее")
-        last_original = working[-1]
-        if hasattr(last_original, "id"):
-            idx = len(working) - 1
-            current_msg_in_working = last_original  # This will be modified
-            original_content = last_original.content or ""
-            content_to_truncate = original_content
-            truncated_during_loop = False  # Flag
-
-            current_tokens = count_tokens(working)  # Initial count for inner loop
-            logger.debug(
-                f"[ensure] Last Msg While Check: current_tokens={current_tokens}, target={target_tokens}, "
-                f"len(content_to_truncate)={len(content_to_truncate)}, MIN_CONTENT_LEN={MIN_CONTENT_LEN}"
+        while (
+            len(content_to_truncate) > MIN_CONTENT_LEN
+            and current_tokens_in_trunc_loop > target_tokens
+        ):
+            cut = max(int(len(content_to_truncate) * CHUNK_REDUCTION_FACTOR), 100)
+            content_to_truncate = content_to_truncate[:-cut]
+            # Create based on the original message object
+            truncated_msg_obj = _create_truncated_message(
+                message_to_truncate, content_to_truncate + "..."
             )
-            while len(content_to_truncate) > MIN_CONTENT_LEN:  # Check length only
-                cut = max(int(len(content_to_truncate) * CHUNK_REDUCTION_FACTOR), 100)
-                content_to_truncate = content_to_truncate[:-cut]
-                # Create based on the original last message object `last_original`
-                truncated_msg_obj = _create_truncated_message(
-                    last_original, content_to_truncate + "..."
-                )
-                working[idx] = truncated_msg_obj  # Update the working list
-                current_msg_in_working = truncated_msg_obj  # Update the reference
-                # --- Recalculate tokens AFTER truncation ---
-                current_tokens = count_tokens(working)
-                logger.info(
-                    f"[ensure] trunc last id={last_original.id} to len={len(content_to_truncate)}, tokens={current_tokens}"
-                )
-                truncated_during_loop = True
-                # --- Check token limit INSIDE the loop ---
-                if current_tokens <= target_tokens:
-                    logger.debug(
-                        f"[ensure] Token limit reached ({current_tokens} <= {target_tokens}), breaking last msg truncation loop."
-                    )
-                    break
-
-            logger.debug(
-                f"[ensure] Last Msg Check Before Append: truncated={truncated_during_loop}, "
-                f"current_content_preview='{current_msg_in_working.content[:50]}...', "
-                f"original_content_preview='{original_content[:50]}...', "
-                f"updates_len_before={len(updates)}"
+            working[0] = truncated_msg_obj  # Update the working list
+            current_tokens_in_trunc_loop = count_tokens(working)  # Recalculate
+            logger.info(
+                f"[ensure_limit] Truncating oldest msg id={getattr(message_to_truncate, 'id', 'N/A')} "
+                f"to len={len(content_to_truncate)}, remaining tokens={current_tokens_in_trunc_loop}"
             )
-            # Add to updates only if content actually changed
-            if (
-                truncated_during_loop
-                and current_msg_in_working.content != original_content
-            ):
+            truncated_during_loop = True
+            # Check if we fit *after* this truncation step
+            if current_tokens_in_trunc_loop <= target_tokens:
                 logger.info(
-                    f"[ensure] Appending truncated last msg id={current_msg_in_working.id} to updates."
+                    "[ensure_limit] Target tokens reached during truncation loop."
                 )
-                updates.append(current_msg_in_working)
-                logger.debug(
-                    f"[ensure] Updates len after last msg append: {len(updates)}, last appended: {updates[-1].id}"
-                )
+                break  # Exit truncation loop
+
+        # Add the truncated message to updates *only if it changed*
+        if truncated_during_loop and working[0].content != original_content:
+            logger.info(
+                f"[ensure_limit] Appending truncated oldest message id={getattr(working[0], 'id', 'N/A')} to updates."
+            )
+            # Check if a RemoveMessage for this ID already exists (shouldn't, as it wasn't removed)
+            if getattr(working[0], "id", None) not in removed_ids:
+                updates.append(working[0])  # Append the modified message object
             else:
-                logger.info(
-                    "[ensure] Truncated last msg not appended (conditions not met)."
+                logger.warning(
+                    f"[ensure_limit] Tried to append truncated message {getattr(working[0], 'id', 'N/A')} but it was already marked for removal?"
                 )
+        else:
+            logger.info(
+                "[ensure_limit] Truncated oldest message not appended (not truncated or content unchanged)."
+            )
 
-    if not updates:
-        logger.warning("[ensure] не удалось уместить в лимит")
-        return {"messages": []}
+    # --- Final Check and Return --- #
+    final_tokens_in_working = count_tokens(
+        working
+    )  # Recalculate final tokens in potentially modified list
+    if final_tokens_in_working > target_tokens:
+        logger.error(
+            f"[ensure_limit] FAILED to bring history tokens ({final_tokens_in_working}) within target ({target_tokens}) after all steps!",
+            extra=log_extra,
+        )
+        # Return the updates we have, but log error. Maybe raise?
 
-    logger.info(f"[ensure] возвращаем {len(updates)} инструкций")
+    logger.info(
+        f"[ensure_limit] COMPLETED. Returning {len(updates)} update instructions.",
+        extra=log_extra,
+    )
     return {"messages": updates}

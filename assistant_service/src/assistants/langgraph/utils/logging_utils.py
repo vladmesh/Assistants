@@ -23,6 +23,9 @@ async def log_messages_to_file(
     log_file_path: str = DEFAULT_LOG_FILE_PATH,
     step_name: str = "Unknown Step",
 ):
+    print("--------------------------------")
+    print(f"Logging messages to {log_file_path}")
+    print("--------------------------------")
     """Logs assistant messages, token count, and context info to a file."""
     log_extra = {
         "user_id": user_id,
@@ -39,6 +42,8 @@ async def log_messages_to_file(
 
         # Use separate write calls for robustness
         with open(log_file_path, "a", encoding="utf-8") as f:
+            print(f"--- Log Entry: {timestamp} (Thread: {thread_id}) ---\n")
+            print("-------------------------")
             f.write(f"--- Log Entry: {timestamp} (Thread: {thread_id}) ---\n")
             f.write(f"Step        : {step_name}\n")
             f.write(f"Assistant ID: {assistant_id}\n")
@@ -77,6 +82,7 @@ async def log_messages_to_file(
                     #     await f.write(f"    Full Repr: {repr(msg)}\n")
 
                 except Exception as log_err:
+                    print(f"  [{i}] Error logging message details: {log_err}")
                     f.write(f"  [{i}] Error logging message details: {log_err}\n")
                     f.write(f"    Fallback Repr: {repr(msg)}\n")
             f.write("---" * 10 + "\n\n")  # Separator
@@ -85,6 +91,7 @@ async def log_messages_to_file(
         # await asyncio.sleep(0.001)
 
     except Exception as e:
+        print(f"Failed to write messages log to {log_file_path}: {e}")
         logger.error(
             f"Failed to write messages log to {log_file_path}: {e}",
             exc_info=True,
