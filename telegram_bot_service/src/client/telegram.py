@@ -51,12 +51,17 @@ class TelegramClient:
             )
             raise
 
-    async def send_message(self, chat_id: int, text: str) -> Dict[str, Any]:
+    async def send_message(
+        self, chat_id: int, text: str, parse_mode: Optional[str] = "Markdown"
+    ) -> Dict[str, Any]:
         """Send message to chat."""
-        logger.info("Sending message", chat_id=chat_id, text=text)
-        return await self._make_request(
-            "sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        logger.info(
+            "Sending message", chat_id=chat_id, text=text, parse_mode=parse_mode
         )
+        payload = {"chat_id": chat_id, "text": text}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        return await self._make_request("sendMessage", json=payload)
 
     async def send_message_with_inline_keyboard(
         self, chat_id: int, text: str, keyboard: List[List[Dict[str, str]]]

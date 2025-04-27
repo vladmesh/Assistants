@@ -89,7 +89,9 @@ async def handle_assistant_responses(
                         response_text = response_message.response
                         if response_text:
                             await telegram.send_message(
-                                chat_id=chat_id, text=response_text
+                                chat_id=chat_id,
+                                text=response_text,
+                                parse_mode="Markdown",
                             )
 
                             logger.info(
