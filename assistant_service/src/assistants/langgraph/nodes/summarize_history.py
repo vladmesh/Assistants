@@ -223,33 +223,9 @@ async def summarize_history_node(
         f"Initial messages count = {len(messages)}, context_size = {context_size}.",
         extra=log_extra,
     )
-    print(
-        f"\\n[DEBUG] Summarize Node: Initial messages count = {len(messages)}"
-    )  # <<< DEBUG PRINT
 
     # Select messages to summarize (returns only head messages and indices to remove)
     head_msgs, remove_idxs = _select_messages(messages, MESSAGES_TO_KEEP_TAIL)
-
-    # --- DEBUG PRINT: Show selected indices and IDs ---
-    print(
-        f"[DEBUG] Summarize Node: Selected {len(remove_idxs)} indices for removal: {remove_idxs}"
-    )
-    ids_to_remove = []
-    original_messages_info = []
-    for i in range(len(messages)):
-        msg = messages[i]
-        msg_id = getattr(msg, "id", "NO_ID")
-        original_messages_info.append(f"  [{i}] Type={type(msg).__name__}, ID={msg_id}")
-        if i in remove_idxs and hasattr(msg, "id") and msg.id is not None:
-            ids_to_remove.append(msg.id)
-    print(
-        f"[DEBUG] Summarize Node: Original message list structure:\\n"
-        + "\\n".join(original_messages_info)
-    )
-    print(
-        f"[DEBUG] Summarize Node: Corresponding IDs selected for removal: {ids_to_remove}"
-    )
-    # --------------------------------------------------
 
     # Create delete instructions for ALL head messages identified for removal.
     initial_deletes = [
@@ -261,12 +237,6 @@ async def summarize_history_node(
         f"Created {len(initial_deletes)} delete instructions for head indices: {remove_idxs}",
         extra=log_extra,
     )
-    # --- DEBUG PRINT: Show RemoveMessage objects ---
-    remove_message_ids = [rm.id for rm in initial_deletes]
-    print(
-        f"[DEBUG] Summarize Node: Created {len(initial_deletes)} RemoveMessage objects with IDs: {remove_message_ids}\\n"
-    )
-    # -----------------------------------------------
 
     if not head_msgs:
         # If no messages selected to summarize, just return the deletes (which would be empty).
@@ -274,11 +244,6 @@ async def summarize_history_node(
             f"No head msgs to summarize, returning {len(initial_deletes)} deletes.",
             extra=log_extra,
         )
-        # --- DEBUG PRINT перед возвратом пустых deletes ---
-        print(
-            f"[DEBUG] Summarize Node: No head messages. Returning {len(initial_deletes)} RemoveMessage instructions (IDs: {remove_message_ids}).\\n"
-        )
-        # -----------------------------------------------
         return {"messages": initial_deletes}
 
     # --- Get Previous Summary (for prompt generation only) ---
@@ -414,10 +379,4 @@ async def summarize_history_node(
         f"Summarization node finished. Returning {len(initial_deletes)} RemoveMessage instructions.",
         extra=log_extra,
     )
-    # --- DEBUG PRINT перед финальным return ---
-    final_remove_ids = [rm.id for rm in initial_deletes]
-    print(
-        f"[DEBUG] Summarize Node: FINISHED. Returning {len(initial_deletes)} RemoveMessage instructions with IDs: {final_remove_ids}\\n"
-    )
-    # ------------------------------------------
     return {"messages": initial_deletes}

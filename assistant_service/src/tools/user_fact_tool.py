@@ -47,9 +47,6 @@ class UserFactTool(BaseTool):
                 )
 
             self._client = httpx.AsyncClient(base_url=base_url, timeout=30.0)
-            logger.debug(
-                f"Initialized httpx client for {self.name} with base URL: {base_url}"
-            )
         return self._client
 
     async def _execute(
@@ -63,7 +60,6 @@ class UserFactTool(BaseTool):
             "user_id": self.user_id,
             "assistant_id": self.assistant_id,
         }
-        logger.debug(f"Executing {self.name} tool", extra=log_extra)
 
         if not self.user_id:
             raise ToolError(
@@ -91,11 +87,6 @@ class UserFactTool(BaseTool):
                 tool_name=self.name,
                 error_code="DATA_PREPARATION_ERROR",
             )
-
-        logger.debug(
-            f"Prepared data for /users/{{user_id}}/facts API: {api_data_dict}",
-            extra=log_extra,
-        )
 
         try:
             start_api_time = time.perf_counter()

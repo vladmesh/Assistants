@@ -50,10 +50,6 @@ class ToolFactory:
         for tool_def in tool_definitions:
             tool_instance = None  # Reset for each definition
             try:
-                logger.debug(
-                    f"Processing tool definition: {tool_def.name} (Type: {tool_def.tool_type}) for assistant {assistant_id}"
-                )
-
                 tool_type = tool_def.tool_type
                 tool_name = tool_def.name  # Get name from DB model
                 tool_description = tool_def.description  # Get description from DB model

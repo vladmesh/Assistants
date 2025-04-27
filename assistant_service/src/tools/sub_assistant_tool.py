@@ -98,15 +98,7 @@ class SubAssistantTool(BaseTool):
             )
 
             try:
-                logger.debug(
-                    "Creating HumanMessage", message=message, tool_name=self.name
-                )
                 human_message = HumanMessage(content=message)
-                logger.debug(
-                    "HumanMessage created",
-                    message=str(human_message),
-                    tool_name=self.name,
-                )
             except Exception as e:
                 logger.error(
                     "Failed to create HumanMessage",
@@ -118,20 +110,8 @@ class SubAssistantTool(BaseTool):
                 raise
 
             try:
-                logger.debug(
-                    "Processing message with sub-assistant",
-                    message=message,
-                    sub_assistant_name=self.sub_assistant.name,
-                    user_id=self.user_id,
-                    tool_name=self.name,
-                )
                 response = await self.sub_assistant.process_message(
                     human_message, self.user_id
-                )
-                logger.debug(
-                    "process_message completed successfully",
-                    sub_assistant_name=self.sub_assistant.name,
-                    tool_name=self.name,
                 )
                 logger.info(
                     "Sub-assistant response received",

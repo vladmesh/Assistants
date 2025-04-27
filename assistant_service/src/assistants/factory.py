@@ -119,9 +119,6 @@ class AssistantFactory:
             assignment = self._secretary_assignments.get(user_id)
             if assignment:
                 secretary_id, _ = assignment
-                logger.debug(
-                    f"Found assignment for user {user_id} in cache: secretary_id={secretary_id}"
-                )
                 secretary_id_to_fetch = secretary_id  # Store the ID
                 # Do NOT call get_assistant_by_id while holding the lock
             else:
@@ -207,10 +204,6 @@ class AssistantFactory:
             cached_data = self._assistant_cache.get(cache_key)
             if cached_data:
                 instance, loaded_at = cached_data
-                logger.debug(
-                    f"Assistant {assistant_uuid} for user {user_id} found in cache (loaded at {loaded_at})."
-                )
-                # TODO: Add check later to see if config needs refresh based on loaded_at vs assistant_data.updated_at
                 return instance
 
         logger.info(

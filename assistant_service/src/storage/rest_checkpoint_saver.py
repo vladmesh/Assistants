@@ -74,9 +74,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             # if used across threads.
             # Let's stick to run_until_complete assuming sync context call.
             # Consider logging a warning if loop is already running.
-            print(
-                "Warning: get_tuple called while event loop is running. Attempting run_until_complete."
-            )
             # Use self.serde here if sync methods need serialization (unlikely for get)
             return self.loop.run_until_complete(self.aget_tuple(config))
 
@@ -89,7 +86,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
         limit: Optional[int] = None,
     ) -> Iterator[CheckpointTuple]:
         """Synchronous wrapper for alist (currently yields nothing)."""
-        print("Warning: list() is not implemented and returns an empty iterator.")
         return iter([])  # Correctly return an empty iterator
 
     def put(self, config: RunnableConfig, checkpoint: Checkpoint) -> RunnableConfig:
@@ -99,9 +95,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             # Note: The async aput method signature needs update if put needs more args
             return self.loop.run_until_complete(self.aput(config, checkpoint))
         else:
-            print(
-                "Warning: put called while event loop is running. Attempting run_until_complete."
-            )
             # Use self.serde here if sync methods need serialization
             # Note: The async aput method signature needs update if put needs more args
             return self.loop.run_until_complete(self.aput(config, checkpoint))
@@ -125,11 +118,8 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             health_url = f"{self.base_url}/health"
             response = await self.client.get(health_url)
             response.raise_for_status()
-            print(f"RestCheckpointSaver: Connection to {self.base_url} successful.")
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
-            print(
-                f"RestCheckpointSaver: Failed to connect to {self.base_url}. Error: {e}"
-            )
+            pass
 
     async def aget_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
         """Get a checkpoint tuple from the REST service."""
@@ -141,7 +131,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
         try:
             response = await self.client.get(url)
             if response.status_code == 404:
-                print(f"Checkpoint not found for thread_id: {thread_id}")
                 return None
             response.raise_for_status()  # Raise for other 4xx/5xx errors
             data = response.json()
@@ -151,11 +140,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             # Fetch actual metadata from the REST API response
             metadata = data.get("checkpoint_metadata")  # Use .get for safety
             if metadata is None:
-                # Handle case where metadata might be missing in older records or if API changes
-                # LangGraph Pregel expects a 'step' key. Default to -1 for the initial state before step 0.
-                print(
-                    f"Warning: checkpoint_metadata missing in response for thread_id {thread_id}. Defaulting to {{'step': -1}}."
-                )
                 metadata = {"step": -1}
             # Return CheckpointTuple with actual metadata
             return CheckpointTuple(
@@ -165,13 +149,9 @@ class RestCheckpointSaver(BaseCheckpointSaver):
                 parent_config=None,
             )
         except httpx.HTTPStatusError as e:  # Catch HTTP errors first
-            # Don't raise for 404, just return None as before
             if e.response.status_code == 404:
-                print(f"Checkpoint not found for thread_id: {thread_id}")
                 return None
             else:
-                # For other HTTP errors, log and raise CheckpointError
-                print(f"HTTP error fetching checkpoint for thread_id {thread_id}: {e}")
                 raise CheckpointError(
                     f"Failed to fetch checkpoint due to HTTP error {e.response.status_code}"
                 ) from e
@@ -187,8 +167,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             binascii.Error,
             Exception,
         ) as e:  # Catch deserialization/other errors
-            # Use logger.exception for better logging with traceback
-            # logger.exception(f"Error decoding/deserializing checkpoint for thread_id {thread_id}", exc_info=True)
             print(
                 f"Error decoding/deserializing checkpoint for thread_id {thread_id}: {e}"
             )
@@ -205,7 +183,6 @@ class RestCheckpointSaver(BaseCheckpointSaver):
         before: Optional[RunnableConfig] = None,
     ) -> AsyncIterator[CheckpointTuple]:
         """List checkpoints (not implemented)."""
-        print("Warning: alist is not implemented for RestCheckpointSaver")
         if False:  # pragma: no cover
             yield  # pragma: no cover
 
@@ -270,12 +247,7 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             response = await self.client.post(url, json=payload)
             response.raise_for_status()
             return config
-        except httpx.HTTPStatusError as e:  # Catch HTTP errors separately
-            # Log the specific HTTP error
-            print(
-                f"HTTP error {e.response.status_code} saving checkpoint for thread_id {thread_id}: {e}"
-            )
-            # Raise CheckpointError, preserving original exception context
+        except httpx.HTTPStatusError as e:
             raise CheckpointError(
                 f"Failed to save checkpoint due to HTTP error {e.response.status_code}"
             ) from e
@@ -290,10 +262,5 @@ class RestCheckpointSaver(BaseCheckpointSaver):
             binascii.Error,
             Exception,
         ) as e:  # Catch serialization or other errors
-            # Log the specific error (e.g., serialization failure)
-            # logger.exception(f"Error serializing or saving checkpoint for thread_id {thread_id}", exc_info=True)
-            print(
-                f"Error serializing or saving checkpoint for thread_id {thread_id}: {e}"
-            )
-            # Raise CheckpointError, preserving original exception context
-            raise CheckpointError(f"Failed to serialize or save checkpoint: {e}") from e
+            # Use logger.exception or similar for better tracing if available
+            raise CheckpointError(f"Failed to serialize/encode checkpoint: {e}") from e

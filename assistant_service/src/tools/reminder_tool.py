@@ -136,7 +136,6 @@ class ReminderTool(BaseTool):
             "user_id": self.user_id,
             "assistant_id": self.assistant_id,
         }
-        logger.debug(f"Executing {self.name} tool", extra=log_extra)
 
         # Access attributes like user_id and assistant_id from self (set by BaseTool)
         if not self.user_id:
@@ -186,7 +185,6 @@ class ReminderTool(BaseTool):
         elif reminder_input.type == "recurring" and reminder_input.cron_expression:
             api_data["cron_expression"] = reminder_input.cron_expression
 
-        logger.debug("Prepared data for /reminders API", data=api_data)
         http_client = self.get_client()  # Use lazy getter
 
         try:

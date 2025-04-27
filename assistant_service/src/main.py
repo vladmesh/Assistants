@@ -56,7 +56,7 @@ async def main():
             try:
                 await task  # Wait for cancellation
             except asyncio.CancelledError:
-                logger.debug(f"Task {task.get_name()} cancelled successfully.")
+                pass
 
         # Check for exceptions in completed tasks
         for task in done:

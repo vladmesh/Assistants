@@ -117,79 +117,24 @@ def custom_message_reducer(
     3. Checks for a critical orphaned ToolMessage at the end.
     4. Validates AIMessage->ToolMessage pairs, removing orphans.
     """
-    print("\n[DEBUG] Custom Reducer: ENTERED")
     left = current_state_messages if current_state_messages is not None else []
     right = new_messages if new_messages is not None else []
 
-    # --- DEBUG PRINT: Show input lists ---
-    print(f"[DEBUG] Custom Reducer: Input 'left' ({len(left)} messages):")
-    for i, msg in enumerate(left):
-        msg_id = getattr(msg, "id", "NO_ID")
-        print(f"  L[{i}] Type={type(msg).__name__}, ID={msg_id}")
-    print(f"[DEBUG] Custom Reducer: Input 'right' ({len(right)} messages):")
-    for i, msg in enumerate(right):
-        msg_id = getattr(msg, "id", "NO_ID")
-        # Check specifically for RemoveMessage
-        is_remove = isinstance(msg, RemoveMessage)
-        print(
-            f"  R[{i}] Type={type(msg).__name__}, ID={msg_id}"
-            + (" (RemoveMessage)" if is_remove else "")
-        )
-    # ------------------------------------
-
     combined_messages = add_messages(left, right)
-    # --- DEBUG PRINT: After add_messages ---
-    print(
-        f"[DEBUG] Custom Reducer: After add_messages ({len(combined_messages)} messages):"
-    )
-    for i, msg in enumerate(combined_messages):
-        msg_id = getattr(msg, "id", "NO_ID")
-        print(f"  C[{i}] Type={type(msg).__name__}, ID={msg_id}")
-    # --------------------------------------
 
     if not combined_messages:
-        print("[DEBUG] Custom Reducer: Combined messages empty, returning [].")
         return []
 
     potentially_valid_messages = _filter_all_system_messages(combined_messages)
-    # --- DEBUG PRINT: After filter system ---
-    print(
-        f"[DEBUG] Custom Reducer: After _filter_all_system_messages ({len(potentially_valid_messages)} messages):"
-    )
-    for i, msg in enumerate(potentially_valid_messages):
-        msg_id = getattr(msg, "id", "NO_ID")
-        print(f"  P[{i}] Type={type(msg).__name__}, ID={msg_id}")
-    # --------------------------------------
 
     logged_last_orphan_error = _log_critical_last_orphan_tool_message(
         potentially_valid_messages
     )
-    # --- DEBUG PRINT: Logged last orphan? ---
-    print(
-        f"[DEBUG] Custom Reducer: Logged last orphan error? {logged_last_orphan_error}"
-    )
-    # ----------------------------------------
 
     final_validated_messages = _validate_and_filter_tool_message_pairs(
         potentially_valid_messages, logged_last_orphan_error
     )
-    # --- DEBUG PRINT: After validate tool pairs ---
-    print(
-        f"[DEBUG] Custom Reducer: After _validate_and_filter_tool_message_pairs ({len(final_validated_messages)} messages):"
-    )
-    for i, msg in enumerate(final_validated_messages):
-        msg_id = getattr(msg, "id", "NO_ID")
-        print(f"  F[{i}] Type={type(msg).__name__}, ID={msg_id}")
-    # --------------------------------------------
 
     final_messages = final_validated_messages
 
-    logger.debug(
-        f"Custom reducer produced {len(final_messages)} messages after filtering system messages and validating tools."
-    )
-    # --- DEBUG PRINT: Final return ---
-    print(
-        f"[DEBUG] Custom Reducer: FINISHED. Returning {len(final_messages)} messages."
-    )
-    # ----------------------------------
     return final_messages

@@ -63,7 +63,6 @@ class RestServiceClient:
         """Get tools associated with a specific assistant."""
         # Wrap the core logic in try...except to handle errors from _request
         try:
-            logger.debug(f"Fetching tools for assistant ID: {assistant_id}")
             # Use the _request helper which handles common HTTP errors
             data = await self._request("GET", f"/api/assistants/{assistant_id}/tools")
             # Ensure data is a list before list comprehension
@@ -183,10 +182,6 @@ class RestServiceClient:
     ) -> Dict[str, Any]:
         """Helper method to make requests and handle common errors with retries."""
         full_url = f"{self.base_url}{endpoint}"  # Construct full URL
-        logger.debug(
-            f"Making request: {method} {full_url}",
-            attempt=getattr(self, "_retry_attempt", 1),
-        )
         try:
             # Use the constructed full_url
             response = await self._client.request(method, full_url, **kwargs)
@@ -438,7 +433,6 @@ class RestServiceClient:
             RestServiceError: If the request fails or returns unexpected data.
         """
         try:
-            logger.debug(f"Fetching facts for user ID: {user_id}")
             # Use the _request helper
             data = await self._request("GET", f"/api/users/{user_id}/facts")
 
@@ -486,11 +480,9 @@ class RestServiceClient:
     ) -> Optional[UserSummaryRead]:
         """Get the latest summary for a user-secretary pair."""
         try:
-            logger.debug(
-                f"Fetching summary for user_id={user_id}, secretary_id={secretary_id}"
+            data = await self._request(
+                "GET", f"/api/users/{user_id}/secretaries/{secretary_id}/summary"
             )
-            endpoint = f"/api/user-summaries/{user_id}/{secretary_id}/latest"
-            data = await self._request("GET", endpoint)
             if data:  # Check if data is not empty
                 return UserSummaryRead(**data)
             else:
@@ -524,13 +516,13 @@ class RestServiceClient:
     ) -> UserSummaryRead:
         """Creates or updates the summary for a user-secretary pair."""
         try:
-            logger.debug(
-                f"Creating/updating summary for user_id={user_id}, secretary_id={secretary_id}"
+            request_data = UserSummaryCreateUpdate(summary_text=summary_text)
+            request_json = request_data.model_dump()
+            data = await self._request(
+                "PUT",
+                f"/api/users/{user_id}/secretaries/{secretary_id}/summary",
+                json=request_json,
             )
-            endpoint = f"/api/user-summaries/{user_id}/{secretary_id}"
-            # Prepare payload according to UserSummaryCreateUpdate schema
-            payload = {"summary_text": summary_text}
-            data = await self._request("POST", endpoint, json=payload)
             return UserSummaryRead(**data)
         except RestServiceError as e:
             logger.error(

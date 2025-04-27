@@ -8,7 +8,7 @@ from assistants.base_assistant import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
-from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 from services.rest_service import RestServiceClient
 
@@ -117,7 +117,6 @@ class AssistantOrchestrator:
 
             logger.info(f"Processing {log_extra['message_class']}", extra=log_extra)
 
-            logger.debug("Getting secretary from factory", extra=log_extra)
             get_secretary_start_time = time.perf_counter()
             secretary: BaseAssistant = await self.factory.get_user_secretary(user_id)
             get_secretary_duration = time.perf_counter() - get_secretary_start_time
@@ -137,11 +136,6 @@ class AssistantOrchestrator:
                 extra=log_extra,
             )
 
-            logger.debug(
-                "Invoking secretary.process_message",
-                message_type=type(lc_message).__name__,
-                extra=log_extra,
-            )
             process_message_start_time = time.perf_counter()
             # Call process_message with only the Langchain message
             response = await secretary.process_message(
@@ -339,12 +333,8 @@ class AssistantOrchestrator:
                 # Dispatch if parsing succeeded
                 if event_object:
                     # Now event_object can be either QueueMessage or QueueTrigger
-                    logger.debug(f"Dispatching event: {type(event_object).__name__}")
+                    # Assign the result directly to response_payload
                     response_payload = await self._dispatch_event(event_object)
-                    logger.debug(
-                        "_dispatch_event finished",
-                        has_payload=response_payload is not None,
-                    )
                 else:
                     # Parsing failed or structure was invalid
                     logger.error(
