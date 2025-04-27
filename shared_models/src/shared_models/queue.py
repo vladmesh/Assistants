@@ -1,88 +1,27 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class QueueMessageSource(str, Enum):
+    """Defines the source of a message or trigger."""
+
     TELEGRAM = "telegram"
     CRON = "cron"
     API = "api"
     CALENDAR = "calendar"
 
 
-class QueueMessageType(str, Enum):
-    HUMAN = "human"
-    TOOL = "tool"
-
-
-class BaseQueueMessageContent(BaseModel):
-    message: str
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-
-class HumanQueueMessageContent(BaseQueueMessageContent):
-    pass
-
-
-class ToolQueueMessageContent(BaseQueueMessageContent):
-    @model_validator(mode="before")
-    def ensure_tool_name_in_metadata(cls, values):
-        """Validate that metadata contains 'tool_name'."""
-        metadata = values.get("metadata")
-        if not metadata or "tool_name" not in metadata:
-            raise ValueError("'tool_name' is required in metadata for ToolQueueMessage")
-        return values
-
-    @field_validator("metadata")
-    def validate_tool_name_type(cls, v):
-        """Ensure tool_name is a string if present."""
-        if "tool_name" in v and not isinstance(v["tool_name"], str):
-            raise ValueError("'tool_name' must be a string")
-        return v
-
-
 class QueueMessage(BaseModel):
+    """Model for messages sent TO the assistant service, specifically for user input."""
+
     user_id: int
-    source: QueueMessageSource
-    type: QueueMessageType
-    content: HumanQueueMessageContent | ToolQueueMessageContent
-    timestamp: datetime = Field(default_factory=datetime.now)
-
-    @model_validator(mode="before")
-    def check_content_type(cls, values):
-        """Ensure content matches message type."""
-        content_data = values.get("content")
-        message_type = values.get("type")
-
-        if message_type == QueueMessageType.HUMAN:
-            # For HUMAN, allow simple string content, auto-convert
-            if isinstance(content_data, str):
-                values["content"] = HumanQueueMessageContent(message=content_data)
-            elif isinstance(content_data, dict):
-                values["content"] = HumanQueueMessageContent(**content_data)
-            elif not isinstance(content_data, HumanQueueMessageContent):
-                raise ValueError(
-                    "Content must be HumanQueueMessageContent or str for HUMAN type"
-                )
-        elif message_type == QueueMessageType.TOOL:
-            if isinstance(content_data, dict):
-                # Validate ToolQueueMessageContent structure explicitly
-                try:
-                    values["content"] = ToolQueueMessageContent(**content_data)
-                except ValueError as e:
-                    raise ValueError(f"Invalid content for TOOL type: {e}")
-            elif not isinstance(content_data, ToolQueueMessageContent):
-                raise ValueError(
-                    "Content must be ToolQueueMessageContent or dict for TOOL type"
-                )
-        else:
-            # This case should ideally not be reached if type is validated first
-            raise ValueError(f"Unsupported message type: {message_type}")
-
-        return values
+    content: str  # Changed from Union type to simple string
+    metadata: Optional[Dict[str, Any]] = None  # Added optional metadata field
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def from_string(cls, json_string: str) -> "QueueMessage":
@@ -90,8 +29,7 @@ class QueueMessage(BaseModel):
         return cls(**json.loads(json_string))
 
 
-# --- New Trigger Types and Model ---
-from datetime import datetime, timezone
+# --- Trigger Types and Model ---
 
 
 class TriggerType(str, Enum):
@@ -132,21 +70,8 @@ class QueueTrigger(BaseModel):
 
 
 # Example Usage (for illustration, not part of the actual file)
-# reminder_trigger = QueueTrigger(
-#     trigger_type=TriggerType.REMINDER,
-#     user_id=123,
-#     source=QueueMessageSource.CRON,
-#     payload={"reminder_id": "abc", "message": "Time for your meeting!"},
-# )
-# auth_trigger = QueueTrigger(
-#     trigger_type=TriggerType.GOOGLE_AUTH,
-#     user_id=456,
-#     source=QueueMessageSource.CALENDAR,
-#     payload={"scopes_granted": ["calendar.readonly"]},
-# )
-#
-# print(reminder_trigger.to_json())
-# print(QueueTrigger.from_json(auth_trigger.to_json()))
+# ... (Example Usage remains the same)
+
 
 # --- Model for Assistant Responses ---
 
@@ -172,7 +97,6 @@ class AssistantResponseMessage(BaseModel):
         if status == "success" and response is None:
             # Allow empty successful responses
             pass
-            # raise ValueError("Field 'response' is required when status is 'success'")
         elif status == "error" and error is None:
             raise ValueError("Field 'error' is required when status is 'error'")
         elif status not in ["success", "error"]:

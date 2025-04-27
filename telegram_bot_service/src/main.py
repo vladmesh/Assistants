@@ -16,12 +16,7 @@ from services.response_handler import handle_assistant_responses
 
 # Import shared models
 from shared_models.api_schemas import TelegramUserRead  # Import schema for type hint
-from shared_models.queue import (
-    HumanQueueMessageContent,
-    QueueMessage,
-    QueueMessageSource,
-    QueueMessageType,
-)
+from shared_models.queue import QueueMessage
 
 logger = structlog.get_logger()
 
@@ -167,19 +162,17 @@ async def process_message(
                 user_id=user_id,
                 secretary_id=assigned_secretary.id,  # Use attribute access
             )
-            # Create QueueMessage instance
+            # Create simplified QueueMessage instance
             queue_message = QueueMessage(
                 user_id=user_id,
-                source=QueueMessageSource.TELEGRAM,
-                type=QueueMessageType.HUMAN,
-                content=HumanQueueMessageContent(
-                    message=message_text,
-                    metadata={
-                        "username": username,
-                        "telegram_id": telegram_id_str,
-                        "chat_id": chat_id,
-                    },
-                ),
+                content=message_text,  # Directly use the message text string
+                metadata={  # Add metadata directly to the QueueMessage
+                    "username": username,
+                    "telegram_id": telegram_id_str,
+                    "chat_id": chat_id,
+                    "source": "telegram",  # Explicitly set source here if needed elsewhere
+                },
+                # timestamp is handled by default_factory
             )
 
             # Send message to assistant queue

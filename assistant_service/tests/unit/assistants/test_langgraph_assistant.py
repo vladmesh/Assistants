@@ -217,7 +217,7 @@ async def test_process_message_simple_response(assistant_instance: LangGraphAssi
 
     # Act: Process the message
     final_response_content = await instance.process_message(
-        human_message, user_id=user_id, triggered_event=None
+        human_message, user_id=user_id
     )
 
     assert final_response_content is not None, "No final AIMessage received"
@@ -234,17 +234,13 @@ async def test_process_message_stateful_memory(assistant_instance: LangGraphAssi
     first_message = HumanMessage(content="My favorite color is blue.")
 
     # Act: Process first message
-    response1 = await instance.process_message(
-        first_message, user_id=user_id, triggered_event=None
-    )
+    response1 = await instance.process_message(first_message, user_id=user_id)
 
     # Arrange: Second message
     second_message = HumanMessage(content="What is my favorite color?")
 
     # Act: Process second message
-    response2 = await instance.process_message(
-        second_message, user_id=user_id, triggered_event=None
-    )
+    response2 = await instance.process_message(second_message, user_id=user_id)
 
     assert response2 is not None
     assert "Async mock reply to: What is my favorite color?" in response2

@@ -431,10 +431,9 @@ class LangGraphAssistant(BaseAssistant):
 
     async def process_message(
         self,
-        message: Optional[BaseMessage],
+        message: BaseMessage,
         user_id: str,
-        triggered_event: QueueTrigger = None,  # Add triggered_event parameter
-        log_extra: Optional[Dict[str, Any]] = None,  # Accept log_extra
+        log_extra: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Processes a single message using the compiled LangGraph graph."""
         if self.user_id != user_id:
@@ -451,44 +450,29 @@ class LangGraphAssistant(BaseAssistant):
         if log_extra:
             combined_log_extra.update(log_extra)
 
+        # Log based on the incoming message type
+        log_message_type = type(message).__name__
         logger.info(
-            f"Processing message: {type(message).__name__ if message else 'None'} for user {user_id}",
+            f"Processing message: {log_message_type} for user {user_id}",
             extra=combined_log_extra,
         )
-
-        if message:
-            # log_messages_to_file([message], f"input_{user_id}.log") # TEMP: Commented out due to TypeError
-            pass  # Added pass to avoid empty block
-        elif triggered_event:
-            logger.info(
-                f"Processing triggered event: {triggered_event}",
-                extra=combined_log_extra,
-            )
-        else:
-            logger.warning(
-                "process_message called with no message or trigger event.",
-                extra=combined_log_extra,
-            )
-            raise ValueError(
-                "process_message requires either a message or a triggered_event"
-            )
 
         # Prepare thread config for the specific user
         thread_config = {"configurable": {"thread_id": self.user_id}}
 
-        # Initial state dictionary construction
+        # Initial state dictionary construction - remove triggered_event
         initial_state: Dict[str, Any] = {
             "user_id": self.user_id,
             "llm_context_size": self.max_tokens,
-            "triggered_event": triggered_event,
             "log_extra": combined_log_extra,  # Pass combined log context
         }
 
-        # Add message(s) to the state if provided
-        input_messages = [message] if message else []
+        # Input for the graph is now just the single incoming message
+        input_messages = [message]
 
         try:
             final_state = None
+            # Pass only messages and the simplified initial_state
             final_state = await self.compiled_graph.ainvoke(
                 input={"messages": input_messages, **initial_state},
                 config=thread_config,

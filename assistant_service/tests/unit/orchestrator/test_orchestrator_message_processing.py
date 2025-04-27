@@ -6,13 +6,13 @@ import pytest
 from langchain_core.messages import HumanMessage, ToolMessage
 from orchestrator import AssistantOrchestrator
 
-from shared_models import QueueMessage, QueueMessageType, QueueTrigger
+from shared_models import QueueMessage, QueueTrigger
 
 # Mark all tests in this file as asyncio
 pytestmark = pytest.mark.asyncio
 
 
-async def test_process_human_message(
+async def test_dispatch_human_message(
     mock_settings,
     mock_factory,
     mock_secretary,
@@ -20,7 +20,7 @@ async def test_process_human_message(
     mocker,
     mock_rest_client,
 ):
-    """Test processing a valid HumanQueueMessage."""
+    """Test dispatching a valid user message (QueueMessage)."""
     # Patch dependencies before creating orchestrator
     mocker.patch("orchestrator.RestServiceClient", return_value=mock_rest_client)
     mocker.patch("orchestrator.AssistantFactory", return_value=mock_factory)
@@ -29,81 +29,40 @@ async def test_process_human_message(
     # Mock the Redis client within the orchestrator instance for this test
     orchestrator.redis = AsyncMock()
 
-    # Act
-    response = await orchestrator.process_message(human_queue_message)
+    # Act - Use _dispatch_event
+    response = await orchestrator._dispatch_event(human_queue_message)
 
     # Assert
     mock_factory.get_user_secretary.assert_awaited_once_with(123)
+    # Check the call to secretary.process_message - no triggered_event
     mock_secretary.process_message.assert_awaited_once_with(
         message=unittest.mock.ANY,
         user_id="123",
-        triggered_event=None,
+        # triggered_event=None, # Removed assertion
     )
-    # Check the type of the message passed
+    # Check the type and content of the message passed
     call_args, call_kwargs = mock_secretary.process_message.call_args
     assert isinstance(call_kwargs["message"], HumanMessage)
-    assert call_kwargs["message"].content == "Hello, assistant!"
-
-    assert response["status"] == "success"
-    # Check against the value set in the mock_secretary fixture
-    assert response["response"] == "Mocked secretary response"
-    assert response["user_id"] == 123
-    # Verify response sent to redis
-    # expected_response_message = QueueMessage(
-    #     type=QueueMessageType.SECRETARY,
-    #     user_id=123,
-    #     source=human_queue_message.source,
-    #     content=human_queue_message.content, # Keep original content info
-    #     response="Mocked secretary response"
-    # )
-    # We need to mock the timestamp generation or compare excluding it
-    # orchestrator.redis.rpush.assert_awaited_once() # Check that rpush was called
-    # More specific check on rpush arguments (may need ANY for timestamp)
-    # args, _ = orchestrator.redis.rpush.call_args
-    # assert args[0] == mock_settings.OUTPUT_QUEUE
-    # assert json.loads(args[1])["response"] == "Mocked secretary response"
-
-
-async def test_process_tool_message(
-    mock_settings,
-    mock_factory,
-    mock_secretary,
-    tool_queue_message,
-    mocker,
-    mock_rest_client,
-):
-    """Test processing a valid ToolQueueMessage."""
-    # Patch dependencies before creating orchestrator
-    mocker.patch("orchestrator.RestServiceClient", return_value=mock_rest_client)
-    mocker.patch("orchestrator.AssistantFactory", return_value=mock_factory)
-
-    orchestrator = AssistantOrchestrator(mock_settings)
-    orchestrator.redis = AsyncMock()
-
-    # Act
-    response = await orchestrator.process_message(tool_queue_message)
-
-    # Assert
-    mock_factory.get_user_secretary.assert_awaited_once_with(123)
-    mock_secretary.process_message.assert_awaited_once_with(
-        message=unittest.mock.ANY,
-        user_id="123",
-        triggered_event=None,
+    expected_timestamp = human_queue_message.timestamp
+    expected_content = (
+        f"(Sent at UTC: {expected_timestamp.isoformat()}) {human_queue_message.content}"
     )
-    # Check the type of the message passed
-    call_args, call_kwargs = mock_secretary.process_message.call_args
-    assert isinstance(call_kwargs["message"], ToolMessage)
-    assert call_kwargs["message"].content == "Event created successfully"
-    assert call_kwargs["message"].tool_name == "calendar_create"  # Check tool_name
+    assert call_kwargs["message"].content == expected_content
+    # Check metadata added by orchestrator
+    assert call_kwargs["message"].metadata["source"] == "telegram"
+    assert "timestamp" in call_kwargs["message"].metadata
+    assert call_kwargs["message"].metadata["chat_id"] == 456  # Metadata from fixture
 
     assert response["status"] == "success"
     assert response["response"] == "Mocked secretary response"
     assert response["user_id"] == 123
-    # Verify response sent to redis (similar check as above)
-    # orchestrator.redis.rpush.assert_awaited_once()
+    # orchestrator.redis.rpush assertions remain commented out
 
 
-async def test_process_message_secretary_error(
+# Removed test_process_tool_message as QueueMessage is no longer used for TOOL type
+
+
+async def test_dispatch_event_secretary_error(
     mock_settings,
     mock_factory,
     mock_secretary,
@@ -111,7 +70,7 @@ async def test_process_message_secretary_error(
     mocker,
     mock_rest_client,
 ):
-    """Test processing when secretary.process_message raises an error."""
+    """Test dispatching when secretary.process_message raises an error."""
     # Arrange: Configure secretary mock to raise an error
     test_error = Exception("Secretary failed")
     mock_secretary.process_message.side_effect = test_error
@@ -123,27 +82,27 @@ async def test_process_message_secretary_error(
     orchestrator = AssistantOrchestrator(mock_settings)
     orchestrator.redis = AsyncMock()
 
-    # Act
-    response = await orchestrator.process_message(human_queue_message)
+    # Act - Use _dispatch_event
+    response = await orchestrator._dispatch_event(human_queue_message)
 
     # Assert
     mock_factory.get_user_secretary.assert_awaited_once_with(123)
+    # Check the call to secretary.process_message - no triggered_event
     mock_secretary.process_message.assert_awaited_once_with(
         message=unittest.mock.ANY,
         user_id="123",
-        triggered_event=None,
+        # triggered_event=None, # Removed assertion
     )
     assert response["status"] == "error"
     assert response["error"] == str(test_error)
     assert response["user_id"] == 123
-    # Verify NO response sent to redis on error
-    # orchestrator.redis.rpush.assert_not_awaited()
+    # orchestrator.redis.rpush assertions remain commented out
 
 
-async def test_process_message_factory_error(
+async def test_dispatch_event_factory_error(
     mock_settings, mock_factory, human_queue_message, mocker, mock_rest_client
 ):
-    """Test processing when factory.get_user_secretary raises an error."""
+    """Test dispatching when factory.get_user_secretary raises an error."""
     # Arrange: Configure factory mock to raise an error
     test_error = Exception("Factory failed")
     mock_factory.get_user_secretary.side_effect = test_error
@@ -155,25 +114,24 @@ async def test_process_message_factory_error(
     orchestrator = AssistantOrchestrator(mock_settings)
     orchestrator.redis = AsyncMock()
 
-    # Act
-    response = await orchestrator.process_message(human_queue_message)
+    # Act - Use _dispatch_event
+    response = await orchestrator._dispatch_event(human_queue_message)
 
     # Assert
     mock_factory.get_user_secretary.assert_awaited_once_with(123)
     # Secretary process_message should not be called
-    # Assuming mock_secretary fixture is not directly used here
-    # If mock_secretary is implicitly created by mock_factory, we need to check it wasn't called
-    # secretary = mock_factory.get_user_secretary.return_value # This would raise error
-    # secretary.process_message.assert_not_awaited() # This check depends on fixture setup
+    mock_secretary = (
+        mock_factory.get_user_secretary.return_value
+    )  # Get the mock secretary
+    mock_secretary.process_message.assert_not_awaited()  # Check it wasn't called
 
     assert response["status"] == "error"
     assert response["error"] == str(test_error)
     assert response["user_id"] == 123
-    # Verify NO response sent to redis on error
-    # orchestrator.redis.rpush.assert_not_awaited()
+    # orchestrator.redis.rpush assertions remain commented out
 
 
-async def test_handle_reminder_trigger(
+async def test_dispatch_reminder_trigger(
     mock_settings,
     mock_factory,
     mock_secretary,
@@ -181,7 +139,7 @@ async def test_handle_reminder_trigger(
     mocker,
     mock_rest_client,
 ):
-    """Test handling a reminder_triggered event."""
+    """Test dispatching a reminder_triggered event (QueueTrigger)."""
     # Patch dependencies before creating orchestrator
     mocker.patch("orchestrator.RestServiceClient", return_value=mock_rest_client)
     mocker.patch("orchestrator.AssistantFactory", return_value=mock_factory)
@@ -189,40 +147,36 @@ async def test_handle_reminder_trigger(
     orchestrator = AssistantOrchestrator(mock_settings)
     orchestrator.redis = AsyncMock()
 
-    # Act
-    response = await orchestrator.handle_trigger(
-        reminder_trigger_event
-    )  # Use handle_trigger
+    # Act - Use _dispatch_event
+    response = await orchestrator._dispatch_event(reminder_trigger_event)
 
     # Assert
-    # Check that the factory was called with the correct user ID from the trigger event
-    # The reminder_trigger_event fixture now uses user_id=123 (int)
     mock_factory.get_user_secretary.assert_awaited_once_with(123)
 
-    # Check that the secretary's process_message was called
+    # Check that the secretary's process_message was called with correct args
     mock_secretary.process_message.assert_awaited_once_with(
-        message=None,  # Trigger passes None for message
+        message=unittest.mock.ANY,
         user_id="123",
-        triggered_event=reminder_trigger_event,  # Check the event is passed
+        # triggered_event=reminder_trigger_event, # Removed assertion
     )
 
-    # # Check the ToolMessage passed to secretary (No longer applicable, event is passed directly)
-    # call_args, call_kwargs = mock_secretary.process_message.call_args
-    # assert isinstance(call_kwargs['message'], ToolMessage)
-    # assert call_kwargs['message'].tool_call_id == "reminder_trigger" # Specific tool_call_id
-    # # Check content structure (might need json.loads if content is stringified)
-    # assert call_kwargs['message'].content == json.dumps({
-    #     "reminder_id": "rem_abc789",
-    #     "details": {"message": "Time for your meeting!"}
-    # })
+    # Check the HumanMessage passed to secretary
+    call_args, call_kwargs = mock_secretary.process_message.call_args
+    passed_message = call_kwargs["message"]
+    assert isinstance(passed_message, HumanMessage)
+
+    # Verify content structure created by _dispatch_event
+    expected_timestamp = reminder_trigger_event.timestamp
+    expected_payload_json = json.dumps(reminder_trigger_event.payload)
+    expected_content = f"System Trigger Activated:\nTimestamp UTC: {expected_timestamp.isoformat()}\nType: {reminder_trigger_event.trigger_type.value}\nSource: {reminder_trigger_event.source.value}\nPayload: {expected_payload_json}"
+    assert passed_message.content == expected_content
+
+    # Verify metadata
+    assert passed_message.metadata["source"] == "cron"  # From QueueMessageSource.CRON
+    assert passed_message.metadata["is_trigger"] is True
+    assert "timestamp" in passed_message.metadata
 
     assert response["status"] == "success"
     assert response["response"] == "Mocked secretary response"
     assert response["user_id"] == 123
-    # Verify response sent to redis
-    # orchestrator.redis.rpush.assert_awaited_once()
-
-    # More specific check on rpush arguments (may need ANY for timestamp)
-    # args, _ = orchestrator.redis.rpush.call_args
-    # assert args[0] == mock_settings.OUTPUT_QUEUE
-    # assert json.loads(args[1])["response"] == "Mocked secretary response"
+    # orchestrator.redis.rpush assertions remain commented out
