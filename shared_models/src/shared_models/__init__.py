@@ -9,15 +9,12 @@ from . import api_schemas
 # Import all enums
 from .enums import AssistantType, ReminderStatus, ReminderType, ToolType
 
-# Import queue models
+# Import remaining queue models
 from .queue import (
     AssistantResponseMessage,
-    HumanQueueMessageContent,
     QueueMessage,
     QueueMessageSource,
-    QueueMessageType,
     QueueTrigger,
-    ToolQueueMessageContent,
     TriggerType,
 )
 
@@ -25,10 +22,7 @@ __all__ = [
     # Queue models
     "AssistantResponseMessage",
     "QueueMessage",
-    "HumanQueueMessageContent",
-    "ToolQueueMessageContent",
     "QueueMessageSource",
-    "QueueMessageType",
     "QueueTrigger",
     "TriggerType",
     # Other API models (UserSecretaryAssignment removed)

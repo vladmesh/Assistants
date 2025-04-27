@@ -3,40 +3,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from shared_models import (
-    HumanQueueMessageContent,
-    QueueMessage,
-    QueueMessageSource,
-    QueueMessageType,
-    ToolQueueMessageContent,
-)
+from shared_models import QueueMessage, QueueMessageSource
 from shared_models.queue import QueueTrigger, TriggerType
 
 
 @pytest.fixture
 def human_queue_message():
+    """Fixture for a user message."""
     return QueueMessage(
-        type=QueueMessageType.HUMAN,
         user_id=123,
-        source=QueueMessageSource.TELEGRAM,
-        content=HumanQueueMessageContent(
-            message="Hello, assistant!", metadata={"chat_id": 456}
-        ),
-        timestamp=datetime.now(),
-    )
-
-
-@pytest.fixture
-def tool_queue_message():
-    return QueueMessage(
-        type=QueueMessageType.TOOL,
-        user_id=123,
-        source=QueueMessageSource.CALENDAR,
-        content=ToolQueueMessageContent(
-            message="Event created successfully",
-            metadata={"tool_name": "calendar_create", "event_id": "abc123"},
-        ),
-        timestamp=datetime.now(),
+        content="Hello, assistant!",
+        metadata={"chat_id": 456, "source": "telegram"},
+        timestamp=datetime.now(timezone.utc),
     )
 
 
