@@ -197,7 +197,7 @@ class RestCheckpointSaver(BaseCheckpointSaver):
         """Save intermediate writes. (Minimal implementation)"""
         # This method is required by BaseCheckpointSaver, but we don't persist
         # intermediate writes via REST in this custom implementation.
-        thread_id = config.get("configurable", {}).get("thread_id")
+        config.get("configurable", {}).get("thread_id")
 
         pass  # Do nothing
 

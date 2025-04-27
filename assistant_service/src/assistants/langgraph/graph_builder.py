@@ -36,7 +36,7 @@ def route_after_assistant(state: AssistantState) -> Literal["tools", END]:
     If tools are called, go to 'tools'. Otherwise, END.
     Summary check is now handled before assistant node.
     """
-    log_extra = state.get("log_extra", {})
+    state.get("log_extra", {})
     messages = state.get("messages", [])
     msg_types = [type(m).__name__ for m in messages]
     logger.info(

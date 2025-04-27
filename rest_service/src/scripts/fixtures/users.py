@@ -1,6 +1,5 @@
 """User fixtures"""
 
-from typing import List
 
 # from models import TelegramUser
 from models.user import TelegramUser

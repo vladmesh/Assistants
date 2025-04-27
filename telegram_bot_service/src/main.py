@@ -1,10 +1,7 @@
 import asyncio
-import datetime
-import json
-from typing import Any, Dict, List, Optional
+from typing import Optional
 from uuid import UUID
 
-import aiohttp
 import structlog
 from client.rest import RestClient, RestClientError
 from client.telegram import TelegramClient

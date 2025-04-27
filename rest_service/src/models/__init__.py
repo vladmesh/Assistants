@@ -39,4 +39,5 @@ __all__ = [
     "ReminderType",
     "ReminderStatus",
     "UserSummary",
+    "UserFact",
 ]

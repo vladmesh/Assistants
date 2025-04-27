@@ -1,14 +1,11 @@
-import re
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 import crud.tool as tool_crud
 import structlog
 from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.assistant import Tool, ToolType
-from pydantic import BaseModel, validator
-from sqlmodel import select
+from models.assistant import Tool
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from shared_models.api_schemas import ToolCreate, ToolRead, ToolUpdate
@@ -62,7 +59,7 @@ async def create_tool_route(
         if "already exists" in detail:
             status_code = status.HTTP_409_CONFLICT
         raise HTTPException(status_code=status_code, detail=detail)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to create tool due to unexpected error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -96,7 +93,7 @@ async def update_tool_route(
         if "already exists" in detail:
             status_code = status.HTTP_409_CONFLICT
         raise HTTPException(status_code=status_code, detail=detail)
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to update tool due to unexpected error", tool_id=str(tool_id)
         )

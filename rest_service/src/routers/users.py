@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 import crud.user as user_crud
 import structlog
@@ -42,7 +42,7 @@ async def create_user_route(
             error=str(e),
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to create user due to unexpected error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

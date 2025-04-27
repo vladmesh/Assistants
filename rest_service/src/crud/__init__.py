@@ -20,17 +20,10 @@ from .calendar import (
     delete_credentials as delete_calendar_credentials,  # Renamed/Aliased
 )
 from .calendar import get_credentials as get_calendar_credentials  # Renamed/Aliased
-from .reminder import update_reminder_status  # Changed from update_reminder
-from .reminder import (
-    create_reminder,
-    delete_reminder,
-    get_reminder,
-    get_reminders,
-    get_scheduled_reminders,
-)
 from .reminder import (  # noqa: F401; Renamed/Aliased
     get_user_reminders as get_reminders_by_user,
 )
+from .reminder import update_reminder_status  # Changed from update_reminder
 from .tool import (  # noqa: F401
     create_tool,
     delete_tool,
@@ -38,9 +31,7 @@ from .tool import (  # noqa: F401
     get_tools,
     update_tool,
 )
-from .user import create_user, delete_user
 from .user import get_user_by_id as get_user  # noqa: F401
-from .user import get_user_by_telegram_id, get_users, update_user
 from .user_fact import (  # noqa: F401
     create_user_fact,
     delete_user_fact,
@@ -53,7 +44,6 @@ from .user_secretary import (  # noqa: F401; get_user_secretary_links, # Removed
 from .user_secretary import (
     deactivate_secretary_assignment as delete_user_secretary_link,  # Renamed/Aliased
 )
-from .user_secretary import get_active_secretary_for_user
 from .user_secretary import (
     get_secretary_assignment as get_user_secretary_link,  # Renamed/Aliased
 )

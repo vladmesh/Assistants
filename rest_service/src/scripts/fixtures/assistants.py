@@ -1,6 +1,5 @@
 """Assistant fixtures for database initialization"""
 import os
-from typing import List
 
 from models.assistant import Assistant, AssistantType
 

@@ -81,7 +81,7 @@ async def assign_secretary_to_user_route(
         if "not found" in detail:
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail)
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to assign secretary due to unexpected error",
             user_id=user_id,

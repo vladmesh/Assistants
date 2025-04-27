@@ -1,6 +1,5 @@
 """Assistant-Tool relationship fixtures for database initialization"""
 
-from typing import List
 
 from models.assistant import Assistant, AssistantToolLink, Tool
 from sqlmodel import select

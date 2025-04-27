@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import BigInteger, Column
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship
 
 from .base import BaseModel
 from .calendar import CalendarCredentials

@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from models.assistant import Assistant  # To check if assistant is secretary
@@ -8,8 +8,6 @@ from models.user_secretary import UserSecretaryLink
 from sqlalchemy.orm import selectinload  # Import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-from shared_models.api_schemas import UserSecretaryLinkCreate, UserSecretaryLinkRead
 
 logger = logging.getLogger(__name__)
 

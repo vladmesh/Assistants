@@ -1,15 +1,11 @@
-from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 import crud.reminder as reminder_crud
-import crud.user as user_crud
 import structlog
 from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.reminder import Reminder, ReminderStatus, ReminderType
-from models.user import TelegramUser
-from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from shared_models.api_schemas import ReminderCreate, ReminderRead, ReminderUpdate
@@ -154,7 +150,7 @@ async def create_reminder_route(
         if "User not found" in detail:
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail)
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to create reminder due to unexpected error",
             user_id=reminder_data.user_id,

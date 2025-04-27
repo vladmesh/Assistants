@@ -1,14 +1,10 @@
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import crud.calendar as calendar_crud
-import crud.user as user_crud
 import structlog
 from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.calendar import CalendarCredentials
-from models.user import TelegramUser
-from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from shared_models.api_schemas import CalendarCredentialsCreate, CalendarCredentialsRead
@@ -44,7 +40,7 @@ async def update_calendar_token_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to update/create calendar token due to unexpected error",
             user_id=user_id,
@@ -68,7 +64,7 @@ async def get_calendar_token_route(
             return None
         logger.info("Calendar token retrieved successfully", user_id=user_id)
         return credentials
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to get calendar token due to unexpected error", user_id=user_id
         )
@@ -93,7 +89,7 @@ async def delete_calendar_token_route(
             )
         logger.info("Calendar token deleted successfully", user_id=user_id)
         return None
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to delete calendar token due to unexpected error", user_id=user_id
         )

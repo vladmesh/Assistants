@@ -418,7 +418,7 @@ class RestServiceClient:
 
     async def get_active_assignments(self) -> List[dict]:
         """Fetch all active user-secretary assignments."""
-        url = f"{self.base_url}/api/user-secretaries/assignments"
+        f"{self.base_url}/api/user-secretaries/assignments"
 
     async def get_user_facts(self, user_id: int) -> List[UserFactRead]:
         """Get facts for a specific user.
