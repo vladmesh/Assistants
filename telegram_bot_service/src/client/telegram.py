@@ -52,7 +52,7 @@ class TelegramClient:
             raise
 
     async def send_message(
-        self, chat_id: int, text: str, parse_mode: Optional[str] = "Markdown"
+        self, chat_id: int, text: str, parse_mode: Optional[str] = None
     ) -> Dict[str, Any]:
         """Send message to chat."""
         logger.info(
