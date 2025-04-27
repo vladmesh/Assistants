@@ -44,8 +44,24 @@ def ensure_context_limit_node(
     messages = state.get("messages", [])
     context_limit = state.get("llm_context_size", 0)
     log_extra = state.get("log_extra", {})
-    safety_margin = 0.95  # Use 95% - slightly less aggressive than summary check
+    safety_margin = 0.95
     effective_limit = int(context_limit * safety_margin) if context_limit > 0 else 0
+    print(f"\n[DEBUG] Ensure Limit Node: ENTERED.")
+    print(f"[DEBUG] Ensure Limit Node: Received {len(messages)} messages.")
+    incoming_messages_info = []
+    for i, msg in enumerate(messages):
+        msg_id = getattr(msg, "id", "NO_ID")
+        msg_content_preview = (
+            str(getattr(msg, "content", "")).replace("\\n", " ")[:80] + "..."
+        )
+        incoming_messages_info.append(
+            f"  [{i}] Type={type(msg).__name__}, ID={msg_id}, Content='{msg_content_preview}'"
+        )
+    print(
+        f"[DEBUG] Ensure Limit Node: Incoming message list structure:\\n"
+        + "\\n".join(incoming_messages_info)
+        + "\\n"
+    )
 
     incoming_types = [type(m).__name__ for m in messages]
     logger.info(

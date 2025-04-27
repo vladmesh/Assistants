@@ -289,13 +289,30 @@ class AssistantOrchestrator:
 
                 # Reset event_object before attempting QueueMessage parse
                 event_object = None
-                if (
-                    "content" in message_dict
-                ):  # Check for 'content' key, now primary identifier for QueueMessage
+                if "trigger_type" in message_dict:
+                    try:
+                        event_object = QueueTrigger(**message_dict)
+                        logger.info(
+                            f"QueueTrigger received for user {event_object.user_id}, type: {event_object.trigger_type.value}"
+                        )
+                    except ValidationError as trigger_exc:
+                        logger.error(
+                            f"Failed to parse as QueueTrigger: {trigger_exc}",
+                            raw_message=raw_message_json,
+                        )
+                        event_object = None  # Reset on parse failure
+                    except Exception as exc:  # Catch other potential errors
+                        logger.error(
+                            f"Unexpected error parsing as QueueTrigger: {exc}",
+                            raw_message=raw_message_json,
+                            exc_info=True,
+                        )
+                        event_object = None
+                elif "content" in message_dict:  # If not a trigger, try as QueueMessage
                     try:
                         event_object = QueueMessage(**message_dict)
                         logger.info(
-                            f"QueueMessage received for user {event_object.user_id}",
+                            f"QueueMessage received for user {event_object.user_id}"
                         )
                     except ValidationError as msg_exc:
                         logger.error(
@@ -303,9 +320,7 @@ class AssistantOrchestrator:
                             raw_message=raw_message_json,
                         )
                         event_object = None  # Reset on parse failure
-                    except (
-                        Exception
-                    ) as exc:  # Catch other potential errors during message parsing
+                    except Exception as exc:  # Catch other potential errors
                         logger.error(
                             f"Unexpected error parsing as QueueMessage: {exc}",
                             raw_message=raw_message_json,
@@ -313,20 +328,18 @@ class AssistantOrchestrator:
                         )
                         event_object = None
                 else:
-                    # Handle case where 'content' key is missing - it's not a valid QueueMessage
+                    # Handle case where it's neither a valid trigger nor a message
                     logger.error(
-                        "Received message missing 'content' key, cannot parse as QueueMessage.",
+                        "Received message is neither a valid QueueTrigger nor QueueMessage.",
+                        keys=list(message_dict.keys()),
                         raw_message=raw_message_json,
                     )
                     event_object = None
 
                 # Dispatch if parsing succeeded
                 if event_object:
-                    # We know it must be a QueueMessage now
+                    # Now event_object can be either QueueMessage or QueueTrigger
                     logger.debug(f"Dispatching event: {type(event_object).__name__}")
-                    # _dispatch_event needs QueueMessage | QueueTrigger, but we only pass QueueMessage now
-                    # The Union type hint in _dispatch_event should still work.
-                    # We might consider changing the type hint later if QueueTrigger is fully removed.
                     response_payload = await self._dispatch_event(event_object)
                     logger.debug(
                         "_dispatch_event finished",
@@ -335,15 +348,15 @@ class AssistantOrchestrator:
                 else:
                     # Parsing failed or structure was invalid
                     logger.error(
-                        "Failed to parse incoming message as QueueMessage.",
+                        "Failed to parse incoming message or trigger.",  # Updated log message
                         raw_message=raw_message_json,
                     )
                     # Create generic error response payload
                     response_payload = {
                         "user_id": message_dict.get("user_id", "unknown"),
                         "status": "error",
-                        "response": "Failed to parse incoming message.",
-                        "error": "Invalid message structure or parsing error.",
+                        "response": "Failed to parse incoming data.",  # Updated response
+                        "error": "Invalid data structure or parsing error.",  # Updated error message
                         "source": message_dict.get(
                             "source", "unknown"
                         ),  # Try to get source if available

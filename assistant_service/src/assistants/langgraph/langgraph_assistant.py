@@ -1,7 +1,6 @@
 # assistant_service/src/assistants/langgraph/langgraph_assistant.py
 import asyncio
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -23,12 +22,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import (  # Import needed for checkpointer
     BaseCheckpointSaver,
 )
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledGraph
 from langgraph.prebuilt import create_react_agent  # Import create_react_agent
 from services.rest_service import RestServiceClient  # Import RestServiceClient
 from utils.error_handler import AssistantError, MessageProcessingError
-
-from shared_models import QueueTrigger
 
 # Import the specific schema needed
 from shared_models.api_schemas.user_fact import UserFactRead
@@ -91,7 +89,7 @@ class LangGraphAssistant(BaseAssistant):
         # Store pre-initialized tools and user_id
         self.tools = tools
         self.user_id = user_id  # Store user_id if needed by other methods
-        self.checkpointer = checkpointer
+        self.checkpointer = MemorySaver()
         self.rest_client = rest_client  # Store the rest_client
         self.timeout = self.config.get("timeout", 60)  # Default timeout 60 seconds
         self.system_prompt_template = self.config[
@@ -170,7 +168,7 @@ class LangGraphAssistant(BaseAssistant):
             )
         return ChatOpenAI(
             model=model_name,
-            temperature=temperature,
+            # temperature=temperature,
             api_key=api_key,
         )
 
