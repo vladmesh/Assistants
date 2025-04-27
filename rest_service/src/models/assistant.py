@@ -63,10 +63,11 @@ class Assistant(BaseModel, table=True):
     )
     user_summaries: List["UserSummary"] = Relationship(back_populates="secretary")
     reminders: List["Reminder"] = Relationship(
+        back_populates="assistant",
         sa_relationship_kwargs={
             "foreign_keys": "[Reminder.assistant_id]",
             "cascade": "all, delete-orphan",
-        }
+        },
     )
 
     def validate_type(self) -> None:
