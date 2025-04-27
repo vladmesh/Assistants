@@ -26,7 +26,7 @@ async def run_assistant_node(
 
         if task in done:
             result = task.result()
-            elapsed_time = time.monotonic() - start_time
+            time.monotonic() - start_time
             return result
         else:
             # Timeout occurred

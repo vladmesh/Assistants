@@ -1,7 +1,5 @@
 """Tool fixtures for database initialization"""
 
-from typing import List, Union
-from uuid import uuid4
 
 # from models import Tool, ToolType
 from models.assistant import Tool, ToolType  # Models are in models/assistant.py

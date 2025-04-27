@@ -1,9 +1,8 @@
-from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import TEXT, Column, UniqueConstraint
-from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import TEXT, Column
+from sqlmodel import Field, Relationship
 
 # Import BaseModel
 from .base import BaseModel

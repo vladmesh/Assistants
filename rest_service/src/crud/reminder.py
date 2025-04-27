@@ -1,6 +1,6 @@
 import json  # Import json
 import logging
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -9,7 +9,7 @@ from models.user import TelegramUser  # To check user existence
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import ReminderCreate, ReminderUpdate
+from shared_models.api_schemas import ReminderCreate
 
 logger = logging.getLogger(__name__)
 

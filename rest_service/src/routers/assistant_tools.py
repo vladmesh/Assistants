@@ -37,7 +37,7 @@ async def list_assistant_tools_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found"
         )
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to list assistant tools due to unexpected error",
             assistant_id=str(assistant_id),
@@ -87,7 +87,7 @@ async def add_tool_to_assistant_route(
         elif "already linked" in detail:
             status_code = status.HTTP_409_CONFLICT
         raise HTTPException(status_code=status_code, detail=detail)
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to link tool due to unexpected error",
             assistant_id=str(assistant_id),

@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import List
 from uuid import UUID
 
 import crud.assistant as assistant_crud  # Import the CRUD module
@@ -73,7 +73,7 @@ async def create_assistant(
     except ValueError as e:
         logger.error("Failed to create assistant due to invalid type", error=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to create assistant due to unexpected error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -111,7 +111,7 @@ async def update_assistant(
             error=str(e),
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to update assistant due to unexpected error",
             assistant_id=str(assistant_id),
@@ -147,7 +147,7 @@ async def delete_assistant(
             f"Deletion conflict for assistant {assistant_id}: {e}", exc_info=True
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except Exception as e:
+    except Exception:
         # Catch any other unexpected errors
         logger.exception(
             f"Unexpected error deleting assistant {assistant_id}", exc_info=True

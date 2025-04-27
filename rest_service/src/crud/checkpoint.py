@@ -1,5 +1,3 @@
-import base64
-import logging
 from typing import Any, Dict, Optional
 
 # Use absolute import for models

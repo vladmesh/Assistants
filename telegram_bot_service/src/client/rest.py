@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 import aiohttp
@@ -25,8 +25,6 @@ logger = structlog.get_logger()
 
 class RestClientError(Exception):
     """Custom exception for REST client errors (e.g., validation, unexpected)."""
-
-    pass
 
 
 class RestClient:

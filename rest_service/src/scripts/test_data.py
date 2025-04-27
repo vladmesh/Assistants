@@ -1,6 +1,5 @@
 """Test data initialization script"""
 
-from typing import List
 
 # from models import Assistant, TelegramUser
 from models.assistant import Assistant

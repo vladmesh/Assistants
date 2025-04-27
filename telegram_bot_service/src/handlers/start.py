@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import List
 
 import structlog
 from client.rest import RestClient, RestClientError

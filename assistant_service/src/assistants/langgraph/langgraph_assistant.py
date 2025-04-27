@@ -159,7 +159,7 @@ class LangGraphAssistant(BaseAssistant):
     def _initialize_llm(self) -> ChatOpenAI:
         """Initializes the language model based on configuration."""
         model_name = self.config.get("model_name", "gpt-4o-mini")  # Default model
-        temperature = self.config.get("temperature", 0.7)
+        self.config.get("temperature", 0.7)
         api_key = self.config.get("api_key", settings.OPENAI_API_KEY)
 
         if not api_key:
