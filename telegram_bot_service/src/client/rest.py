@@ -55,17 +55,14 @@ class RestClient:
             raise RestClientError("Session is not initialized.")
 
         url = f"{self.base_url}{self.api_prefix}{endpoint}"
-        logger.debug("Making request", url=url, method=method)
 
         try:
             async with self.session.request(method, url, **kwargs) as response:
                 if response.status == 404:
-                    logger.debug("Received 404 Not Found", url=url, method=method)
                     return None  # Return None for 404
                 response.raise_for_status()  # Raise exception for other errors (4xx, 5xx)
                 # Handle 204 No Content
                 if response.status == 204:
-                    logger.debug("Received 204 No Content", url=url, method=method)
                     return {}  # Return empty dict for successful no-content responses
                 # Check content type? Assume JSON for now
                 return await response.json()

@@ -95,8 +95,8 @@ class LangGraphAssistant(BaseAssistant):
         self.system_prompt_template = self.config[
             "system_prompt"
         ]  # NEW: Store as template
-        self.max_tokens = self.config.get("max_tokens", 2500)
-        self.assistant_id_uuid = UUID(assistant_id)  # Store UUID version
+        self.max_tokens = self.config.get("max_tokens", 7500)
+        self.assistant_id_uuid = UUID(assistant_id)
 
         # --- Initialize Shared Cache --- #
         self.prompt_context_cache = PromptContextCache()

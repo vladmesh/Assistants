@@ -41,7 +41,6 @@ class WebSearchTool(BaseTool):
                 raise ToolExecutionError("Tavily API key not configured", self.name)
             try:
                 self._client = TavilyClient(api_key=self.settings.TAVILY_API_KEY)
-                logger.debug("TavilyClient initialized lazily for WebSearchTool.")
             except Exception as e:
                 logger.error(f"Failed to initialize TavilyClient: {e}", exc_info=True)
                 raise ToolExecutionError(

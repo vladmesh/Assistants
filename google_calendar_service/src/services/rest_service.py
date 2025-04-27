@@ -37,11 +37,9 @@ class RestService:
     async def _request(self, method: str, endpoint: str, **kwargs) -> Optional[Any]:
         """Helper method for making requests and handling common errors/responses."""
         url = f"{self.base_url}{endpoint}"  # Assumes endpoint starts with /
-        logger.debug(f"Making REST request: {method} {url}")
         try:
             response = await self.client.request(method, url, **kwargs)
             if response.status_code == 404:
-                logger.debug(f"Received 404 for {method} {url}")
                 return None
             response.raise_for_status()  # Raise for other 4xx/5xx errors
             if response.status_code == 204:

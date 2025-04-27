@@ -224,7 +224,6 @@ class CalendarCreateTool(BaseGoogleCalendarTool):
             if location:
                 event_data["location"] = location
 
-            logger.debug("Sending event data to calendar service", data=event_data)
             try:
                 # Make the API call (specific to create tool)
                 response = await client.post(
@@ -288,11 +287,6 @@ class CalendarListTool(BaseGoogleCalendarTool):
             if time_max:
                 params["time_max"] = time_max
 
-            logger.debug(
-                "Making request to calendar service",
-                url=f"{self.base_url}/events/{self.user_id}",
-                params=params,
-            )
             try:
                 # Make the API call (specific to list tool)
                 response = await client.get(

@@ -330,7 +330,7 @@ async def handle_telegram_update(
                 logger.warning("Received unhandled callback query", data=data)
                 await telegram.answer_callback_query(query_id)
         else:
-            logger.debug("Received update type not handled", update_keys=update.keys())
+            pass
 
     except Exception as e:
         # Catch-all for errors before chat_id might be extracted or other broad issues

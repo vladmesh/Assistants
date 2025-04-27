@@ -32,13 +32,11 @@ class TelegramClient:
             )
 
         url = f"{self.base_url}/{method}"
-        logger.debug("Making request to Telegram", url=url, method=method, **kwargs)
 
         try:
             async with self.session.post(url, **kwargs) as response:
                 response.raise_for_status()
                 result = await response.json()
-                logger.debug("Got response from Telegram", result=result)
 
                 if not result.get("ok"):
                     error = result.get("description", "Unknown error")
@@ -98,7 +96,7 @@ class TelegramClient:
                 response.raise_for_status()
                 result = await response.json()
                 if result.get("ok"):
-                    logger.debug("Callback query answered", query_id=callback_query_id)
+                    pass
                 else:
                     logger.warning(
                         "Failed to answer callback query",
@@ -116,7 +114,6 @@ class TelegramClient:
         self, offset: int = 0, timeout: int = 30
     ) -> List[Dict[str, Any]]:
         """Get updates from Telegram."""
-        logger.debug("Getting updates", offset=offset)
         result = await self._make_request(
             "getUpdates",
             json={

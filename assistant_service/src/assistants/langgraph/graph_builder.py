@@ -42,12 +42,9 @@ def route_after_assistant(state: AssistantState) -> Literal["tools", END]:
     logger.info(
         f"[route_after_assistant] ENTERED. Msgs: {len(messages)}, Types: {msg_types}"
     )
-    logger.debug("Routing after assistant node.", extra=log_extra)
     if tools_condition(state) == "tools":
-        logger.debug("Routing -> tools", extra=log_extra)
         return "tools"
 
-    logger.debug("Routing -> END", extra=log_extra)
     return END
 
 
