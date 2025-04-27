@@ -99,20 +99,23 @@ class RestClient:
         """Get user by telegram_id. Returns parsed model or None if not found."""
         try:
             response_data = await self._make_request(
-                "GET", "/users/", params={"telegram_id": telegram_id}
+                "GET", "/users/by-telegram-id/", params={"telegram_id": telegram_id}
             )
 
             if response_data is None:
                 return None  # User not found (404)
 
-            # API might return a list, handle it
-            if isinstance(response_data, list):
-                user_data = response_data[0] if response_data else None
-            else:
-                user_data = response_data
+            if not isinstance(response_data, dict):
+                logger.error(
+                    "Received unexpected data type from get_user_by_telegram_id endpoint",
+                    data_type=type(response_data),
+                    telegram_id=telegram_id,
+                )
+                raise RestClientError(
+                    "Invalid response format from /users/by-telegram-id/"
+                )
 
-            if not user_data:
-                return None  # Empty list received
+            user_data = response_data
 
             # Parse the dictionary into the Pydantic model
             return TelegramUserRead(**user_data)
