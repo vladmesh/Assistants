@@ -53,7 +53,6 @@ class GoogleCalendarService:
             include_granted_scopes="true",
             prompt="consent",
             state=state,
-            response_type="code",
         )
 
         return auth_url
