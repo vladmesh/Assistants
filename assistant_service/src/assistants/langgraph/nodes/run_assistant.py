@@ -3,9 +3,11 @@ import time
 from typing import Any, Dict
 
 from assistants.langgraph.state import AssistantState
-from config import logger
+from config.logger import get_logger
 from langchain_core.runnables import Runnable
 from utils.error_handler import MessageProcessingError
+
+logger = get_logger(__name__)
 
 
 async def run_assistant_node(
@@ -34,13 +36,13 @@ async def run_assistant_node(
             try:
                 await task  # Wait for cancellation to propagate
             except asyncio.CancelledError:
-                logger.error(f"Agent runnable invocation timed out after {timeout}s.")
+                logger.warning(f"Agent runnable invocation timed out after {timeout}s.")
                 raise MessageProcessingError(
                     f"Assistant processing timed out after {timeout}s."
                 )
             except Exception as e:
                 # Log unexpected errors during cancellation
-                logger.exception(
+                logger.warning(
                     f"Unexpected error during agent task cancellation: {e}",
                     exc_info=True,
                 )
@@ -51,7 +53,7 @@ async def run_assistant_node(
     except Exception as e:
         # Catch errors from ainvoke itself or timeout handling
         if not isinstance(e, MessageProcessingError):  # Avoid double wrapping
-            logger.exception(
+            logger.warning(
                 "Error during agent runnable invocation or timeout handling.",
                 exc_info=True,
             )
