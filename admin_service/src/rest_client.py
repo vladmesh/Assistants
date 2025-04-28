@@ -208,9 +208,12 @@ class RestServiceClient:
         Returns:
             Created Tool object
         """
+        # Convert the Pydantic model to a JSON string first
+        json_payload = tool.model_dump_json(exclude_none=True)
         response = await self._client.post(
             f"{self.base_url}/api/tools/",
-            json=tool.model_dump(exclude_none=True),
+            content=json_payload,  # Pass the JSON string as content
+            headers={"Content-Type": "application/json"},  # Ensure correct header
         )
         response.raise_for_status()
         return ToolRead(**response.json())
