@@ -89,7 +89,7 @@ class LangGraphAssistant(BaseAssistant):
         # Store pre-initialized tools and user_id
         self.tools = tools
         self.user_id = user_id  # Store user_id if needed by other methods
-        self.checkpointer = MemorySaver()
+        self.checkpointer = checkpointer
         self.rest_client = rest_client  # Store the rest_client
         self.timeout = self.config.get("timeout", 60)  # Default timeout 60 seconds
         self.system_prompt_template = self.config[

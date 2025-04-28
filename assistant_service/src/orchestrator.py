@@ -248,6 +248,9 @@ class AssistantOrchestrator:
 
     async def listen_for_messages(self):
         """Listen for incoming messages/triggers from Redis queue and dispatch processing."""
+        # Setup checkpointer indices once at the start
+        await self.factory.setup_checkpointer()
+
         logger.info(
             "Starting message listener",
             input_queue=self.settings.INPUT_QUEUE,
