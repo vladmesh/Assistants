@@ -1,12 +1,20 @@
 """Database initialization and session management"""
 
 
+import logging
+
 from config import settings
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+logging.basicConfig()
+logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+
+logging.basicConfig()
+logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
 # Create async engine
 async_engine = create_async_engine(
@@ -16,9 +24,6 @@ async_engine = create_async_engine(
     pool_size=settings.DB_POOL_SIZE,
     max_overflow=settings.DB_MAX_OVERFLOW,
 )
-print("--------------------------------")
-print(settings.ASYNC_DATABASE_URL)
-print("--------------------------------")
 
 # Create session factory
 AsyncSessionLocal = sessionmaker(

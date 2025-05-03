@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Application settings"""
 
     ASYNC_DATABASE_URL: str = os.getenv("ASYNC_DATABASE_URL")
-    DB_ECHO: bool = False
+    DB_ECHO: bool = True
     DB_POOL_SIZE: int = 5
     DB_MAX_OVERFLOW: int = 10
 
