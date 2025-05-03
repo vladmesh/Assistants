@@ -95,21 +95,6 @@ def schedule_job(reminder):
             else:
                 run_date = run_date.astimezone(utc)
 
-            # Check if the job is already past (use <= for current time)
-            # Allow a grace period (e.g., 10 seconds) to account for execution delays
-            if run_date <= datetime.now(utc) - timedelta(seconds=10):
-                logger.warning(
-                    f"Skipping past one-time reminder {job_id} scheduled for {run_date}"
-                )
-                # Check if job exists and remove it if it's definitively in the past
-                if existing_job:
-                    try:
-                        scheduler.remove_job(job_id)
-                        logger.info(f"Removed past job {job_id}.")
-                    except Exception as remove_err:
-                        logger.error(f"Error removing past job {job_id}: {remove_err}")
-                return
-
             trigger = DateTrigger(run_date=run_date)
             trigger_args["trigger"] = trigger
             trigger_args["name"] = f"One-time reminder {reminder['id']}"
@@ -245,8 +230,3 @@ def start_scheduler():
         logger.critical(f"Failed to start scheduler: {e}", exc_info=True)
         scheduler.shutdown()  # Attempt graceful shutdown on error
         raise
-
-
-# Remove the old unused functions if they exist
-# del parse_cron_expression
-# del execute_job

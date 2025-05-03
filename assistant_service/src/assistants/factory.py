@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 import httpx  # Add httpx import
+import redis.asyncio as aioredis  # Ensure aioredis is imported
 from assistants.base_assistant import BaseAssistant
 from assistants.langgraph.langgraph_assistant import LangGraphAssistant
 
@@ -11,10 +12,15 @@ from assistants.langgraph.langgraph_assistant import LangGraphAssistant
 from config.logger import get_logger
 from config.settings import Settings
 
+# from storage.rest_checkpoint_saver import RestCheckpointSaver # Already commented/removed
+# from langgraph_checkpoint_redis import AsyncRedisSaver # Incorrect import
+from langgraph.checkpoint.redis.ashallow import (  # Correct import for shallow async saver
+    AsyncShallowRedisSaver,
+)
+
 # Import the recommended serializer
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from services.rest_service import RestServiceClient
-from storage.rest_checkpoint_saver import RestCheckpointSaver  # Import new saver
 
 # Import ToolFactory
 from tools.factory import ToolFactory
@@ -26,7 +32,7 @@ logger = get_logger(__name__)
 
 class AssistantFactory:
     def __init__(self, settings: Settings):
-        """Initialize the factory with settings, REST client, and REST checkpointer"""
+        """Initialize the factory with settings, REST client, and Redis checkpointer"""
         self.settings = settings
         self.rest_client = RestServiceClient()
         # Cache for user_id -> (secretary_id, assignment_updated_at)
@@ -38,39 +44,58 @@ class AssistantFactory:
         # Lock for cache access
         self._cache_lock = asyncio.Lock()
 
-        # Initialize HTTP client for the checkpointer
-        self.http_client = httpx.AsyncClient(
-            timeout=settings.HTTP_CLIENT_TIMEOUT
-        )  # Use setting for timeout
-        # Initialize the REST checkpointer with the serializer
-        self.checkpointer = RestCheckpointSaver(
-            base_url=settings.REST_SERVICE_URL,  # Use setting for URL
-            client=self.http_client,
-            serializer=JsonPlusSerializer(),  # Pass the serializer instance
+        # --- START CHECKPOINTER INIT ---
+        # 1. Create Redis client for the checkpointer
+        redis_url = (
+            f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
         )
+        self.redis_client_for_checkpoint = aioredis.from_url(redis_url)
+        logger.info("Created dedicated Redis client for checkpointer.")
+
+        # 2. Instantiate AsyncShallowRedisSaver directly with the client
+        self.checkpointer = AsyncShallowRedisSaver(
+            redis_client=self.redis_client_for_checkpoint
+        )
+        logger.info(f"Instantiated checkpointer: {type(self.checkpointer).__name__}")
+
+        # 3. Set the serializer
+        # self.checkpointer.serde = JsonPlusSerializer()
+        logger.info(
+            f"Set serializer for checkpointer: {type(self.checkpointer.serde).__name__}"
+        )
+        # --- END CHECKPOINTER INIT ---
+
         # Initialize ToolFactory, passing self (the AssistantFactory instance)
         self.tool_factory = ToolFactory(settings=settings, assistant_factory=self)
         logger.info(
             f"AssistantFactory initialized with checkpointer: {type(self.checkpointer).__name__}"
             f" and ToolFactory"
         )
-        # Note: Consider calling self.checkpointer.setup() during app startup
+        # Note: Consider calling await self.checkpointer.asetup() during app startup
 
     async def close(self):
-        """Close REST client, checkpointer HTTP client, and assistant instances"""
-        # Close checkpointer's HTTP client first
-        try:
-            await self.http_client.aclose()
-            logger.info("Closed checkpointer HTTP client.")
-        except Exception as e:
-            logger.warning(f"Error closing checkpointer HTTP client: {e}")
-
+        """Close REST client, checkpointer Redis client, and assistant instances"""
         # Close main REST client
         try:
             await self.rest_client.close()
             logger.info("Closed main REST service client.")
         except Exception as e:
             logger.warning(f"Error closing main REST service client: {e}")
+
+        # --- START ADDING CLOSE LOGIC ---
+        # Close the dedicated Redis client for the checkpointer
+        if (
+            hasattr(self, "redis_client_for_checkpoint")
+            and self.redis_client_for_checkpoint
+        ):
+            try:
+                await self.redis_client_for_checkpoint.aclose()
+                logger.info("Closed dedicated Redis client for checkpointer.")
+            except Exception as e:
+                logger.warning(
+                    f"Error closing dedicated Redis client for checkpointer: {e}"
+                )
+        # --- END ADDING CLOSE LOGIC ---
 
         # Close all assistant instances from the correct cache
         async with self._cache_lock:  # Ensure thread-safe access during iteration
@@ -98,6 +123,57 @@ class AssistantFactory:
             self._assistant_cache.clear()
             self._secretary_assignments.clear()  # Clear assignments cache too
         logger.info("AssistantFactory closed REST client and cleared caches.")
+
+    async def setup_checkpointer(self):
+        """Initializes the checkpointer by calling its setup method if available."""
+        # Check if the checkpointer has the 'asetup' method (for async setup)
+        if hasattr(self.checkpointer, "asetup") and asyncio.iscoroutinefunction(
+            getattr(self.checkpointer, "asetup")
+        ):
+            logger.info(
+                f"Attempting to setup checkpointer indices for {type(self.checkpointer).__name__}..."
+            )
+            try:
+                # Call the asynchronous setup method
+                await self.checkpointer.asetup()
+                logger.info(
+                    f"Checkpointer {type(self.checkpointer).__name__} setup complete."
+                )
+            except Exception as e:
+                # Log detailed error if setup fails
+                logger.exception(
+                    f"Failed to setup checkpointer {type(self.checkpointer).__name__}",
+                    error=str(e),
+                    exc_info=True,
+                )
+                # Depending on requirements, you might want to raise the error
+                # or handle it gracefully (e.g., allow app to continue with warnings)
+                # raise  # Uncomment to make setup failure critical
+        # Check if the checkpointer has the 'setup' method (for sync setup)
+        elif hasattr(self.checkpointer, "setup") and not asyncio.iscoroutinefunction(
+            getattr(self.checkpointer, "setup")
+        ):
+            logger.info(
+                f"Attempting to setup checkpointer indices for {type(self.checkpointer).__name__} (sync)..."
+            )
+            try:
+                # Call the synchronous setup method
+                self.checkpointer.setup()
+                logger.info(
+                    f"Checkpointer {type(self.checkpointer).__name__} setup complete (sync)."
+                )
+            except Exception as e:
+                logger.exception(
+                    f"Failed to setup checkpointer {type(self.checkpointer).__name__} (sync)",
+                    error=str(e),
+                    exc_info=True,
+                )
+                # raise # Uncomment if sync setup failure should be critical
+        else:
+            # Log if no setup method is found (might be okay for some checkpointers)
+            logger.warning(
+                f"Checkpointer {type(self.checkpointer).__name__} does not have a recognized setup method (asetup/setup)."
+            )
 
     async def get_user_secretary(self, user_id: int) -> BaseAssistant:
         """Get secretary assistant for user using the cached assignments.
