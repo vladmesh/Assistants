@@ -116,15 +116,17 @@ def show_tools_page(rest_client: RestServiceClient):
 
                 if tool_type != ToolType.SUB_ASSISTANT.value or assistant_id:
                     try:
-                        # Create the tool
-                        run_async(
-                            rest_client.create_tool(
-                                name=name,
-                                tool_type=ToolType(tool_type),
-                                description=description,
-                                assistant_id=assistant_id,
-                            )
+                        # Create ToolCreate object
+                        tool_data = ToolCreate(
+                            name=name,
+                            tool_type=ToolType(tool_type),
+                            description=description,
+                            assistant_id=assistant_id,
+                            # Assuming parameters are not handled by this simple form yet
+                            parameters={},
                         )
+                        # Call create_tool with the object
+                        run_async(rest_client.create_tool(tool=tool_data))
                         st.success("Tool created successfully!")
                         st.rerun()
                     except Exception as e:
