@@ -9,7 +9,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-
+import sqlmodel
 # revision identifiers, used by Alembic.
 revision: str = "11f7771296eb"
 down_revision: Union[str, None] = None
