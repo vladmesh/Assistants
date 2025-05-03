@@ -56,3 +56,6 @@ qdrant_data/
 
 scripts/assistants_template.yaml
 scripts/init_db.py
+
+docs/inline_selection_plan.md
+redis_persistence_plan.md
