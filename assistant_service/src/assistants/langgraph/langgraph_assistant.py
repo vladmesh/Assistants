@@ -22,7 +22,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import (  # Import needed for checkpointer
     BaseCheckpointSaver,
 )
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledGraph
 from langgraph.prebuilt import create_react_agent  # Import create_react_agent
 from services.rest_service import RestServiceClient  # Import RestServiceClient

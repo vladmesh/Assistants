@@ -1,4 +1,3 @@
-from datetime import datetime
 from uuid import UUID
 
 from .base import BaseSchema, TimestampSchema
@@ -13,12 +12,9 @@ class UserSummaryBase(BaseSchema):
 class UserSummaryCreateUpdate(UserSummaryBase):
     """Schema for creating or updating a user summary."""
 
-    pass
-
 
 class UserSummaryRead(UserSummaryBase, TimestampSchema):
     """Schema for reading a user summary, including timestamps."""
 
     id: UUID
     # Timestamps are inherited from TimestampSchema
-    pass

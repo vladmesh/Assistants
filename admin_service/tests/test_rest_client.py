@@ -3,8 +3,6 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-import pytest_asyncio
-from httpx import AsyncClient, Response
 
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
 from src.rest_client import RestServiceClient

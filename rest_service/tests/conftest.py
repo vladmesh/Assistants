@@ -1,5 +1,4 @@
-import asyncio
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator
 from uuid import UUID
 
 import pytest_asyncio

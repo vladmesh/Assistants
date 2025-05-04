@@ -1,6 +1,5 @@
 """Tools page of the admin panel"""
 
-from enum import Enum
 from uuid import UUID
 
 import pandas as pd
@@ -18,7 +17,7 @@ def show_tools_page(rest_client: RestServiceClient):
 
     # Получаем список инструментов и ассистентов
     tools = run_async(rest_client.get_tools())
-    assistants = run_async(rest_client.get_assistants())
+    run_async(rest_client.get_assistants())
 
     if not tools:
         st.warning("Нет доступных инструментов")

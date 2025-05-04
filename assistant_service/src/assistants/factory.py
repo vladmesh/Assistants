@@ -19,7 +19,6 @@ from langgraph.checkpoint.redis.ashallow import (  # Correct import for shallow 
 )
 
 # Import the recommended serializer
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from services.rest_service import RestServiceClient
 
 # Import ToolFactory

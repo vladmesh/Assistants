@@ -6,10 +6,8 @@ import pytest
 
 # Import necessary components with corrected paths
 from assistants.langgraph.graph_builder import build_full_graph
-from assistants.langgraph.state import AssistantState
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_core.tools import BaseTool
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledGraph
 
