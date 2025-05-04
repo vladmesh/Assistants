@@ -37,17 +37,11 @@ async def get_or_create_telegram_user(
 async def get_user_by_telegram_id(
     rest: RestClient, telegram_id: int
 ) -> Optional[TelegramUserRead]:
-    """Gets a user by their Telegram ID via the REST API.
-
-    Handles 404 by returning None.
-    Raises:
-        RestClientError: For non-404 errors.
-    Returns:
-        The TelegramUserRead object or None if not found (404).
-    """
-    # Let the handler deal with specific error codes like 404 vs other errors
-    logger.debug("Calling rest.get_user_by_telegram_id", telegram_id=telegram_id)
-    return await rest.get_user_by_telegram_id(telegram_id)
+    """Retrieve a user by their Telegram ID."""
+    logger.info("Getting user by Telegram ID", telegram_id=telegram_id)
+    # Method was removed from RestClient as it duplicates get_user
+    # Use the private method _get_user instead
+    return await rest._get_user(telegram_id)
 
 
 async def get_assigned_secretary(
