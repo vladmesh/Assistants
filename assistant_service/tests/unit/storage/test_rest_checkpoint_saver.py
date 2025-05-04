@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import json
 from typing import Optional  # Import Optional for type hinting
 from unittest.mock import AsyncMock, MagicMock
 

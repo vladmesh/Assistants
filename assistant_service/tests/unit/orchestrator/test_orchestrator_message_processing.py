@@ -1,12 +1,10 @@
 import json
 import unittest.mock
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 from orchestrator import AssistantOrchestrator
-
-from shared_models import QueueMessage, QueueTrigger
 
 # Mark all tests in this file as asyncio
 pytestmark = pytest.mark.asyncio

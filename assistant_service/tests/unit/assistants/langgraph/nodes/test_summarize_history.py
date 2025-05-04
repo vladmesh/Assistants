@@ -1,14 +1,12 @@
 # assistant_service/tests/unit/assistants/langgraph/nodes/test_summarize_history.py
 import asyncio
 import uuid
-from datetime import datetime, timezone
 from typing import Any, List, Optional
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 # Adjust imports for new structure
-from assistants.langgraph.constants import HISTORY_SUMMARY_NAME
 from assistants.langgraph.nodes.summarize_history import summarize_history_node
 from assistants.langgraph.state import AssistantState
 from langchain_core.callbacks import (
@@ -22,7 +20,6 @@ from langchain_core.messages import (
     HumanMessage,
     RemoveMessage,
     SystemMessage,
-    ToolMessage,
 )
 from langchain_core.outputs import ChatGeneration, ChatResult
 

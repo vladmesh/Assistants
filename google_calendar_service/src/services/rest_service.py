@@ -20,8 +20,6 @@ logger = structlog.get_logger()
 class RestServiceError(Exception):
     """Custom exception for google_calendar_service REST client errors."""
 
-    pass
-
 
 class RestService:
     def __init__(self, settings: Settings):

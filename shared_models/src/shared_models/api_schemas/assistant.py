@@ -1,8 +1,5 @@
-import json
 from typing import List, Optional
 from uuid import UUID
-
-from pydantic import Field, field_validator
 
 # Need enums from models, adjust path if needed
 # from models.assistant import AssistantType, ToolType

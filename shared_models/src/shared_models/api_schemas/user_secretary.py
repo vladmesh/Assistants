@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from .assistant import AssistantRead  # Needed for nested read response
