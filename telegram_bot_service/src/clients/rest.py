@@ -297,6 +297,34 @@ class RestClient:
                 f"API response validation failed for get_user_secretary: {e}"
             ) from e
 
+    async def ping(self) -> bool:
+        """Check if the REST service is healthy."""
+        try:
+            # Use a GET request for the health check endpoint
+            # Assuming _make_request can handle GET and different base paths or needs adjustment
+            # For now, let's construct the URL directly
+            if not self.session:
+                raise RuntimeError("Session not initialized.")
+            async with self.session.get(
+                f"{self.base_url}/health"
+            ) as response:  # Use GET
+                response.raise_for_status()  # Raise for bad status codes (4xx, 5xx)
+                result = await response.json()
+                if isinstance(result, dict) and result.get("status") == "healthy":
+                    logger.debug("REST service ping successful.")
+                    return True
+                else:
+                    logger.warning(
+                        "REST service ping returned unexpected status",
+                        response_content=result,
+                    )
+                    return False
+        except Exception as e:  # Catches aiohttp errors, JSONDecodeError etc.
+            logger.error(
+                "REST service ping failed", error=str(e), exc_info=False
+            )  # Keep log clean
+            return False
+
     async def close(self) -> None:
         """Close the aiohttp session."""
         if self.session:
