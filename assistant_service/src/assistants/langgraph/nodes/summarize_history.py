@@ -28,16 +28,22 @@ def should_summarize(
     state: AssistantState,
     prompt_context_cache: PromptContextCache,
     system_prompt_template: str,
+    max_tokens: int,
 ) -> Literal["summarize", "assistant"]:
     """
     Checks if the total token count (including the anticipated dynamic SystemMessage)
     exceeds the summarization threshold.
+    Uses max_tokens for the context limit check.
     """
     messages = state.get("messages", [])
-    context_limit = state.get("llm_context_size", 8192)
+    context_limit = max_tokens
     log_extra = state.get("log_extra", {})
 
     if not messages or context_limit <= 0:
+        logger.warning(
+            f"[should_summarize] Skipping check: No messages ({len(messages)}) or context_limit <= 0 ({context_limit}).",
+            extra=log_extra,
+        )
         return "assistant"
 
     # --- Estimate Dynamic System Message Tokens ---
@@ -77,7 +83,17 @@ def should_summarize(
 
     ratio = (total_estimated_tokens / context_limit) if context_limit else 0
 
-    decision = "summarize" if ratio >= SUMMARY_THRESHOLD_PERCENT else "assistant"
+    # Определяем порог на основе переданного размера окна
+    # Используем процент от лимита, например, 60%
+    threshold = SUMMARY_THRESHOLD_PERCENT
+
+    decision = "summarize" if ratio >= threshold else "assistant"
+
+    logger.info(
+        f"[should_summarize] Check result: Tokens={total_estimated_tokens}, Limit={context_limit}, Ratio={ratio:.2f}, Threshold={threshold:.2f}, Decision='{decision}'",
+        extra=log_extra,
+    )
+
     return decision
 
 
@@ -178,10 +194,14 @@ def _select_messages(
 
 
 async def summarize_history_node(
-    state: AssistantState, summary_llm: BaseChatModel, rest_client: RestServiceClient
+    state: AssistantState,
+    summary_llm: BaseChatModel,
+    rest_client: RestServiceClient,
+    summarization_prompt: str,
 ) -> Dict[str, Any]:
     """
     Summarizes history, saves the summary via REST API, and returns RemoveMessage instructions.
+    Uses the provided summarization_prompt.
     """
     logger.warning("[summarize_history_node] ENTERED (v2 - DB Save).")
     messages = state.get("messages", [])
@@ -195,186 +215,165 @@ async def summarize_history_node(
     # --- Input Validation ---
     if not messages or context_size <= 0:
         logger.warning(
-            "Prerequisites not met (no messages or context size <= 0), skipping."
+            "Prerequisites not met (no messages or context size <= 0), skipping.",
+            extra=log_extra,
         )
         return {"messages": []}
 
     if not user_id_str or not assistant_id_str:
-        logger.error("Missing user_id or assistant_id in state, cannot save summary.")
-        # Decide how to proceed: skip summarization or raise error? Let's skip.
-        # We still need to return potential deletes if selection happened.
-        return {"messages": []}  # Or potentially return deletes if needed later
+        logger.error(
+            "User ID or Assistant ID not found in state, cannot save summary.",
+            extra=log_extra,
+        )
+        # Proceed with summarization but cannot save. Return empty message list?
+        # Or raise? For now, just return empty to avoid breaking flow, but log error.
+        return {"messages": []}
 
+    user_id_int: Optional[int] = None
     try:
         user_id_int = int(user_id_str)
-        assistant_id_uuid = uuid.UUID(assistant_id_str)
-    except (ValueError, TypeError) as e:
+    except ValueError:
         logger.error(
-            f"Invalid user_id or assistant_id format: {e}. Cannot save summary."
+            f"Invalid User ID format '{user_id_str}', cannot save summary.",
+            extra=log_extra,
         )
-        return {"messages": []}  # Skip
+        return {"messages": []}
 
-    log_extra = {"user_id": user_id_str, "assistant_id": assistant_id_str}
-    # ----------------------
-
-    logger.warning(
-        f"Initial messages count = {len(messages)}, context_size = {context_size}.",
-        extra=log_extra,
-    )
-
-    # Select messages to summarize (returns only head messages and indices to remove)
-    head_msgs, remove_idxs = _select_messages(messages, MESSAGES_TO_KEEP_TAIL)
-
-    # Create delete instructions for ALL head messages identified for removal.
-    initial_deletes = [
-        RemoveMessage(id=messages[i].id)
-        for i in remove_idxs
-        if hasattr(messages[i], "id") and messages[i].id is not None  # Ensure ID exists
-    ]
-    logger.warning(
-        f"Created {len(initial_deletes)} delete instructions for head indices: {remove_idxs}",
-        extra=log_extra,
-    )
-
+    # --- Select messages to summarize ---
+    head_msgs, head_idxs = _select_messages(messages, MESSAGES_TO_KEEP_TAIL)
     if not head_msgs:
-        # If no messages selected to summarize, just return the deletes (which would be empty).
         logger.warning(
-            f"No head msgs to summarize, returning {len(initial_deletes)} deletes.",
-            extra=log_extra,
+            "No messages selected for summarization, exiting node.", extra=log_extra
         )
-        return {"messages": initial_deletes}
+        return {"messages": []}
+    # --- DEBUG: Log ID of first message to be removed ---
+    if head_msgs and hasattr(head_msgs[0], "id"):
+        logger.info(f"[Summarize Node] First message to remove ID: {head_msgs[0].id}")
+    # -----------------------------------------------------
 
-    # --- Get Previous Summary (for prompt generation only) ---
-    prev_summary: Optional[str] = None
-    try:
-        summary_data = await rest_client.get_user_summary(
-            user_id=user_id_int, secretary_id=assistant_id_uuid
-        )
-        if summary_data and hasattr(summary_data, "summary_text"):
-            prev_summary = summary_data.summary_text
-            logger.info("Retrieved previous summary for context.", extra=log_extra)
-        else:
-            logger.info("No previous summary found via REST.", extra=log_extra)
-    except Exception as e:
-        logger.error(
-            f"Failed to retrieve previous summary: {e}", exc_info=True, extra=log_extra
-        )
-        # Continue without previous summary if fetch fails
-
-    # --- Summarization Loop (largely same as before) ---
-    effective_context_limit = int(context_size * CONTEXT_SAFETY_MARGIN_RATIO)
-    logger.warning(
-        f"Effective context limit for summary prompt: {effective_context_limit}",
-        extra=log_extra,
+    # --- Prepare summary request ---
+    prev_summary = state.get("current_summary", "")
+    json_chunk = _make_json_chunk(head_msgs)
+    prompt = _create_prompt_with_template(
+        prev_summary, json_chunk, summarization_prompt
     )
 
-    # Initialize new_summary with the previous one (or None)
-    new_summary = prev_summary if prev_summary is not None else ""
-    chunk: List[BaseMessage] = []
-    iteration = 0
-    last_valid_prompt: Optional[List[BaseMessage]] = None
-    # No need to track processed IDs here, we just save the final summary
-
-    for msg in head_msgs:
-        if not hasattr(msg, "id"):
-            logger.warning(f"Skipping message without ID: {type(msg).__name__}")
-            continue
-        iteration += 1
-
-        potential_chunk = chunk + [msg]
-        potential_chunk_json = _make_json_chunk(potential_chunk)
-        # Use the potentially updated 'new_summary' from the previous iteration for the prompt
-        potential_prompt = _create_prompt(new_summary, potential_chunk_json)
-        prompt_tokens = count_tokens(potential_prompt)
-
-        if prompt_tokens <= effective_context_limit:
-            chunk = potential_chunk
-            last_valid_prompt = potential_prompt
-        else:
-            if last_valid_prompt:
-                response = await _call_llm(
-                    summary_llm, last_valid_prompt, effective_context_limit, 0
-                )
-                if response:
-                    new_summary = (
-                        response  # Update summary for the next prompt generation
-                    )
-                # Start new chunk with the current message
-                chunk = [msg]
-                current_chunk_json = _make_json_chunk(chunk)
-                current_prompt = _create_prompt(
-                    new_summary, current_chunk_json
-                )  # Use latest summary
-                current_tokens = count_tokens(current_prompt)
-                if current_tokens <= effective_context_limit:
-                    last_valid_prompt = current_prompt
-                else:
-                    last_valid_prompt = None  # Even single message doesn't fit
-            else:
-                # No valid prompt to process before this message
-                logger.warning(
-                    f"Message ID {msg.id} exceeds limit, and no previous chunk to process.",
-                    extra=log_extra,
-                )
-                chunk = []  # Reset chunk
-                last_valid_prompt = None
-
-    # --- Process the final remaining chunk ---
-    if last_valid_prompt:
-        logger.warning(
-            f"Processing final chunk (size {len(chunk)}, {count_tokens(last_valid_prompt)} tokens).",
-            extra=log_extra,
-        )
-        response = await _call_llm(
-            summary_llm, last_valid_prompt, effective_context_limit, 0
-        )
-        if response:
-            new_summary = response  # Final summary content
-            logger.warning(
-                f"LLM call for final chunk successful. Final summary length: {len(new_summary)}.",
-                extra=log_extra,
-            )
-        else:
-            logger.warning(
-                "LLM call for final chunk failed. Summary might be incomplete.",
-                extra=log_extra,
-            )
-            # Keep the summary from the previous successful chunk (stored in new_summary)
-
-    # --- Save the final summary via REST API --- #
-    if (
-        new_summary and new_summary != prev_summary
-    ):  # Only save if there's a new/updated summary
+    # --- Call LLM for summarization ---
+    new_summary: Optional[str] = None
+    try:
         logger.info(
-            f"Attempting to save summary (length {len(new_summary)}) via REST...",
+            f"Invoking summary LLM. Prompt length: {len(str(prompt))}", extra=log_extra
+        )
+        # Simple call, no iterative reduction here for now
+        # Consider context limit if summary LLM has one
+        response = await summary_llm.ainvoke(prompt)
+        new_summary = (
+            response.content if hasattr(response, "content") else str(response)
+        )
+        logger.info("Summary LLM call successful.", extra=log_extra)
+    except Exception as e:
+        logger.exception("Error calling summary LLM", exc_info=True, extra=log_extra)
+        # Decide how to proceed: use old summary? skip update?
+        # For now, we'll proceed without updating the summary if LLM fails
+        new_summary = None  # Ensure summary is None if failed
+
+    # --- Save Summary via REST ---
+    remove_instructions: List[BaseMessage] = []
+    if new_summary:
+        logger.info(
+            f"Attempting to save new summary (length {len(new_summary)}) via REST...",
             extra=log_extra,
         )
         try:
-            await rest_client.create_or_update_user_summary(
-                user_id=user_id_int,
-                secretary_id=assistant_id_uuid,
-                summary_text=new_summary,
+            # Make sure assistant_id_str is a valid UUID string
+            assistant_uuid = str(uuid.UUID(assistant_id_str))
+            # Save using user_id_int and assistant_uuid
+            await rest_client.save_summary(user_id_int, assistant_uuid, new_summary)
+            logger.info(
+                f"Successfully saved summary for user {user_id_int}, assistant {assistant_uuid}",
+                extra=log_extra,
             )
-            logger.info("Successfully saved summary via REST.", extra=log_extra)
-            # We rely on the assistant instance polling via needs_summary_refresh flag.
 
-        except Exception as e:
-            logger.error(
-                f"Failed to save summary via REST: {e}", exc_info=True, extra=log_extra
+            # Only generate RemoveMessages if summary was successfully saved
+            remove_instructions = [
+                RemoveMessage(id=messages[idx].id)
+                for idx in head_idxs
+                if hasattr(messages[idx], "id") and messages[idx].id
+            ]
+            logger.info(
+                f"Generated {len(remove_instructions)} RemoveMessage instructions.",
+                extra=log_extra,
             )
-            # Even if save fails, we still need to return the deletes
-    elif not new_summary:
-        logger.warning("No new summary generated.", extra=log_extra)
-    else:  # new_summary == prev_summary
-        logger.info(
-            "Generated summary is identical to the previous one, skipping save.",
+
+        except ValueError as e:
+            logger.error(
+                f"Invalid Assistant ID format '{assistant_id_str}': {e}. Cannot save summary.",
+                extra=log_extra,
+            )
+            # Don't generate remove instructions if we couldn't save
+        except Exception as e:
+            logger.exception(
+                "Error saving summary via REST API", exc_info=True, extra=log_extra
+            )
+            # Don't generate remove instructions if we couldn't save
+    else:
+        logger.warning(
+            "No new summary generated or LLM call failed, skipping REST save and message removal.",
             extra=log_extra,
         )
 
-    # --- Return only the messages to be deleted --- #
-    # DO NOT return the SystemMessage with the summary anymore.
-    logger.warning(
-        f"Summarization node finished. Returning {len(initial_deletes)} RemoveMessage instructions.",
-        extra=log_extra,
-    )
-    return {"messages": initial_deletes}
+    # Return RemoveMessage instructions ONLY if summary was successfully generated AND saved
+    return {"messages": remove_instructions}
+
+
+# Helper function to create prompt using the template
+def _create_prompt_with_template(
+    prev_summary: str, chunk_json: str, template: str
+) -> List[BaseMessage]:
+    """Creates the summarization prompt using a template."""
+    try:
+        content = template.format(
+            previous_summary=prev_summary, message_chunk_json=chunk_json
+        )
+        logger.info(
+            f"Generated summarization prompt using template. Length: {len(content)}"
+        )
+        return [HumanMessage(content=content)]
+    except KeyError as e:
+        logger.error(
+            f"Error formatting summarization prompt template: Missing key {e}",
+            exc_info=True,
+        )
+        # Fallback to a basic prompt if template fails
+        logger.warning(
+            "Falling back to basic summarization prompt due to template error."
+        )
+        fallback_content = (
+            f"Current summary: {prev_summary}\n\n"
+            if prev_summary
+            else "" f"Summarize the following messages:\n```json\n{chunk_json}\n```"
+        )
+        return [HumanMessage(content=fallback_content)]
+    except Exception as e:
+        logger.exception(
+            "Unexpected error creating prompt from template.", exc_info=True
+        )
+        logger.warning(
+            "Falling back to basic summarization prompt due to unexpected error."
+        )
+        fallback_content = (
+            f"Current summary: {prev_summary}\n\n"
+            if prev_summary
+            else "" f"Summarize the following messages:\n```json\n{chunk_json}\n```"
+        )
+        return [HumanMessage(content=fallback_content)]
+
+
+# Keep other helper functions like _make_json_chunk, _select_messages, _call_llm if they are still used/needed.
+# Remove _create_prompt if replaced by _create_prompt_with_template
+# Ensure all necessary imports are present.
+
+# Placeholder for removed _create_prompt to avoid breaking changes if called elsewhere unexpectedly
+# def _create_prompt(prev_summary: str, chunk_json: str) -> List[BaseMessage]:
+#     logger.error("_create_prompt is deprecated. Use _create_prompt_with_template.")
+#     raise NotImplementedError("_create_prompt is deprecated.")

@@ -31,10 +31,12 @@ def ensure_context_limit_node(
     state: AssistantState,
     prompt_context_cache: PromptContextCache,
     system_prompt_template: str,
+    max_tokens: int,
 ) -> Dict[str, Any]:
     """
     Ensures the message history fits within the token limit, considering the
     space needed for the dynamically generated SystemMessage.
+    Uses the provided max_tokens as the context limit.
 
     1. Calculates the available token limit for history.
     2. If history exceeds the limit, removes oldest messages first.
@@ -42,7 +44,7 @@ def ensure_context_limit_node(
     4. Returns RemoveMessage instructions and potentially one updated (truncated) message.
     """
     messages = state.get("messages", [])
-    context_limit = state.get("llm_context_size", 0)
+    context_limit = max_tokens
     log_extra = state.get("log_extra", {})
     safety_margin = 0.95
     effective_limit = int(context_limit * safety_margin) if context_limit > 0 else 0
@@ -136,6 +138,9 @@ def ensure_context_limit_node(
     )
 
     if current_history_tokens <= target_tokens:
+        print(
+            f"[DEBUG] Ensure Limit Node: History token limit not exceeded, no action needed."
+        )
         logger.info(
             "[ensure_limit] History token limit not exceeded, no action needed."
         )
@@ -146,6 +151,7 @@ def ensure_context_limit_node(
     logger.warning(
         f"[ensure_limit] History limit exceeded ({current_history_tokens} > {target_tokens}). Applying removal/truncation."
     )
+    print(f"[DEBUG] Ensure Limit Node: Applying removal/truncation.")
     working = messages.copy()  # Work on a copy
     removed_ids = set()
     updates: List[Any] = []

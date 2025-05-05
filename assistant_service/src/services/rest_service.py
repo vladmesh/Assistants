@@ -18,8 +18,11 @@ from tenacity import (
 # Use schemas from shared_models.api_schemas instead of old models
 from shared_models.api_schemas import (
     AssistantRead,
+    GlobalSettingsRead,
+    GlobalSettingsUpdate,
     ReminderCreate,
     ReminderRead,
+    ReminderUpdate,
     TelegramUserRead,
     ToolRead,
     UserSecretaryLinkRead,
@@ -539,11 +542,51 @@ class RestServiceClient:
                 f"Unexpected error creating/updating summary for user {user_id}, secretary {secretary_id}"
             ) from e
 
+    # --- Global Settings --- #
+
+    async def get_global_settings(self) -> Optional[GlobalSettingsRead]:
+        """Get the global system settings.
+
+        Returns:
+            GlobalSettingsRead object if found, None otherwise.
+
+        Raises:
+            RestServiceError: If the request fails.
+        """
+        data = await self._request("GET", "/api/global-settings/")
+        # Handle case where settings might not exist yet (though API creates defaults)
+        if data:
+            return GlobalSettingsRead(**data)
+        return None  # Should not happen if API works as expected
+
+    async def update_global_settings(
+        self, data: GlobalSettingsUpdate
+    ) -> Optional[GlobalSettingsRead]:
+        """Update the global system settings.
+
+        Args:
+            data: GlobalSettingsUpdate object with fields to update.
+
+        Returns:
+            Updated GlobalSettingsRead object.
+
+        Raises:
+            RestServiceError: If the request fails.
+        """
+        updated_data = await self._request(
+            "PUT",
+            "/api/global-settings/",
+            json=data.model_dump(
+                exclude_unset=True
+            ),  # Use model_dump and exclude_unset
+        )
+        if updated_data:
+            return GlobalSettingsRead(**updated_data)
+        return None  # Should indicate an error if PUT succeeded but returned nothing
+
     async def close_session(self):
-        """Closes the underlying HTTPX client session."""
-        if hasattr(self, "_client") and self._client and not self._client.is_closed:
-            await self._client.aclose()
-            logger.info("RestServiceClient HTTP session closed.")
+        """Alias for close to maintain compatibility if needed"""
+        await self.close()
 
     async def __aenter__(self):
         return self
