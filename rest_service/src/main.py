@@ -15,6 +15,7 @@ from routers import user_facts  # Add user_facts
 from routers import (  # user_secretary_links, # Removed non-existent router
     assistants,
     calendar,
+    global_settings,
     reminders,
     tools,
     user_summaries,
@@ -80,7 +81,7 @@ app.include_router(
     user_facts.router, prefix="/api", tags=["User Facts"]
 )  # Add user_facts router
 app.include_router(user_summaries.router, prefix="/api", tags=["User Summaries"])
-# app.include_router(user_secretary_links.router, prefix="/api") # Removed non-existent router
+app.include_router(global_settings.router, prefix="/api", tags=["Global Settings"])
 app.include_router(checkpoints.router, prefix="/api")
 
 

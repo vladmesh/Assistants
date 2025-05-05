@@ -20,6 +20,11 @@ from .calendar import (
     delete_credentials as delete_calendar_credentials,  # Renamed/Aliased
 )
 from .calendar import get_credentials as get_calendar_credentials  # Renamed/Aliased
+from .global_settings import (  # noqa: F401
+    create_default_global_settings,
+    get_global_settings,
+    upsert_global_settings,
+)
 from .reminder import (  # noqa: F401; Renamed/Aliased
     get_user_reminders as get_reminders_by_user,
 )
@@ -58,4 +63,5 @@ __all__ = [
     "user_fact",
     "user_secretary",
     "user_summary",
+    "global_settings",
 ]
