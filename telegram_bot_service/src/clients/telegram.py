@@ -64,7 +64,11 @@ class TelegramClient:
         return await self._make_request("sendMessage", json=payload)
 
     async def send_message_with_inline_keyboard(
-        self, chat_id: int, text: str, keyboard: List[List[Dict[str, str]]]
+        self,
+        chat_id: int,
+        text: str,
+        keyboard: List[List[Dict[str, str]]],
+        parse_mode: Optional[str] = None,
     ) -> None:
         """Send message with inline keyboard."""
         url = f"{self.base_url}/sendMessage"
@@ -73,6 +77,9 @@ class TelegramClient:
             "text": text,
             "reply_markup": json.dumps({"inline_keyboard": keyboard}),
         }
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+
         try:
             async with self.session.post(url, json=payload) as response:
                 response.raise_for_status()

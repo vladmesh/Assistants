@@ -6,14 +6,16 @@ import structlog
 from clients.rest import RestClient, RestClientError
 from clients.telegram import TelegramClient
 
-# Импортируем фабрику клавиатур (будет создана позже)
-from keyboards.secretary_selection import create_secretary_selection_keyboard
-
 # Используем user_service
 from services import user_service
 
 # Import shared models if needed for type hints (AssistantRead?)
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
+
+# Импортируем фабрику клавиатур (будет создана позже)
+# from keyboards.secretary_selection import create_secretary_selection_keyboard # No longer needed here
+
+
 
 logger = structlog.get_logger()
 
@@ -73,44 +75,22 @@ async def handle_start(**context: Any) -> None:
 
         user_id = user.id  # Internal UUID
 
-        # 2. Fetch available secretaries from REST service
-        secretaries: List[AssistantRead] = []
-        try:
-            secretaries = await user_service.list_available_secretaries(rest)
-        except RestClientError as e:
-            logger.error(
-                "REST Client Error listing secretaries during /start",
+        # 2. Prompt user to select secretary using the new service function
+        prompt = "👋 Привет! Пожалуйста, выбери своего секретаря:"
+        success = await user_service.prompt_secretary_selection(
+            telegram=telegram,
+            rest=rest,
+            chat_id=chat_id,
+            prompt_message=prompt,
+            user_id_for_log=user_id,  # Pass user UUID for logging
+        )
+
+        if success:
+            logger.info(
+                "Secretary selection prompt initiated successfully for /start",
                 user_id=user_id,
-                error=str(e),
             )
-            await telegram.send_message(
-                chat_id,
-                "Не удалось загрузить список секретарей. Попробуйте /start позже.",
-            )
-            return  # Stop processing
-
-        if not secretaries:
-            logger.warning(
-                "No secretaries found in REST service (empty list).", user_id=user_id
-            )
-            await telegram.send_message(
-                chat_id,
-                "К сожалению, сейчас нет доступных секретарей. Попробуйте позже.",
-            )
-            return
-
-        # 3. Create inline keyboard using the factory
-        keyboard_buttons = create_secretary_selection_keyboard(secretaries)
-
-        # 4. Send message with inline keyboard
-        message_text = "👋 Привет! Пожалуйста, выбери своего секретаря:"
-        await telegram.send_message_with_inline_keyboard(
-            chat_id=chat_id, text=message_text, keyboard=keyboard_buttons
-        )
-
-        logger.info(
-            "Secretaries list sent to user", user_id=user_id, count=len(secretaries)
-        )
+        # else: The prompt function already logs errors and notifies the user
 
     except Exception as e:  # Catch any other unexpected errors during the process
         logger.error(
