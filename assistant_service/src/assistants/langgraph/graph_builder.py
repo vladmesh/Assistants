@@ -56,6 +56,8 @@ def build_full_graph(
     prompt_context_cache: PromptContextCache,  # NEW: Pass shared cache
     system_prompt_template: str,
     agent_runnable: Runnable,
+    summarization_prompt: str,
+    context_window_size: int,
     timeout: int = 30,
 ) -> CompiledGraph:
     """Builds the complete LangGraph state machine (v2.5 - shared cache for token checks).
@@ -65,6 +67,11 @@ def build_full_graph(
     - GUARANTEED context limit enforcement (uses shared cache for token check)
     - Main agent loop (LLM call + Tool execution)
     """
+    logger.debug(
+        f"Building graph with: tools={len(tools)}, "
+        f"context_window={context_window_size}, "
+        f"summary_prompt_len={len(summarization_prompt)}"
+    )
     builder = StateGraph(AssistantState)
 
     # --- Nodes --- #
@@ -72,7 +79,10 @@ def build_full_graph(
     # 1. summarize: Node to summarize history and save via REST
     # Still needs summary_llm and rest_client
     bound_summarize_node = functools.partial(
-        summarize_history_node, summary_llm=summary_llm, rest_client=rest_client
+        summarize_history_node,
+        summary_llm=summary_llm,
+        rest_client=rest_client,
+        summarization_prompt=summarization_prompt,
     )
     builder.add_node("summarize", bound_summarize_node)
 
@@ -82,6 +92,7 @@ def build_full_graph(
         ensure_context_limit_node,
         prompt_context_cache=prompt_context_cache,
         system_prompt_template=system_prompt_template,
+        max_tokens=context_window_size,
     )
     builder.add_node("ensure_limit", bound_ensure_limit_node)
 
@@ -101,8 +112,8 @@ def build_full_graph(
     bound_should_summarize_condition = functools.partial(
         should_summarize,
         prompt_context_cache=prompt_context_cache,
-        system_prompt_template=system_prompt_template
-        # Note: rest_client is NOT needed here if cache is used for check
+        system_prompt_template=system_prompt_template,
+        max_tokens=context_window_size,
     )
     # --------------------------------------------------- #
 

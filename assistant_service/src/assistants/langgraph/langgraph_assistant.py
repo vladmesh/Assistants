@@ -63,6 +63,8 @@ class LangGraphAssistant(BaseAssistant):
         user_id: str,  # Receive user_id
         checkpointer: BaseCheckpointSaver,  # Require checkpointer
         rest_client: RestServiceClient,  # Add rest_client parameter
+        summarization_prompt: str,
+        context_window_size: int,
         **kwargs,
     ):
         """
@@ -78,6 +80,8 @@ class LangGraphAssistant(BaseAssistant):
             user_id: The ID of the user associated with this assistant instance.
             checkpointer: Checkpointer instance for state persistence.
             rest_client: REST Service client instance.
+            summarization_prompt: Prompt for summarizing conversation history.
+            context_window_size: Maximum token limit for the context window.
             **kwargs: Additional keyword arguments.
         """
         raw_tool_definitions = config.get(
@@ -101,6 +105,11 @@ class LangGraphAssistant(BaseAssistant):
         self.prompt_context_cache = PromptContextCache()
         # Initial flags are True by default in the cache object
         # ------------------------------- #
+
+        # --- Initialize New Parameters --- #
+        self.summarization_prompt = summarization_prompt
+        self.context_window_size = context_window_size
+        # --------------------------------- #
 
         try:
             # 1. Initialize LLM
@@ -126,6 +135,8 @@ class LangGraphAssistant(BaseAssistant):
                 system_prompt_template=self.system_prompt_template,  # Pass template
                 agent_runnable=self.agent_runnable,
                 timeout=self.timeout,
+                summarization_prompt=self.summarization_prompt,
+                context_window_size=self.context_window_size,
             )
 
             logger.info(
