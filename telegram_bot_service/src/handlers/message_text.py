@@ -6,14 +6,16 @@ import structlog
 from clients.rest import RestClient, RestClientError
 from clients.telegram import TelegramClient
 
-# Импортируем фабрику клавиатур (уже используется в command_start)
-from keyboards.secretary_selection import create_secretary_selection_keyboard
-
 # Используем user_service
 from services import message_queue, user_service
 
 # Import shared models
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
+
+# Импортируем фабрику клавиатур (уже используется в command_start)
+# from keyboards.secretary_selection import create_secretary_selection_keyboard # No longer needed here
+
+
 
 logger = structlog.get_logger()
 
@@ -102,44 +104,27 @@ async def handle_text_message(**context: Any) -> None:
             return
 
         if not assigned_secretary:
-            # Secretary not assigned (404 from REST client), prompt choice completion
+            # Secretary not assigned, prompt choice using the new service function
             logger.info(
                 "User exists but no secretary assigned, prompting choice",
                 user_id=user_id,
             )
-            secretaries: List[AssistantRead] = []
-            try:
-                # Вызов user_service
-                secretaries = await user_service.list_available_secretaries(rest)
-            except RestClientError as e:
-                logger.error(
-                    "REST Client Error listing secretaries for re-prompt",
-                    user_id=user_id,
-                    error=str(e),
-                )
-                await telegram.send_message(
-                    chat_id,
-                    "Не удалось загрузить список секретарей. Попробуйте /start позже.",
-                )
-                return
+            prompt = (
+                "Похоже, у тебя еще не выбран секретарь. Пожалуйста, выбери одного:"
+            )
+            success = await user_service.prompt_secretary_selection(
+                telegram=telegram,
+                rest=rest,
+                chat_id=chat_id,
+                prompt_message=prompt,
+                user_id_for_log=user_id,
+            )
 
-            if secretaries:
-                keyboard_buttons = create_secretary_selection_keyboard(secretaries)
-                message_text = (
-                    "Похоже, у тебя еще не выбран секретарь. Пожалуйста, выбери одного:"
-                )
-                await telegram.send_message_with_inline_keyboard(
-                    chat_id=chat_id, text=message_text, keyboard=keyboard_buttons
-                )
-            else:
-                logger.warning(
-                    "Secretaries list is empty, cannot re-prompt user", user_id=user_id
-                )
-                await telegram.send_message(
-                    chat_id,
-                    "Нет доступных секретарей для выбора. Попробуйте /start позже.",
-                )
-            return  # Stop processing the original message
+            # No need for explicit success/failure handling here, as the function handles logs/user messages
+            # We just need to stop processing the original text message if a prompt was needed.
+            # The prompt_secretary_selection function returns False if it fails or if there are no secretaries,
+            # but in either case, we should just return here.
+            return  # Stop processing the original message regardless of prompt success/failure
 
         # 3. User exists and secretary is assigned, send message to queue
         logger.info(
