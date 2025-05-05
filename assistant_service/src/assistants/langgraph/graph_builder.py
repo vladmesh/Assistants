@@ -88,13 +88,13 @@ def build_full_graph(
 
     # 2. ensure_limit: Node to enforce token limits via truncation if needed
     # NEW: Pass cache and template for accurate token calculation
-    bound_ensure_limit_node = functools.partial(
-        ensure_context_limit_node,
-        prompt_context_cache=prompt_context_cache,
-        system_prompt_template=system_prompt_template,
-        max_tokens=context_window_size,
-    )
-    builder.add_node("ensure_limit", bound_ensure_limit_node)
+    # bound_ensure_limit_node = functools.partial(
+    #     ensure_context_limit_node,
+    #     prompt_context_cache=prompt_context_cache,
+    #     system_prompt_template=system_prompt_template,
+    #     max_tokens=context_window_size,
+    # )
+    # builder.add_node("ensure_limit", bound_ensure_limit_node)
 
     # 3. run_assistant: The core node running the agent logic (LLM call)
     bound_run_assistant_node = functools.partial(
@@ -122,13 +122,13 @@ def build_full_graph(
         bound_should_summarize_condition,  # Use bound condition function
         {
             "summarize": "summarize",
-            "assistant": "ensure_limit",
+            "assistant": "assistant",
         },
     )
 
-    builder.add_edge("summarize", "ensure_limit")
+    builder.add_edge("summarize", "assistant")
 
-    builder.add_edge("ensure_limit", "assistant")
+    # builder.add_edge("ensure_limit", "assistant")
 
     builder.add_conditional_edges(
         "assistant",
@@ -141,7 +141,7 @@ def build_full_graph(
         bound_should_summarize_condition,  # Use bound condition function again
         {
             "summarize": "summarize",
-            "assistant": "ensure_limit",
+            "assistant": "assistant",
         },
     )
 

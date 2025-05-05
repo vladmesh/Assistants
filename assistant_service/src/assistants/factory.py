@@ -11,9 +11,7 @@ from assistants.langgraph.langgraph_assistant import LangGraphAssistant
 # Project imports
 from config.logger import get_logger
 from config.settings import Settings
-
-# from storage.rest_checkpoint_saver import RestCheckpointSaver # Already commented/removed
-# from langgraph_checkpoint_redis import AsyncRedisSaver # Incorrect import
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.redis.ashallow import (  # Correct import for shallow async saver
     AsyncShallowRedisSaver,
 )
@@ -78,6 +76,7 @@ class AssistantFactory:
         self.checkpointer = AsyncShallowRedisSaver(
             redis_client=self.redis_client_for_checkpoint
         )
+        # self.checkpointer = MemorySaver()
         logger.info(f"Instantiated checkpointer: {type(self.checkpointer).__name__}")
 
         # 3. Set the serializer
