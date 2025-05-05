@@ -180,6 +180,8 @@ async def assistant_instance(
         user_id=assistant_user_id,
         checkpointer=mock_checkpointer,
         rest_client=mock_rest_client,
+        summarization_prompt="",
+        context_window_size=1000,
     )
     # Ensure the LLM instance used is the mock
     assert isinstance(instance.llm, MockChatLLM)
