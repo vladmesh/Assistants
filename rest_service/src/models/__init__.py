@@ -9,6 +9,7 @@ from .assistant import (
 from .base import BaseModel
 from .calendar import CalendarCredentials
 from .checkpoint import Checkpoint
+from .global_settings import GlobalSettings
 
 # from .cron import (
 #     CronJob,
@@ -40,4 +41,5 @@ __all__ = [
     "ReminderStatus",
     "UserSummary",
     "UserFact",
+    "GlobalSettings",
 ]
