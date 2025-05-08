@@ -23,7 +23,8 @@ router = APIRouter()
 async def list_secretaries(session: AsyncSession = Depends(get_session)):
     """Получить список всех доступных секретарей"""
     query = select(Assistant).where(Assistant.is_secretary.is_(True))
-    secretaries = (await session.exec(query)).all()
+    result = await session.execute(query)
+    secretaries = result.scalars().all()
     return secretaries
 
 
@@ -131,7 +132,8 @@ async def list_active_user_secretary_assignments(
 ) -> List[UserSecretaryLink]:
     """Получить список всех активных назначений секретарей пользователям."""
     query = select(UserSecretaryLink).where(UserSecretaryLink.is_active.is_(True))
-    active_links = (await session.exec(query)).all()
+    result = await session.execute(query)
+    active_links = result.scalars().all()
     # FastAPI will automatically convert these ORM models to the UserSecretaryLinkRead response model
     # because of from_attributes=True in the schema's config
     return active_links
@@ -165,6 +167,7 @@ async def list_all_secretary_assignments(
         query = query.where(UserSecretaryLink.is_active == is_active)
 
     query = query.offset(skip).limit(limit)
-    assignments = (await session.exec(query)).all()
+    result = await session.execute(query)
+    assignments = result.scalars().all()
     logger.info(f"Found {len(assignments)} assignments")
     return assignments
