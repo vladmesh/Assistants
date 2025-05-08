@@ -16,6 +16,7 @@ from routers import (  # user_secretary_links, # Removed non-existent router
     assistants,
     calendar,
     global_settings,
+    messages,  # Добавлен импорт messages
     reminders,
     tools,
     user_summaries,
@@ -81,6 +82,7 @@ app.include_router(
     user_facts.router, prefix="/api", tags=["User Facts"]
 )  # Add user_facts router
 app.include_router(user_summaries.router, prefix="/api", tags=["User Summaries"])
+app.include_router(messages.router, prefix="/api", tags=["Messages"])  # Добавлен префикс "/api"
 app.include_router(global_settings.router, prefix="/api", tags=["Global Settings"])
 app.include_router(checkpoints.router, prefix="/api")
 

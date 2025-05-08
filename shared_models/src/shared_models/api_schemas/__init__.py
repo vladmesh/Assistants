@@ -26,6 +26,7 @@ from .global_settings import (
     GlobalSettingsRead,
     GlobalSettingsUpdate,
 )
+from .message import MessageBase, MessageCreate, MessageRead, MessageUpdate
 from .reminder import ReminderBase, ReminderCreate, ReminderRead, ReminderUpdate
 from .user import TelegramUserCreate, TelegramUserRead, TelegramUserUpdate
 from .user_fact import UserFactBase, UserFactCreate, UserFactRead
@@ -86,4 +87,9 @@ __all__ = [
     "GlobalSettingsBase",
     "GlobalSettingsRead",
     "GlobalSettingsUpdate",
+    # Message
+    "MessageBase",
+    "MessageCreate",
+    "MessageRead",
+    "MessageUpdate",
 ]
