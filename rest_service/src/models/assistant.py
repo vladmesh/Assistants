@@ -11,6 +11,7 @@ from shared_models.enums import AssistantType, ToolType
 from .base import BaseModel
 
 if TYPE_CHECKING:
+    from .message import Message
     from .reminder import Reminder
     from .user_secretary import UserSecretaryLink
     from .user_summary import UserSummary
@@ -61,13 +62,14 @@ class Assistant(BaseModel, table=True):
     user_links: List["UserSecretaryLink"] = Relationship(
         back_populates="secretary", sa_relationship_kwargs={"lazy": "selectin"}
     )
-    user_summaries: List["UserSummary"] = Relationship(back_populates="secretary")
+    user_summaries: List["UserSummary"] = Relationship(back_populates="assistant")
     reminders: List["Reminder"] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "[Reminder.assistant_id]",
             "cascade": "all, delete-orphan",
         }
     )
+    messages: List["Message"] = Relationship(back_populates="assistant")
 
     def validate_type(self) -> None:
         """Проверяет корректность типа ассистента"""
