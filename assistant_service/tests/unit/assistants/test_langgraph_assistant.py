@@ -178,7 +178,6 @@ async def assistant_instance(
         config=assistant_config,
         tools=created_tools,  # Use tools from mocked factory
         user_id=assistant_user_id,
-        checkpointer=mock_checkpointer,
         rest_client=mock_rest_client,
         summarization_prompt="",
         context_window_size=1000,
@@ -202,7 +201,6 @@ async def test_initialization(assistant_instance: LangGraphAssistant):
     assert instance.tools is not None
     assert len(instance.tools) > 0  # Check tools are present
     assert instance.compiled_graph is not None
-    assert instance.checkpointer is not None
     assert instance.user_id is not None
     assert instance.assistant_id is not None
     assert instance.rest_client is not None
@@ -230,7 +228,6 @@ async def test_process_message_stateful_memory(assistant_instance: LangGraphAssi
     """Test if the assistant remembers context across messages using the checkpointer."""
     instance = await assistant_instance
     user_id = instance.user_id
-    config = {"configurable": {"thread_id": user_id}}
 
     # Arrange: First message
     first_message = HumanMessage(content="My favorite color is blue.")
@@ -247,14 +244,7 @@ async def test_process_message_stateful_memory(assistant_instance: LangGraphAssi
     assert response2 is not None
     assert "Async mock reply to: What is my favorite color?" in response2
 
-    # Verify state was saved and loaded (using MemorySaver)
-    saved_state = instance.checkpointer.get(config)
-    assert saved_state is not None
-    assert len(saved_state.get("channel_values", {}).get("messages", [])) > 2
-    assert any(
-        isinstance(msg, HumanMessage) and msg.content == "My favorite color is blue."
-        for msg in saved_state.get("channel_values", {}).get("messages", [])
-    )
+    # Note: Checkpointing verification removed as we don't use checkpointers anymore
 
 
 # TODO: Add tests for tool usage within the graph

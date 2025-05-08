@@ -4,17 +4,12 @@ from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 import httpx  # Add httpx import
-import redis.asyncio as aioredis  # Ensure aioredis is imported
 from assistants.base_assistant import BaseAssistant
 from assistants.langgraph.langgraph_assistant import LangGraphAssistant
 
 # Project imports
 from config.logger import get_logger
 from config.settings import Settings
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.redis.ashallow import (  # Correct import for shallow async saver
-    AsyncShallowRedisSaver,
-)
 
 # Import the recommended serializer
 from services.rest_service import RestServiceClient
@@ -34,7 +29,7 @@ logger = get_logger(__name__)
 
 class AssistantFactory:
     def __init__(self, settings: Settings):
-        """Initialize the factory with settings, REST client, and Redis checkpointer"""
+        """Initialize the factory with settings and REST client"""
         self.settings = settings
         self.rest_client = RestServiceClient()
         # Cache for user_id -> (secretary_id, assignment_updated_at)
@@ -64,35 +59,9 @@ class AssistantFactory:
         self.logger = get_logger(__name__)
         # -----------------------------
 
-        # --- START CHECKPOINTER INIT ---
-        # 1. Create Redis client for the checkpointer
-        redis_url = (
-            f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
-        )
-        self.redis_client_for_checkpoint = aioredis.from_url(redis_url)
-        logger.info("Created dedicated Redis client for checkpointer.")
-
-        # 2. Instantiate AsyncShallowRedisSaver directly with the client
-        self.checkpointer = AsyncShallowRedisSaver(
-            redis_client=self.redis_client_for_checkpoint
-        )
-        # self.checkpointer = MemorySaver()
-        logger.info(f"Instantiated checkpointer: {type(self.checkpointer).__name__}")
-
-        # 3. Set the serializer
-        # self.checkpointer.serde = JsonPlusSerializer()
-        logger.info(
-            f"Set serializer for checkpointer: {type(self.checkpointer.serde).__name__}"
-        )
-        # --- END CHECKPOINTER INIT ---
-
         # Initialize ToolFactory, passing self (the AssistantFactory instance)
         self.tool_factory = ToolFactory(settings=settings, assistant_factory=self)
-        logger.info(
-            f"AssistantFactory initialized with checkpointer: {type(self.checkpointer).__name__}"
-            f" and ToolFactory"
-        )
-        # Note: Consider calling await self.checkpointer.asetup() during app startup
+        logger.info("AssistantFactory initialized with ToolFactory")
 
     async def close(self):
         """Close REST client, checkpointer Redis client, and assistant instances"""
@@ -102,21 +71,6 @@ class AssistantFactory:
             logger.info("Closed main REST service client.")
         except Exception as e:
             logger.warning(f"Error closing main REST service client: {e}")
-
-        # --- START ADDING CLOSE LOGIC ---
-        # Close the dedicated Redis client for the checkpointer
-        if (
-            hasattr(self, "redis_client_for_checkpoint")
-            and self.redis_client_for_checkpoint
-        ):
-            try:
-                await self.redis_client_for_checkpoint.aclose()
-                logger.info("Closed dedicated Redis client for checkpointer.")
-            except Exception as e:
-                logger.warning(
-                    f"Error closing dedicated Redis client for checkpointer: {e}"
-                )
-        # --- END ADDING CLOSE LOGIC ---
 
         # Close all assistant instances from the correct cache
         async with self._cache_lock:  # Ensure thread-safe access during iteration
@@ -144,6 +98,16 @@ class AssistantFactory:
             self._assistant_cache.clear()
             self._secretary_assignments.clear()  # Clear assignments cache too
         logger.info("AssistantFactory closed REST client and cleared caches.")
+
+    async def get_global_settings(self) -> GlobalSettingsBase:
+        """
+        Публичный метод для получения глобальных настроек.
+        Будет использоваться Orchestrator для получения настроек при создании AssistantState.
+
+        Returns:
+            GlobalSettingsBase: объект с глобальными настройками
+        """
+        return await self._get_cached_global_settings()
 
     async def _get_cached_global_settings(self) -> GlobalSettingsBase:
         """Fetches global settings from REST or cache, returning defaults on failure."""
@@ -211,57 +175,6 @@ class AssistantFactory:
                 "Returning default global settings due to unexpected error and empty cache."
             )
             return self._default_settings
-
-    async def setup_checkpointer(self):
-        """Initializes the checkpointer by calling its setup method if available."""
-        # Check if the checkpointer has the 'asetup' method (for async setup)
-        if hasattr(self.checkpointer, "asetup") and asyncio.iscoroutinefunction(
-            getattr(self.checkpointer, "asetup")
-        ):
-            logger.info(
-                f"Attempting to setup checkpointer indices for {type(self.checkpointer).__name__}..."
-            )
-            try:
-                # Call the asynchronous setup method
-                await self.checkpointer.asetup()
-                logger.info(
-                    f"Checkpointer {type(self.checkpointer).__name__} setup complete."
-                )
-            except Exception as e:
-                # Log detailed error if setup fails
-                logger.exception(
-                    f"Failed to setup checkpointer {type(self.checkpointer).__name__}",
-                    error=str(e),
-                    exc_info=True,
-                )
-                # Depending on requirements, you might want to raise the error
-                # or handle it gracefully (e.g., allow app to continue with warnings)
-                # raise  # Uncomment to make setup failure critical
-        # Check if the checkpointer has the 'setup' method (for sync setup)
-        elif hasattr(self.checkpointer, "setup") and not asyncio.iscoroutinefunction(
-            getattr(self.checkpointer, "setup")
-        ):
-            logger.info(
-                f"Attempting to setup checkpointer indices for {type(self.checkpointer).__name__} (sync)..."
-            )
-            try:
-                # Call the synchronous setup method
-                self.checkpointer.setup()
-                logger.info(
-                    f"Checkpointer {type(self.checkpointer).__name__} setup complete (sync)."
-                )
-            except Exception as e:
-                logger.exception(
-                    f"Failed to setup checkpointer {type(self.checkpointer).__name__} (sync)",
-                    error=str(e),
-                    exc_info=True,
-                )
-                # raise # Uncomment if sync setup failure should be critical
-        else:
-            # Log if no setup method is found (might be okay for some checkpointers)
-            logger.warning(
-                f"Checkpointer {type(self.checkpointer).__name__} does not have a recognized setup method (asetup/setup)."
-            )
 
     async def get_user_secretary(self, user_id: int) -> BaseAssistant:
         """Get secretary assistant for user using the cached assignments.
@@ -434,7 +347,6 @@ class AssistantFactory:
                     config=config_for_assistant,  # Pass the prepared dict
                     tools=created_tools,
                     user_id=user_id,
-                    checkpointer=self.checkpointer,
                     rest_client=self.rest_client,
                     # ---> Передаем новые глобальные настройки <---
                     summarization_prompt=global_settings.summarization_prompt,
