@@ -19,13 +19,12 @@ from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
 
 # LangGraph components
-from langgraph.checkpoint.base import (  # Import needed for checkpointer
-    BaseCheckpointSaver,
-)
 from langgraph.graph.state import CompiledGraph
 from langgraph.prebuilt import create_react_agent  # Import create_react_agent
 from services.rest_service import RestServiceClient  # Import RestServiceClient
 from utils.error_handler import AssistantError, MessageProcessingError
+
+from shared_models.api_schemas.message import MessageCreate, MessageRead
 
 # Import the specific schema needed
 from shared_models.api_schemas.user_fact import UserFactRead
@@ -38,7 +37,7 @@ logger = logging.getLogger(__name__)
 class LangGraphAssistant(BaseAssistant):
     """
     Assistant implementation using LangGraph with a custom graph structure
-    similar to the old BaseLLMChat, supporting checkpointing for memory.
+    similar to the old BaseLLMChat, supporting database-based message storage.
     Handles fact caching internally.
     """
 
@@ -46,7 +45,6 @@ class LangGraphAssistant(BaseAssistant):
     agent_runnable: Any
     tools: List[Tool]
     rest_client: RestServiceClient
-    checkpointer: BaseCheckpointSaver
     llm: ChatOpenAI
 
     # --- NEW: Shared Cache Object and Template --- #
@@ -61,14 +59,13 @@ class LangGraphAssistant(BaseAssistant):
         config: Dict,
         tools: List[Tool],  # Receive initialized tools
         user_id: str,  # Receive user_id
-        checkpointer: BaseCheckpointSaver,  # Require checkpointer
         rest_client: RestServiceClient,  # Add rest_client parameter
         summarization_prompt: str,
         context_window_size: int,
         **kwargs,
     ):
         """
-        Initializes the LangGraphAssistant with pre-initialized tools and checkpointing.
+        Initializes the LangGraphAssistant with pre-initialized tools.
 
         Args:
             assistant_id: Unique identifier for the assistant instance.
@@ -78,7 +75,6 @@ class LangGraphAssistant(BaseAssistant):
                                    'system_prompt', 'timeout' (optional, default 60).
             tools: List of initialized Langchain Tool instances.
             user_id: The ID of the user associated with this assistant instance.
-            checkpointer: Checkpointer instance for state persistence.
             rest_client: REST Service client instance.
             summarization_prompt: Prompt for summarizing conversation history.
             context_window_size: Maximum token limit for the context window.
@@ -92,7 +88,6 @@ class LangGraphAssistant(BaseAssistant):
         # Store pre-initialized tools and user_id
         self.tools = tools
         self.user_id = user_id  # Store user_id if needed by other methods
-        self.checkpointer = checkpointer
         self.rest_client = rest_client  # Store the rest_client
         self.timeout = self.config.get("timeout", 60)  # Default timeout 60 seconds
         self.system_prompt_template = self.config[
@@ -128,7 +123,6 @@ class LangGraphAssistant(BaseAssistant):
             # 4. Build and compile the full graph
             self.compiled_graph = build_full_graph(
                 tools=self.tools,
-                checkpointer=self.checkpointer,
                 summary_llm=self.llm,  # Summary LLM still needed for summary node logic
                 rest_client=self.rest_client,  # REST client needed for summary node SAVE logic
                 prompt_context_cache=self.prompt_context_cache,  # Pass cache object
@@ -442,15 +436,24 @@ class LangGraphAssistant(BaseAssistant):
         message: BaseMessage,
         user_id: str,
         log_extra: Optional[Dict[str, Any]] = None,
-    ) -> str:
-        """Processes a single message using the compiled LangGraph graph."""
+    ) -> Optional[str]:
+        """Processes a single message using the compiled LangGraph graph.
+
+        Args:
+            message: The incoming message from the user or system.
+            user_id: User ID as string.
+            log_extra: Additional logging context.
+
+        Returns:
+            Optional[str]: Response string or None if no response needed.
+        """
         if self.user_id != user_id:
             logger.error(
                 f"Mismatch user_id: assistant instance for {self.user_id} received message for {user_id}"
             )
             raise ValueError("User ID mismatch")
 
-        # Prepare log context
+        # Common logging context
         combined_log_extra = {
             "assistant_id": self.assistant_id,
             "user_id": self.user_id,
@@ -458,78 +461,91 @@ class LangGraphAssistant(BaseAssistant):
         if log_extra:
             combined_log_extra.update(log_extra)
 
-        # Log based on the incoming message type
-        log_message_type = type(message).__name__
-        logger.info(
-            f"Processing message: {log_message_type} for user {user_id}",
-            extra=combined_log_extra,
-        )
-
-        # Prepare thread config for the specific user
-        thread_config = {"configurable": {"thread_id": self.user_id}}
-
-        # Initial state dictionary construction - remove triggered_event
-        initial_state: Dict[str, Any] = {
-            "user_id": self.user_id,
-            "llm_context_size": self.max_tokens,
-            "log_extra": combined_log_extra,  # Pass combined log context
-        }
-
-        # Input for the graph is now just the single incoming message
-        input_messages = [message]
+        # Получение глобальных настроек для создания AssistantState
+        global_settings = await self.rest_client.get_global_settings()
 
         try:
-            final_state = None
-            # Pass only messages and the simplified initial_state
-            final_state = await self.compiled_graph.ainvoke(
-                input={"messages": input_messages, **initial_state},
-                config=thread_config,
+            # Формируем AssistantState для графа
+            initial_state = AssistantState(
+                messages=[message],  # Входящее сообщение
+                user_id=user_id,
+                assistant_id=self.assistant_id,
+                llm_context_size=self.max_tokens,
+                triggered_event=None,  # Если это обычное сообщение, а не триггер
+                log_extra=combined_log_extra,
+                initial_message_id=None,  # ID сообщения будет установлен узлом save_input_message_node
+                current_summary_content=None,  # Будет загружено графом
+                newly_summarized_message_ids=None,
+                user_facts=None,  # Будет загружено графом
             )
 
-            if not final_state or "messages" not in final_state:
-                raise MessageProcessingError(
-                    "Graph execution finished but final state is missing or invalid.",
-                    self.name,
+            # Запускаем граф
+            try:
+                final_state = await self.compiled_graph.ainvoke(
+                    input=dict(initial_state),
+                    config=None,  # Чекпоинтер больше не используется
                 )
 
-            final_messages = final_state["messages"]
+                if not final_state or "messages" not in final_state:
+                    raise MessageProcessingError(
+                        "Graph execution finished but final state is missing or invalid.",
+                        self.name,
+                    )
 
-            # Extract the last message as the response
-            last_message = final_messages[-1]
-            if isinstance(last_message, AIMessage):
-                response_content = last_message.content
-                logger.info(
-                    f"Successfully processed message. Response: {response_content[:100]}...",
+                # Извлекаем ответ из финального состояния
+                ai_response = None
+                final_messages = final_state["messages"]
+
+                # Extract the last message as the response
+                if final_messages:
+                    last_message = final_messages[-1]
+                    if isinstance(last_message, AIMessage):
+                        ai_response = last_message.content
+                        logger.info(
+                            f"Successfully processed message. Response: {ai_response[:100]}...",
+                            extra=combined_log_extra,
+                        )
+                    elif isinstance(last_message, ToolMessage):
+                        logger.info(
+                            "Processing finished with a ToolMessage (likely from fact save/reminder trigger processing). No response sent to user.",
+                            extra=combined_log_extra,
+                        )
+
+                return ai_response
+
+            except Exception as e:
+                # В случае ошибки во время выполнения графа, обновляем статус сообщения
+                message_id = initial_state.get("initial_message_id")
+                if message_id:
+                    try:
+                        await self.rest_client.update_message(
+                            message_id=message_id, message_update={"status": "error"}
+                        )
+                    except Exception as update_error:
+                        logger.error(
+                            f"Failed to update message status after error: {update_error}",
+                            exc_info=True,
+                            extra=combined_log_extra,
+                        )
+
+                # Логируем ошибку выполнения графа и прокидываем ее выше
+                logger.exception(
+                    f"Error during graph execution: {e}",
+                    exc_info=True,
                     extra=combined_log_extra,
                 )
-                return response_content
-            elif isinstance(last_message, ToolMessage):
-                logger.info(
-                    "Processing finished with a ToolMessage (likely from fact save/reminder trigger processing). No response sent to user.",
-                    extra=combined_log_extra,
-                )
-                return ""  # Return empty string, no direct user response
-            else:
                 raise MessageProcessingError(
-                    f"Graph execution finished with unexpected message type: {type(last_message).__name__}",
-                    self.name,
-                )
+                    f"Unexpected error processing message: {e}", self.name
+                ) from e
 
-        except MessageProcessingError as e:
-            logger.error(
-                f"Message processing error: {e}",
-                exc_info=True,
-                extra=combined_log_extra,
-            )
-            raise  # Re-raise specific error
         except Exception as e:
             logger.exception(
-                f"Unexpected error during graph invocation for user {user_id}",
+                f"Failed to process message for user {user_id}",
                 exc_info=True,
                 extra=combined_log_extra,
             )
             raise MessageProcessingError(
-                f"Unexpected error processing message: {e}", self.name
+                f"Failed to process message: {e}", self.name
             ) from e
 
     async def close(self):
