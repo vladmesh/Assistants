@@ -63,9 +63,7 @@ async def finalize_processing_node(
         # Get latest summary ID first
         latest_summary = None
         try:
-            latest_summary = await rest_client.get_user_summary(
-                user_id, str(assistant_id)
-            )
+            latest_summary = await rest_client.get_user_summary(user_id, assistant_id)
         except Exception as e:
             logger.error(
                 f"Error getting latest summary: {str(e)}",
@@ -125,6 +123,25 @@ async def finalize_processing_node(
         except Exception as e:
             logger.error(
                 f"Error updating message error status: {str(e)}", extra=log_extra
+            )
+    # Обновление статуса сообщения на "processed" при успешной обработке
+    elif initial_message_id:
+        try:
+            update_data = MessageUpdate(status="processed")
+            updated = await rest_client.update_message(initial_message_id, update_data)
+            if updated:
+                logger.info(
+                    f"Updated message status to 'processed' (ID: {initial_message_id})",
+                    extra=log_extra,
+                )
+            else:
+                logger.warning(
+                    f"Failed to update message status to 'processed' (ID: {initial_message_id})",
+                    extra=log_extra,
+                )
+        except Exception as e:
+            logger.error(
+                f"Error updating message processed status: {str(e)}", extra=log_extra
             )
 
     # 3. Perform any additional cleanup or finalization tasks

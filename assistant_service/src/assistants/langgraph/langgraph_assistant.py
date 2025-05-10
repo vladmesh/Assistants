@@ -93,7 +93,6 @@ class LangGraphAssistant(BaseAssistant):
         self.system_prompt_template = self.config[
             "system_prompt"
         ]  # NEW: Store as template
-        self.max_tokens = self.config.get("max_tokens", 7500)
         self.assistant_id_uuid = UUID(assistant_id)
 
         # --- Initialize Shared Cache --- #
@@ -162,8 +161,7 @@ class LangGraphAssistant(BaseAssistant):
 
     def _initialize_llm(self) -> ChatOpenAI:
         """Initializes the language model based on configuration."""
-        model_name = self.config.get("model_name", "gpt-4o-mini")  # Default model
-        self.config.get("temperature", 0.7)
+        model_name = self.config["model_name"]  # Требуем обязательное значение
         api_key = self.config.get("api_key", settings.OPENAI_API_KEY)
 
         if not api_key:
@@ -172,7 +170,6 @@ class LangGraphAssistant(BaseAssistant):
             )
         return ChatOpenAI(
             model=model_name,
-            # temperature=temperature,
             api_key=api_key,
         )
 
@@ -279,6 +276,7 @@ class LangGraphAssistant(BaseAssistant):
         Dynamically creates the SystemMessage using the shared cache,
         refreshing data via REST if flags indicate necessity.
         """
+
         try:
             user_id_int = int(self.user_id)
         except ValueError:
@@ -293,6 +291,7 @@ class LangGraphAssistant(BaseAssistant):
 
         # --- Check if Refresh Needed (using shared cache flags) --- #
         current_messages = state.get("messages", [])
+
         if current_messages:
             last_message = current_messages[-1]
             if (
@@ -422,7 +421,7 @@ class LangGraphAssistant(BaseAssistant):
                 user_id=self.user_id,
                 messages=final_messages,
                 total_tokens=total_tokens,
-                context_limit=self.max_tokens,
+                context_limit=self.context_window_size,
                 log_file_path=f"src/logs/message_logs/message_log_{self.user_id}.log",
                 step_name="_add_system_prompt_modifier",
             )
@@ -461,16 +460,14 @@ class LangGraphAssistant(BaseAssistant):
         if log_extra:
             combined_log_extra.update(log_extra)
 
-        # Получение глобальных настроек для создания AssistantState
-        global_settings = await self.rest_client.get_global_settings()
-
         try:
             # Формируем AssistantState для графа
             initial_state = AssistantState(
-                messages=[message],  # Входящее сообщение
+                messages=[],
+                initial_message=message,  # Входящее сообщение
                 user_id=user_id,
                 assistant_id=self.assistant_id,
-                llm_context_size=self.max_tokens,
+                llm_context_size=self.context_window_size,
                 triggered_event=None,  # Если это обычное сообщение, а не триггер
                 log_extra=combined_log_extra,
                 initial_message_id=None,  # ID сообщения будет установлен узлом save_input_message_node

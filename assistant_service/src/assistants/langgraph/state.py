@@ -15,6 +15,7 @@ class AssistantState(TypedDict):
     """State for the assistant, including messages and dialog tracking."""
 
     messages: Annotated[Sequence[BaseMessage], custom_message_reducer]
+    initial_message: BaseMessage  # Входящее сообщение
     user_id: str  # ID of the user for API calls, etc.
     assistant_id: str  # ID of the assistant for API calls
     llm_context_size: int  # Token limit for the main LLM

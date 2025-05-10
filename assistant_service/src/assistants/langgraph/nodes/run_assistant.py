@@ -14,10 +14,9 @@ async def run_assistant_node(
     state: AssistantState, agent_runnable: Runnable, timeout: int = 30
 ) -> Dict[str, Any]:
     """Executes the core agent logic using the pre-configured agent_runnable."""
-    print("Entering _run_assistant_node")
 
     # The self.agent_runnable implicitly calls _add_system_prompt_modifier
-    # The state passed here ALREADY has messages filtered by the reducer.
+    # The state passed here ALREADY has messages  by the reducer.
     try:
         # Timeout logic implementation
         start_time = time.monotonic()
