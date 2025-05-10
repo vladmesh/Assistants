@@ -24,7 +24,6 @@ async def load_context_node(
 
     Updates the AssistantState with the loaded context.
     """
-    logger.info("[load_context_node] Loading context from database")
 
     # Extract necessary IDs
     user_id_str = state.get("user_id", "")
@@ -49,14 +48,6 @@ async def load_context_node(
         )
         return state  # Return state unchanged
 
-    # Get current message to determine where to load history from
-    current_messages = state.get("messages", [])
-    if not current_messages:
-        logger.warning(
-            "No current message in state, loading context may be incomplete.",
-            extra=log_extra,
-        )
-
     # 1. Get the latest summary first
     summary = None
     try:
@@ -65,10 +56,13 @@ async def load_context_node(
             logger.info(
                 f"Loaded summary (ID: {summary.id}) for user {user_id}", extra=log_extra
             )
+            print(f"Loaded summary: ID={summary.id}")
         else:
             logger.info(f"No summary found for user {user_id}", extra=log_extra)
+            print("No summary found")
     except Exception as e:
         logger.error(f"Error loading summary: {str(e)}", extra=log_extra)
+        print(f"Error loading summary: {e}")
 
     # 2. Load historical messages
     messages: List[BaseMessage] = []
@@ -76,6 +70,9 @@ async def load_context_node(
     if summary and summary.last_message_id_covered:
         # If we have a summary, load messages after the last summarized message
         try:
+            print(
+                f"Loading messages after summary last_id: {summary.last_message_id_covered}"
+            )
             raw_messages = await rest_client.get_messages(
                 user_id=user_id,
                 assistant_id=assistant_id_str,
@@ -85,6 +82,7 @@ async def load_context_node(
                 sort_by="id",  # Сортировка по id вместо timestamp
                 sort_order="asc",
             )
+
             # Convert to BaseMessage objects
             messages = [_convert_db_message_to_langchain(msg) for msg in raw_messages]
             logger.info(
@@ -95,9 +93,11 @@ async def load_context_node(
             logger.error(
                 f"Error loading messages after summary: {str(e)}", extra=log_extra
             )
+            print(f"Error loading messages after summary: {e}")
     else:
         # If no summary, just load the most recent messages
         try:
+            print(f"Loading most recent messages (no summary)")
             raw_messages = await rest_client.get_messages(
                 user_id=user_id,
                 assistant_id=assistant_id_str,
@@ -106,6 +106,7 @@ async def load_context_node(
                 sort_by="id",  # Сортировка по id вместо timestamp
                 sort_order="asc",
             )
+
             # Convert to BaseMessage objects
             messages = [_convert_db_message_to_langchain(msg) for msg in raw_messages]
             logger.info(
@@ -113,6 +114,7 @@ async def load_context_node(
             )
         except Exception as e:
             logger.error(f"Error loading recent messages: {str(e)}", extra=log_extra)
+            print(f"Error loading recent messages: {e}")
 
     # 3. Load user facts
     user_facts = []
@@ -122,24 +124,21 @@ async def load_context_node(
         logger.info(f"Loaded {len(user_facts)} user facts", extra=log_extra)
     except Exception as e:
         logger.error(f"Error loading user facts: {str(e)}", extra=log_extra)
+        print(f"Error loading user facts: {e}")
 
     # 4. Prepare the updated state
     # В полный контекст сначала идут исторические сообщения (отсортированные в БД по id),
     # затем входящее сообщение
-    full_context = messages + list(current_messages)
 
-    # Отладочный вывод сообщений
-    logger.debug(f"Context messages ({len(full_context)} total):", extra=log_extra)
-    for i, msg in enumerate(full_context):
-        msg_type = type(msg).__name__
-        msg_id = getattr(msg, "additional_kwargs", {}).get("db_id", "no_db_id")
-        content_preview = getattr(msg, "content", "")[:30].replace("\n", " ") + (
-            "..." if len(getattr(msg, "content", "")) > 30 else ""
-        )
-        logger.debug(
-            f"  [{i}] Type={msg_type}, DB_ID={msg_id}, Content='{content_preview}'",
-            extra=log_extra,
-        )
+    # Получаем initial_message_id, если он есть в state
+    initial_message = state.get("initial_message")
+    initial_message_id = state.get("initial_message_id")
+
+    # Если у initial_message есть ID из БД, добавим его в id
+    if initial_message and initial_message_id:
+        initial_message.id = str(initial_message_id)
+
+    full_context = messages + [initial_message] if initial_message else messages
 
     logger.info(
         f"Loaded context contains {len(full_context)} messages", extra=log_extra
@@ -156,12 +155,18 @@ async def load_context_node(
 def _convert_db_message_to_langchain(db_message) -> BaseMessage:
     """Convert a database message to a LangChain message class."""
     content = db_message.content or ""
+    # Преобразуем ID из БД в строку для использования в качестве ID сообщения LangChain
+    msg_id = str(db_message.id)
+
+    logger.debug(
+        f"Converting DB message: ID={msg_id}, Role={db_message.role}, Content Preview={content[:30]}..."
+    )
 
     # Map role to appropriate LangChain message class
     if db_message.role == "human":
-        msg = HumanMessage(content=content)
+        msg = HumanMessage(content=content, id=msg_id)
     elif db_message.role == "assistant":
-        msg = AIMessage(content=content)
+        msg = AIMessage(content=content, id=msg_id)
     elif db_message.role in ["tool_request", "tool_response"]:
         # For tool messages, we might need additional processing based on your schema
         msg = ToolMessage(
@@ -169,16 +174,16 @@ def _convert_db_message_to_langchain(db_message) -> BaseMessage:
             tool_call_id=str(db_message.tool_call_id)
             if db_message.tool_call_id
             else None,
+            id=msg_id,
         )
     else:
         # Default fallback - log warning about unknown role
         logger.warning(
             f"Unknown message role: {db_message.role}, treating as human message"
         )
-        msg = HumanMessage(content=content)
+        msg = HumanMessage(content=content, id=msg_id)
 
-    # Сохраняем ID из базы в additional_kwargs для отладки
-    if hasattr(db_message, "id") and db_message.id:
-        msg.additional_kwargs["db_id"] = db_message.id
+    if not hasattr(msg, "id") or msg.id is None:
+        logger.warning(f"WARNING: Message has no ID attribute set")
 
     return msg

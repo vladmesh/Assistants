@@ -5,7 +5,6 @@ import logging
 from typing import List, Literal
 
 # Import existing nodes
-from assistants.langgraph.nodes.ensure_context_limit import ensure_context_limit_node
 from assistants.langgraph.nodes.finalize_processing import finalize_processing_node
 
 # Import new nodes
@@ -132,7 +131,6 @@ def build_full_graph(
     # --- Conditional Edge Function --- #
     bound_should_summarize_condition = functools.partial(
         should_summarize,
-        prompt_context_cache=prompt_context_cache,
         system_prompt_template=system_prompt_template,
         max_tokens=context_window_size,
     )

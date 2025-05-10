@@ -47,11 +47,7 @@ class AssistantFactory:
         self._global_settings_cache_ttl = timedelta(
             minutes=5
         )  # Время жизни кэша - 5 минут
-        # Дефолтные значения (на случай недоступности API при первом запуске)
-        self._default_settings = GlobalSettingsBase(
-            summarization_prompt="Default: Summarize the conversation concisely.",
-            context_window_size=4096,
-        )
+        # Удаляем дефолтные значения и кэш
         # ---------------------------------------------
 
         # --- Инициализация логгера ---
@@ -110,7 +106,7 @@ class AssistantFactory:
         return await self._get_cached_global_settings()
 
     async def _get_cached_global_settings(self) -> GlobalSettingsBase:
-        """Fetches global settings from REST or cache, returning defaults on failure."""
+        """Fetches global settings from REST or cache without fallback defaults."""
         now = datetime.now(timezone.utc)
         cache_valid = (
             self._global_settings_cache is not None
@@ -138,43 +134,15 @@ class AssistantFactory:
                 return settings
             else:
                 # API вернул 200 OK, но тело ответа пустое (None)
-                self.logger.warning(
-                    "Global settings endpoint returned empty data, using defaults."
-                )
-                self._global_settings_cache = None  # Сбрасываем кэш
-                self._global_settings_last_fetched = (
-                    now  # Обновляем время, чтобы не запрашивать сразу
-                )
-                return self._default_settings
-
-        except httpx.RequestError as e:
-            self.logger.error(
-                f"HTTP error fetching global settings: {e}. Using defaults or stale cache.",
-                exc_info=True,
-            )
-            if self._global_settings_cache:
-                self.logger.warning(
-                    "Returning stale cached global settings due to HTTP error."
-                )
-                return self._global_settings_cache
-            self.logger.warning(
-                "Returning default global settings due to HTTP error and empty cache."
-            )
-            return self._default_settings
+                self.logger.error("Global settings endpoint returned empty response.")
+                raise ValueError("Failed to fetch global settings (empty response)")
         except Exception as e:
-            self.logger.exception(
-                "Unexpected error fetching global settings. Using defaults or stale cache.",
+            # Прокидываем ошибку дальше без маскирования
+            self.logger.error(
+                f"Error fetching global settings: {e}. Exception will be propagated.",
                 exc_info=True,
             )
-            if self._global_settings_cache:
-                self.logger.warning(
-                    "Returning stale cached global settings due to unexpected error."
-                )
-                return self._global_settings_cache
-            self.logger.warning(
-                "Returning default global settings due to unexpected error and empty cache."
-            )
-            return self._default_settings
+            raise
 
     async def get_user_secretary(self, user_id: int) -> BaseAssistant:
         """Get secretary assistant for user using the cached assignments.

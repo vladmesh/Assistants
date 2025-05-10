@@ -533,7 +533,7 @@ class RestServiceClient:
             data = await self._request(
                 "POST",
                 "/api/user-summaries/",
-                json=summary_data.model_dump(exclude_unset=True),
+                json=summary_data.model_dump(exclude_unset=True, mode="json"),
             )
             if not data:
                 logger.warning("Empty response when creating user summary")
@@ -629,6 +629,7 @@ class RestServiceClient:
         Returns:
             List of messages matching the criteria
         """
+
         params = {
             "limit": limit,
             "offset": offset,
@@ -657,7 +658,10 @@ class RestServiceClient:
             if not isinstance(data, list):
                 logger.error(f"Unexpected response format for messages: {type(data)}")
                 return []
-            return [MessageRead(**item) for item in data]
+
+            result = [MessageRead(**item) for item in data]
+
+            return result
         except RestServiceError as e:
             logger.error(f"Error getting messages: {e}")
             return []
@@ -704,23 +708,13 @@ class RestServiceClient:
 
                 return GlobalSettingsBase(**response)
             else:
-                logger.warning("Failed to get global settings: empty response")
-                # Return default settings
-                from shared_models.api_schemas.global_settings import GlobalSettingsBase
-
-                return GlobalSettingsBase(
-                    summarization_prompt="Summarize the conversation concisely.",
-                    context_window_size=4096,
-                )
+                logger.error("Failed to get global settings: empty response")
+                # Не возвращаем значения по умолчанию - пусть падает
+                raise ValueError("Failed to retrieve global settings: empty response")
         except Exception as e:
             logger.error(f"Error getting global settings: {e}", exc_info=True)
-            # Return default settings on error
-            from shared_models.api_schemas.global_settings import GlobalSettingsBase
-
-            return GlobalSettingsBase(
-                summarization_prompt="Summarize the conversation concisely.",
-                context_window_size=4096,
-            )
+            # Не маскируем ошибку возвращением дефолтных значений, проксируем исключение дальше
+            raise ValueError(f"Failed to retrieve global settings: {e}") from e
 
     async def update_global_settings(
         self, data: GlobalSettingsUpdate
