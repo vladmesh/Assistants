@@ -12,6 +12,8 @@ from shared_models.api_schemas import (
     AssistantRead,
     AssistantReadSimple,
     AssistantUpdate,
+    GlobalSettingsRead,
+    GlobalSettingsUpdate,
     TelegramUserRead,
     ToolCreate,
     ToolRead,
@@ -234,3 +236,22 @@ class RestServiceClient:
         )
         response.raise_for_status()
         return ToolRead(**response.json())
+
+    # --- Global Settings --- #
+
+    async def get_global_settings(self) -> GlobalSettingsRead:
+        """Get the global system settings."""
+        response = await self._client.get(f"{self.base_url}/api/global-settings/")
+        response.raise_for_status()  # Raise exception for non-2xx responses
+        return GlobalSettingsRead(**response.json())
+
+    async def update_global_settings(
+        self, data: GlobalSettingsUpdate
+    ) -> GlobalSettingsRead:
+        """Update the global system settings."""
+        response = await self._client.put(
+            f"{self.base_url}/api/global-settings/",
+            json=data.model_dump(exclude_unset=True),
+        )
+        response.raise_for_status()
+        return GlobalSettingsRead(**response.json())

@@ -6,10 +6,8 @@ import pytest
 
 # Import necessary components with corrected paths
 from assistants.langgraph.graph_builder import build_full_graph
-from assistants.langgraph.state import AssistantState
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_core.tools import BaseTool
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledGraph
 
@@ -71,6 +69,8 @@ def compiled_test_graph(
     mock_rest_client: MagicMock,
     memory_saver: MemorySaver,
     user_fact_tool_instance: UserFactTool,  # Use the specific instance fixture
+    summarization_prompt: str,
+    context_window_size: int,
 ) -> CompiledGraph:
     """Compiled LangGraph with mocks for unit testing graph logic."""
     tools_list = [user_fact_tool_instance]
@@ -91,6 +91,8 @@ def compiled_test_graph(
         rest_client=mock_rest_client,
         system_prompt_text="Test system prompt",
         summary_llm=mock_summary_llm,
+        summarization_prompt=summarization_prompt,
+        context_window_size=context_window_size,
     )
     return graph
 

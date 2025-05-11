@@ -38,22 +38,21 @@ class BaseAssistant(ABC):
     @abstractmethod
     async def process_message(
         self,
-        message: Optional[BaseMessage],
+        message: BaseMessage,
         user_id: str,
-        triggered_event: Optional[dict] = None,
-    ) -> str:
+        log_extra: Optional[Dict[str, any]] = None,
+    ) -> Optional[str]:
         """Processes an incoming message or a triggered event and returns the assistant's response string.
 
         Args:
             message: The input message (standard Langchain BaseMessage).
-                     Can be None if triggered_event is provided.
             user_id: The identifier of the user initiating the request.
                      The assistant implementation is responsible for managing
                      conversation context/memory based on the user_id.
-            triggered_event: Optional dictionary containing data from an external trigger (e.g., reminder).
+            log_extra: Optional dictionary with additional context for logging.
 
         Returns:
-            A string containing the assistant's response.
+            A string containing the assistant's response or None if no direct response.
         """
 
     # Optional: Add other common abstract methods if needed in the future

@@ -1,12 +1,10 @@
 import json
 import unittest.mock
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 from orchestrator import AssistantOrchestrator
-
-from shared_models import QueueMessage, QueueTrigger
 
 # Mark all tests in this file as asyncio
 pytestmark = pytest.mark.asyncio
@@ -38,7 +36,7 @@ async def test_dispatch_human_message(
     mock_secretary.process_message.assert_awaited_once_with(
         message=unittest.mock.ANY,
         user_id="123",
-        # triggered_event=None, # Removed assertion
+        log_extra=unittest.mock.ANY,
     )
     # Check the type and content of the message passed
     call_args, call_kwargs = mock_secretary.process_message.call_args
@@ -91,7 +89,7 @@ async def test_dispatch_event_secretary_error(
     mock_secretary.process_message.assert_awaited_once_with(
         message=unittest.mock.ANY,
         user_id="123",
-        # triggered_event=None, # Removed assertion
+        log_extra=unittest.mock.ANY,
     )
     assert response["status"] == "error"
     assert response["error"] == str(test_error)
@@ -157,7 +155,7 @@ async def test_dispatch_reminder_trigger(
     mock_secretary.process_message.assert_awaited_once_with(
         message=unittest.mock.ANY,
         user_id="123",
-        # triggered_event=reminder_trigger_event, # Removed assertion
+        log_extra=unittest.mock.ANY,
     )
 
     # Check the HumanMessage passed to secretary

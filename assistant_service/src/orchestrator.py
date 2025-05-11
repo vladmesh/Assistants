@@ -48,6 +48,7 @@ class AssistantOrchestrator:
         lc_message: HumanMessage
 
         try:
+            # Extract user_id from the event
             user_id = event.user_id
             timestamp_iso = event.timestamp.isoformat()
 
@@ -117,6 +118,7 @@ class AssistantOrchestrator:
 
             logger.info(f"Processing {log_extra['message_class']}", extra=log_extra)
 
+            # Получение секретаря для пользователя
             get_secretary_start_time = time.perf_counter()
             secretary: BaseAssistant = await self.factory.get_user_secretary(user_id)
             get_secretary_duration = time.perf_counter() - get_secretary_start_time
@@ -136,18 +138,21 @@ class AssistantOrchestrator:
                 extra=log_extra,
             )
 
+            # Вызов process_message с сообщением, user_id и логами
             process_message_start_time = time.perf_counter()
-            # Call process_message with only the Langchain message
-            response = await secretary.process_message(
-                message=lc_message, user_id=str(user_id)
+            ai_response = await secretary.process_message(
+                message=lc_message, user_id=str(user_id), log_extra=log_extra
             )
             process_message_duration = time.perf_counter() - process_message_start_time
             log_extra["process_message_duration_ms"] = round(
                 process_message_duration * 1000
             )
+
             logger.info(
                 "Secretary response received",
-                response_preview=str(response)[:100],
+                response_preview=str(ai_response)[:100]
+                if ai_response
+                else "No response",
                 extra=log_extra,
             )
 
@@ -155,7 +160,7 @@ class AssistantOrchestrator:
             result = {
                 "user_id": user_id,
                 "text": text_for_response,  # Use appropriate text representation
-                "response": response,
+                "response": ai_response,
                 "status": "success",
                 "source": log_extra["source"],  # Original source (telegram or cron etc)
                 "type": "assistant",  # Or derive from response?

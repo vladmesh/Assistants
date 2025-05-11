@@ -1,8 +1,5 @@
 import uuid
-from datetime import datetime
 from typing import Any, Dict, Optional
-
-from pydantic import BaseModel, Field
 
 # Assuming BaseSchema and TimestampSchema are in .base
 from .base import BaseSchema, TimestampSchema

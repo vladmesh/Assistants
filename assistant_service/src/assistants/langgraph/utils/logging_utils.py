@@ -24,6 +24,7 @@ async def log_messages_to_file(
     step_name: str = "Unknown Step",
 ):
     """Logs assistant messages, token count, and context info to a file."""
+
     log_extra = {
         "user_id": user_id,
         "assistant_id": assistant_id,

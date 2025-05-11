@@ -9,7 +9,9 @@ class AssistantType(str, enum.Enum):
 
 class ToolType(str, enum.Enum):
     CALENDAR = "calendar"
-    REMINDER = "reminder"
+    REMINDER_CREATE = "reminder_create"
+    REMINDER_LIST = "reminder_list"
+    REMINDER_DELETE = "reminder_delete"
     TIME = "time"
     SUB_ASSISTANT = "sub_assistant"
     WEATHER = "weather"

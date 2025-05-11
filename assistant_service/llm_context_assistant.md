@@ -17,7 +17,7 @@ The assistant service is the core engine of the Smart Assistant project. It hand
 - The primary and currently active implementation using LangGraph.
 - Responsible for the main message processing graph.
 - Provides built-in support for tool integration and execution.
-- Handles complex conversational flows and state management via checkpoints.
+- Handles complex conversational flows and state management using database persistence.
 
 ### 2.2 Directory Structure
 
@@ -41,7 +41,7 @@ assistant_service/src/
 │   ├── time.py          # Time operations
 │   └── web_search.py    # Web search using Tavily
 ├── services/          # External service clients
-├── storage/           # Context storage
+   └── rest_service.py # REST API client with message/summary operations
 ├── config/            # Service configuration
 ├── core/              # Core logic
 ├── utils/             # Utilities
@@ -60,7 +60,7 @@ assistant_service/src/
     - `ensure_limit`: Explicitly truncates message history if it exceeds the maximum token limit, keeping essential messages.
     - `assistant`: The main agent logic node. It prepares the prompt (including system message and facts), calls the LLM, and determines the next action (respond or use a tool).
     - `tools`: Executes the chosen tool if the assistant node decides to use one.
-- The state (`AssistantState` defined in `assistants/langgraph/state.py`) is persisted between turns using a checkpointer (e.g., `RestCheckpointSaver`).
+- The state (`AssistantState` defined in `assistants/langgraph/state.py`) is now persisted using PostgreSQL database through REST API. Rather than using LangGraph checkpointers, the system stores messages and summaries directly in the database.
 
 #### Tool Integration
 - Tools are implemented as classes inheriting from `BaseTool` (in `tools/`).
@@ -98,8 +98,9 @@ async def create_langchain_tools(
 - SystemMessage: System notifications
 
 ### 4.2 Context Management
-- LangGraph: Graph-based state management
-- Redis: Persistent storage and queues
+- LangGraph: Graph-based state management within the assistant service
+- PostgreSQL: Primary storage for messages, summaries, and user facts via REST API
+- Redis: Message queues for inter-service communication
 
 ## 5. External Integration
 
