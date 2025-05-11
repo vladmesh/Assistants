@@ -10,25 +10,29 @@ from .base import BaseModel, get_utc_now
 
 if TYPE_CHECKING:
     from .assistant import Assistant
-    from .user import TelegramUser # Assuming user model is TelegramUser based on plan
+    from .user import TelegramUser  # Assuming user model is TelegramUser based on plan
     from .user_summary import UserSummary
 
 
 class Message(BaseModel, table=True):
     __tablename__ = "messages"
 
-    id: Optional[int] = Field(default=None, primary_key=True, sa_column_kwargs={"autoincrement": True}) # BIGSERIAL
+    id: Optional[int] = Field(
+        default=None, primary_key=True, sa_column_kwargs={"autoincrement": True}
+    )  # BIGSERIAL
     user_id: int = Field(foreign_key="telegramuser.id", index=True)
     assistant_id: UUID = Field(foreign_key="assistant.id", index=True)
     timestamp: datetime = Field(
         default_factory=get_utc_now,
-        sa_column=Column(TIMESTAMP(timezone=True), index=True) # TIMESTAMPTZ с индексом
+        sa_column=Column(
+            TIMESTAMP(timezone=True), index=True
+        ),  # TIMESTAMPTZ с индексом
     )
     role: str = Field(index=True)
     content: str = Field(sa_column=Column(TEXT))
-    content_type: str = Field(default='text')
-    tool_call_id: Optional[UUID] = Field(default=None, index=True)
-    status: str = Field(default='active', index=True)
+    content_type: str = Field(default="text")
+    tool_call_id: Optional[str] = Field(default=None, index=True)
+    status: str = Field(default="active", index=True)
     summary_id: Optional[int] = Field(default=None, foreign_key="user_summaries.id")
     meta_data: Optional[dict] = Field(sa_column=Column(JSONB))
 
