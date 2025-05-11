@@ -2,18 +2,27 @@ import json
 import time  # Import time
 from datetime import datetime, timezone
 from typing import Any, Optional, Type
+from uuid import UUID  # Import UUID for reminder_id type hint in delete_reminder
 from zoneinfo import ZoneInfo
 
 import httpx
 from config.logger import get_logger
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+# Import RestServiceClient and specific schemas
+from services.rest_service import RestServiceClient
 from tools.base import BaseTool
 from utils.error_handler import ToolError
+
+from shared_models.api_schemas import ReminderCreate  # For ReminderCreateTool
 
 logger = get_logger(__name__)
 
 
-class ReminderSchema(BaseModel):
+# --- Schemas for Reminder Tools ---
+
+
+class ReminderCreateSchema(BaseModel):
     """Schema for reminder creation input validation."""
 
     type: str = Field(..., description="Тип напоминания: 'one_time' или 'recurring'")
@@ -73,6 +82,7 @@ class ReminderSchema(BaseModel):
                 )
         elif reminder_type is not None:
             raise ValueError("type должен быть 'one_time' или 'recurring'")
+        # Removed the more complex elif as 'type' is mandatory for create schema
 
         return data
 
@@ -81,11 +91,9 @@ class ReminderSchema(BaseModel):
         if self.type == "one_time" and self.trigger_at and self.timezone:
             try:
                 local_tz = ZoneInfo(self.timezone)
-                # Attempt to parse with or without seconds/microseconds
                 try:
                     local_dt = datetime.fromisoformat(self.trigger_at)
                 except ValueError:
-                    # Try parsing without seconds if fromisoformat fails initially
                     local_dt = datetime.strptime(self.trigger_at, "%Y-%m-%d %H:%M")
 
                 if local_dt.tzinfo is None:
@@ -104,22 +112,67 @@ class ReminderSchema(BaseModel):
         return None
 
 
-class ReminderTool(BaseTool):
-    """Инструмент для создания напоминаний. Использует значения name и description из базы данных."""
+class ReminderListSchema(BaseModel):
+    """Schema for listing active reminders. No arguments needed for now."""
 
-    # Restore the Type annotation
-    args_schema: Type[ReminderSchema] = ReminderSchema
+    pass
 
-    # Keep specific attributes
-    rest_service_url: str = "http://rest_service:8000"
-    _client: Optional[httpx.AsyncClient] = None  # For lazy init
 
-    def get_client(self) -> httpx.AsyncClient:
-        """Lazily initialize and return the httpx client."""
-        if self._client is None:
-            # Consider adding timeout configuration from settings if available
-            self._client = httpx.AsyncClient(timeout=30.0)
-        return self._client
+class ReminderDeleteSchema(BaseModel):
+    """Schema for deleting a reminder."""
+
+    reminder_id: UUID = Field(
+        ..., description="ID напоминания (UUID), которое нужно удалить."
+    )
+
+
+# --- Base Class for Reminder Tools ---
+class BaseReminderTool(BaseTool):
+    """Base class for Reminder tools."""
+
+    # rest_service_url is inherited from BaseTool if settings provides it, or can be set here.
+    # For clarity, let tools use settings.REST_SERVICE_URL via RestServiceClient
+    # _client: Optional[httpx.AsyncClient] = None # Not needed if using RestServiceClient
+    _rest_client: Optional[RestServiceClient] = None
+
+    def get_rest_client(self) -> RestServiceClient:
+        """Lazily initialize and return the RestServiceClient."""
+        if self._rest_client is None:
+            # self.settings should be available from BaseTool if passed by ToolFactory
+            base_url = (
+                self.settings.REST_SERVICE_URL
+                if self.settings
+                else "http://rest_service:8000"
+            )
+            self._rest_client = RestServiceClient(base_url=base_url)
+        return self._rest_client
+
+    # _handle_api_error and _ensure_ids_present can be removed if RestServiceClient handles this
+    # For now, keeping _ensure_ids_present as it's tool-specific logic regarding assistant_id
+    def _ensure_ids_present(self) -> None:
+        """Ensures user_id is present. Assistant_id check is optional for some tools."""
+        if not self.user_id:
+            raise ToolError(
+                message="User ID is required for this tool.",
+                tool_name=self.name,
+                error_code="USER_ID_REQUIRED",
+            )
+        # assistant_id is not strictly required for list/delete by user, but useful for logging.
+        # if not self.assistant_id: # Example if we wanted to make it mandatory for some base tools
+        #     raise ToolError(
+        #         message="Assistant ID is required for this tool.",
+        #         tool_name=self.name,
+        #         error_code="ASSISTANT_ID_REQUIRED",
+        #     )
+
+
+# --- Concrete Reminder Tools ---
+
+
+class ReminderCreateTool(BaseReminderTool):
+    """Инструмент для создания напоминаний."""
+
+    args_schema: Type[ReminderCreateSchema] = ReminderCreateSchema
 
     async def _execute(
         self,
@@ -129,31 +182,18 @@ class ReminderTool(BaseTool):
         timezone: Optional[str] = None,
         cron_expression: Optional[str] = None,
     ) -> str:
-        """Создает напоминание через REST API /reminders/"""
-        start_time = time.perf_counter()  # Start timer
+        """Создает напоминание через RestServiceClient."""
+        start_time = time.perf_counter()
         log_extra = {
             "tool_name": self.name,
             "user_id": self.user_id,
             "assistant_id": self.assistant_id,
+            "action": "create_reminder",
         }
+        self._ensure_ids_present()
 
-        # Access attributes like user_id and assistant_id from self (set by BaseTool)
-        if not self.user_id:
-            raise ToolError(
-                message="User ID is required",
-                tool_name=self.name,
-                error_code="USER_ID_REQUIRED",
-            )
-        if not self.assistant_id:
-            raise ToolError(
-                message="Assistant ID is required",
-                tool_name=self.name,
-                error_code="ASSISTANT_ID_REQUIRED",
-            )
-
-        # Validate input using the schema
         try:
-            reminder_input = ReminderSchema(
+            reminder_input_schema = ReminderCreateSchema(
                 type=type,
                 payload=payload,
                 trigger_at=trigger_at,
@@ -166,76 +206,249 @@ class ReminderTool(BaseTool):
             log_extra["duration_ms"] = duration_ms
             logger.warning(f"Input validation failed for {self.name}", extra=log_extra)
             raise ToolError(
-                message=f"Ошибка валидации входных данных: {str(e)}",
+                message=f"Ошибка валидации: {str(e)}",
                 tool_name=self.name,
                 error_code="INVALID_INPUT",
             )
 
-        # Prepare data for the API call using the shared model structure
-        trigger_datetime_utc = reminder_input.get_trigger_datetime_utc()
-        api_data: dict = {
-            "user_id": int(self.user_id),  # API expects int
-            "assistant_id": str(self.assistant_id),  # API expects str UUID
-            "type": reminder_input.type,
-            "payload": reminder_input.payload,
-            "status": "active",
-        }
-        if reminder_input.type == "one_time" and trigger_datetime_utc:
-            api_data["trigger_at"] = trigger_datetime_utc.isoformat()
-        elif reminder_input.type == "recurring" and reminder_input.cron_expression:
-            api_data["cron_expression"] = reminder_input.cron_expression
+        trigger_datetime_utc_iso = None
+        if reminder_input_schema.type == "one_time":
+            dt_utc = reminder_input_schema.get_trigger_datetime_utc()
+            if dt_utc:
+                trigger_datetime_utc_iso = dt_utc.isoformat()
 
-        http_client = self.get_client()  # Use lazy getter
+        # Prepare ReminderCreate Pydantic model for the client
+        reminder_create_data = ReminderCreate(
+            user_id=int(self.user_id),  # API model expects int
+            assistant_id=str(self.assistant_id),  # API model expects UUID as str
+            type=reminder_input_schema.type,
+            payload=reminder_input_schema.payload,
+            status="active",  # Default status
+            trigger_at=trigger_datetime_utc_iso,  # Will be None if not one_time or if conversion failed
+            cron_expression=reminder_input_schema.cron_expression,  # Will be None if not recurring
+        )
 
+        rest_client = self.get_rest_client()
         try:
-            start_api_time = time.perf_counter()  # Start API timer
-            response = await http_client.post(
-                f"{self.rest_service_url}/api/reminders/", json=api_data
-            )
-            api_duration_ms = round((time.perf_counter() - start_api_time) * 1000)
-            log_extra["api_duration_ms"] = api_duration_ms
+            created_reminder = await rest_client.create_reminder(reminder_create_data)
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
 
-            if response.status_code not in [200, 201]:
-                log_extra["api_status_code"] = response.status_code
-                log_extra["api_response"] = response.text[:200]  # Log snippet
-                duration_ms = round((time.perf_counter() - start_time) * 1000)
-                log_extra["duration_ms"] = duration_ms
-                logger.error(
-                    "Reminder API request failed",
-                    status_code=response.status_code,
-                    response=response.text,
+            if created_reminder:
+                log_extra["reminder_id"] = str(created_reminder.id)
+                logger.info(
+                    "Reminder successfully created via RestServiceClient",
+                    extra=log_extra,
                 )
-                error_detail = response.text
-                try:
-                    detail_json = response.json()
-                    error_detail = detail_json.get("detail", error_detail)
-                except Exception:
-                    pass
+                return "Напоминание успешно создано."
+            else:
+                logger.error(
+                    "Reminder creation failed, RestServiceClient returned None",
+                    extra=log_extra,
+                )
                 raise ToolError(
-                    message=f"Ошибка API ({response.status_code}): {error_detail}",
+                    message="Не удалось создать напоминание.",
                     tool_name=self.name,
                     error_code="API_ERROR",
                 )
 
-            duration_ms = round((time.perf_counter() - start_time) * 1000)
-            log_extra["duration_ms"] = duration_ms
-            logger.info("Reminder successfully created via API", extra=log_extra)
-            return "Напоминание успешно создано."
-
-        except httpx.RequestError as e:
-            log_extra["network_error"] = str(e)
-            duration_ms = round((time.perf_counter() - start_time) * 1000)
-            log_extra["duration_ms"] = duration_ms
-            logger.error(f"HTTP request failed: {e}", exc_info=True, extra=log_extra)
-            raise ToolError(
-                message=f"Ошибка сети при создании напоминания: {str(e)}",
-                tool_name=self.name,
-                error_code="NETWORK_ERROR",
-            )
+        except ToolError:  # Re-raise ToolErrors directly
+            raise
         except Exception as e:
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
-            logger.exception("Unexpected error during reminder creation", exc_info=True)
+            log_extra["unexpected_error"] = str(e)
+            logger.exception(
+                "Unexpected error during reminder creation via RestServiceClient",
+                exc_info=True,
+                extra=log_extra,
+            )
+            raise ToolError(
+                message=f"Непредвиденная ошибка: {str(e)}",
+                tool_name=self.name,
+                error_code="UNEXPECTED_ERROR",
+            )
+
+
+class ReminderListTool(BaseReminderTool):
+    """Инструмент для получения списка активных напоминаний пользователя."""
+
+    args_schema: Type[ReminderListSchema] = ReminderListSchema
+
+    async def _execute(self) -> str:
+        """Получает список активных напоминаний через RestServiceClient."""
+        start_time = time.perf_counter()
+        log_extra = {
+            "tool_name": self.name,
+            "user_id": self.user_id,
+            "assistant_id": self.assistant_id,
+            "action": "list_reminders",
+        }
+        self._ensure_ids_present()
+
+        if not self.user_id:  # Should be caught by _ensure_ids_present
+            return "Ошибка: ID пользователя не найден."
+
+        rest_client = self.get_rest_client()
+        try:
+            reminders = await rest_client.get_user_active_reminders(
+                user_id=int(self.user_id)
+            )
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
+            log_extra["reminders_count"] = len(reminders)
+            logger.info(
+                "Successfully fetched active reminders via RestServiceClient",
+                extra=log_extra,
+            )
+
+            if not reminders:
+                return "У вас нет активных напоминаний."
+
+            formatted_reminders = []
+            for r in reminders:
+                payload_summary = ""
+                payload_dict = None
+
+                if isinstance(r.payload, dict):
+                    payload_dict = r.payload
+                elif isinstance(r.payload, str):
+                    try:
+                        payload_dict = json.loads(r.payload)
+                    except json.JSONDecodeError:
+                        payload_summary = (
+                            r.payload[:50] + "..." if len(r.payload) > 50 else r.payload
+                        )
+                        logger.warning(
+                            f"Reminder payload is a string but not valid JSON: {r.payload[:100]}",
+                            tool_name=self.name,
+                            reminder_id=str(r.id),
+                        )
+                else:
+                    # Handle other unexpected types for payload if necessary
+                    payload_summary = (
+                        str(r.payload)[:50] + "..."
+                        if len(str(r.payload)) > 50
+                        else str(r.payload)
+                    )
+                    logger.warning(
+                        f"Reminder payload has unexpected type: {type(r.payload)}",
+                        tool_name=self.name,
+                        reminder_id=str(r.id),
+                    )
+
+                if payload_dict:
+                    payload_text = payload_dict.get(
+                        "text", payload_dict.get("message", str(payload_dict))
+                    )
+                    payload_summary = (
+                        payload_text[:50] + "..."
+                        if len(payload_text) > 50
+                        else payload_text
+                    )
+                elif (
+                    not payload_summary
+                ):  # If payload_summary wasn't set above (e.g. not string, not dict, not parsable)
+                    payload_summary = "(не удалось отобразить содержимое)"
+
+                trigger_info = ""
+                if r.type == "one_time" and r.trigger_at:
+                    try:
+                        # Ensure trigger_at is datetime before formatting
+                        dt_obj = (
+                            r.trigger_at
+                            if isinstance(r.trigger_at, datetime)
+                            else datetime.fromisoformat(
+                                str(r.trigger_at).replace("Z", "+00:00")
+                            )
+                        )
+                        trigger_info = (
+                            f"Однократно: {dt_obj.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                        )
+                    except ValueError:
+                        trigger_info = f"Однократно: {str(r.trigger_at)} (не удалось распарсить дату)"
+                elif r.type == "recurring" and r.cron_expression:
+                    trigger_info = f"Повторяющееся: {r.cron_expression}"
+
+                reminder_id_str = str(r.id)  # Display UUID as string
+                formatted_reminders.append(
+                    f"ID: {reminder_id_str} - «{payload_summary}» ({trigger_info})"
+                )
+
+            return "Ваши активные напоминания:\n" + "\n".join(formatted_reminders)
+
+        except ToolError:  # Re-raise ToolErrors directly
+            raise
+        except Exception as e:
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
+            log_extra["unexpected_error"] = str(e)
+            logger.exception(
+                "Unexpected error during listing reminders via RestServiceClient",
+                exc_info=True,
+                extra=log_extra,
+            )
+            raise ToolError(
+                message=f"Непредвиденная ошибка: {str(e)}",
+                tool_name=self.name,
+                error_code="UNEXPECTED_ERROR",
+            )
+
+
+class ReminderDeleteTool(BaseReminderTool):
+    """Инструмент для удаления напоминания по ID."""
+
+    args_schema: Type[ReminderDeleteSchema] = ReminderDeleteSchema
+
+    async def _execute(self, reminder_id: UUID) -> str:
+        """Удаляет напоминание по ID через RestServiceClient."""
+        start_time = time.perf_counter()
+        log_extra = {
+            "tool_name": self.name,
+            "user_id": self.user_id,
+            "assistant_id": self.assistant_id,
+            "reminder_id_to_delete": str(reminder_id),
+            "action": "delete_reminder",
+        }
+        self._ensure_ids_present()
+
+        rest_client = self.get_rest_client()
+        try:
+            success = await rest_client.delete_reminder(reminder_id=reminder_id)
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
+
+            if success:
+                logger.info(
+                    f"Reminder {reminder_id} successfully deleted via RestServiceClient",
+                    extra=log_extra,
+                )
+                return f"Напоминание с ID {reminder_id} успешно удалено."
+            else:
+                # RestServiceClient.delete_reminder logs error and returns False.
+                # ToolError might have been raised by RestServiceClient if it were configured to do so for HTTP errors.
+                # For now, assume False means a non-exception failure reported by the client.
+                logger.warning(
+                    f"Deletion of reminder {reminder_id} reported as failed by RestServiceClient",
+                    extra=log_extra,
+                )
+                raise ToolError(
+                    message=f"Не удалось удалить напоминание с ID {reminder_id}.",
+                    tool_name=self.name,
+                    error_code="API_ERROR",
+                )
+
+        except ToolError:  # Re-raise ToolErrors directly
+            raise
+        except Exception as e:
+            duration_ms = round((time.perf_counter() - start_time) * 1000)
+            log_extra["duration_ms"] = duration_ms
+            log_extra["unexpected_error"] = str(e)
+            logger.exception(
+                "Unexpected error during reminder deletion via RestServiceClient",
+                exc_info=True,
+                extra=log_extra,
+            )
             raise ToolError(
                 message=f"Непредвиденная ошибка: {str(e)}",
                 tool_name=self.name,

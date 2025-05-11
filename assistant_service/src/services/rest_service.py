@@ -354,27 +354,97 @@ class RestServiceClient:
     async def create_reminder(
         self, reminder_data: ReminderCreate
     ) -> Optional[ReminderRead]:
-        """Create a new reminder."""
+        """Create a new reminder.
+
+        Args:
+            reminder_data: Reminder creation data.
+
+        Returns:
+            ReminderRead object if successful, None otherwise.
+        """
         try:
             response_data = await self._request(
-                "POST", "/api/reminders/", json=reminder_data.model_dump()
+                "POST", "/api/reminders/", json=reminder_data.model_dump(mode="json")
             )
-            return ReminderRead(**response_data) if response_data else None
-        except RestServiceError as e:  # Changed exception handling
-            # Log details if needed, re-raise
+            if response_data:
+                return ReminderRead(**response_data)
+            return None  # Should not happen if API returns 201 with body
+        except RestServiceError as e:
             logger.error(
-                "Failed to create reminder",
-                data=reminder_data.model_dump(),
-                error=str(e),
-            )
-            raise
-        except Exception:
-            logger.exception(
-                "Unexpected error creating reminder",
-                data=reminder_data.model_dump(),
+                f"Failed to create reminder for user {reminder_data.user_id}: {e}",
                 exc_info=True,
             )
-            return None  # Return None on unexpected errors
+            return None
+        except Exception:
+            logger.exception(
+                f"Unexpected error creating reminder for user {reminder_data.user_id}",
+                exc_info=True,
+            )
+            return None
+
+    async def get_user_active_reminders(self, user_id: int) -> List[ReminderRead]:
+        """Get a list of active reminders for a specific user.
+
+        Args:
+            user_id: The ID of the user.
+
+        Returns:
+            A list of ReminderRead objects.
+        """
+        try:
+            # GET /api/reminders/user/{user_id}?status=active
+            response_data = await self._request(
+                "GET", f"/api/reminders/user/{user_id}", params={"status": "active"}
+            )
+            if isinstance(response_data, list):
+                return [ReminderRead(**item) for item in response_data]
+            logger.error(
+                f"Received unexpected data format for user active reminders: {type(response_data)}",
+                user_id=user_id,
+                data_received=response_data,
+            )
+            return []
+        except RestServiceError as e:
+            logger.error(
+                f"Failed to get active reminders for user {user_id}: {e}", exc_info=True
+            )
+            return []
+        except Exception:
+            logger.exception(
+                f"Unexpected error getting active reminders for user {user_id}",
+                exc_info=True,
+            )
+            return []
+
+    async def delete_reminder(self, reminder_id: UUID) -> bool:
+        """Delete a reminder by its ID.
+
+        Args:
+            reminder_id: The UUID of the reminder to delete.
+
+        Returns:
+            True if deletion was successful (e.g., 204 No Content), False otherwise.
+        """
+        try:
+            # DELETE /api/reminders/{reminder_id}
+            # _request returns empty dict for 204, or raises error for others
+            await self._request("DELETE", f"/api/reminders/{str(reminder_id)}")
+            logger.info(f"Successfully deleted reminder {reminder_id}")
+            return True
+        except RestServiceError as e:
+            # Log specific error, but return False as per method contract for failure
+            logger.error(f"Failed to delete reminder {reminder_id}: {e}", exc_info=True)
+            # Distinguish 404 (not found, arguably a "successful" deletion if goal is absence)
+            # from other errors. For now, any RestServiceError means False.
+            # if "404" in str(e):
+            #     logger.warning(f"Reminder {reminder_id} not found for deletion.")
+            #     return True # Or False, depending on desired semantics for "not found"
+            return False
+        except Exception:
+            logger.exception(
+                f"Unexpected error deleting reminder {reminder_id}", exc_info=True
+            )
+            return False
 
     async def list_active_user_secretary_assignments(
         self,
@@ -557,18 +627,10 @@ class RestServiceClient:
             The created message if successful, None otherwise
         """
         try:
-            # Преобразуем UUID в строки для корректной сериализации
-            message_dict = message_data.model_dump(exclude_unset=True)
-            # Явно конвертируем assistant_id в строку, если это UUID
-            if "assistant_id" in message_dict and isinstance(
-                message_dict["assistant_id"], UUID
-            ):
-                message_dict["assistant_id"] = str(message_dict["assistant_id"])
-
             data = await self._request(
                 "POST",
                 "/api/messages/",
-                json=message_dict,
+                json=message_data.model_dump(mode="json", exclude_unset=True),
             )
             if not data:
                 logger.warning("Empty response when creating message")
@@ -682,7 +744,7 @@ class RestServiceClient:
             data = await self._request(
                 "PATCH",
                 f"/api/messages/{message_id}",
-                json=update_data.model_dump(exclude_unset=True),
+                json=update_data.model_dump(exclude_unset=True, mode="json"),
             )
             if not data:
                 logger.warning(f"Empty response when updating message {message_id}")
@@ -716,30 +778,30 @@ class RestServiceClient:
             # Не маскируем ошибку возвращением дефолтных значений, проксируем исключение дальше
             raise ValueError(f"Failed to retrieve global settings: {e}") from e
 
-    async def update_global_settings(
-        self, data: GlobalSettingsUpdate
-    ) -> Optional[GlobalSettingsRead]:
-        """Update the global system settings.
+    # async def update_global_settings(
+    #     self, data: GlobalSettingsUpdate
+    # ) -> Optional[GlobalSettingsRead]:
+    #     """Update the global system settings.
 
-        Args:
-            data: GlobalSettingsUpdate object with fields to update.
+    #     Args:
+    #         data: GlobalSettingsUpdate object with fields to update.
 
-        Returns:
-            Updated GlobalSettingsRead object.
+    #     Returns:
+    #         Updated GlobalSettingsRead object.
 
-        Raises:
-            RestServiceError: If the request fails.
-        """
-        updated_data = await self._request(
-            "PUT",
-            "/api/global-settings/",
-            json=data.model_dump(
-                exclude_unset=True
-            ),  # Use model_dump and exclude_unset
-        )
-        if updated_data:
-            return GlobalSettingsRead(**updated_data)
-        return None  # Should indicate an error if PUT succeeded but returned nothing
+    #     Raises:
+    #         RestServiceError: If the request fails.
+    #     """
+    #     updated_data = await self._request(
+    #         "PUT",
+    #         "/api/global-settings/",
+    #         json=data.model_dump(
+    #             exclude_unset=True
+    #         ),  # Use model_dump and exclude_unset
+    #     )
+    #     if updated_data:
+    #         return GlobalSettingsRead(**updated_data)
+    #     return None  # Should indicate an error if PUT succeeded but returned nothing
 
     async def close_session(self):
         """Alias for close to maintain compatibility if needed"""
