@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -24,10 +24,7 @@ class MessageBase(BaseSchema):
         description="Status of the message (e.g., 'active', 'summarized', 'archived', 'error')",
     )
     summary_id: Optional[int] = None
-    # Per plan, meta_data is Optional[str] in Pydantic, but Optional[dict] in SQLAlchemy with JSONB.
-    # For Pydantic, if we expect JSON, it's better to use Optional[dict] or a specific Pydantic model.
-    # However, plan says Optional[str]. Sticking to plan for now.
-    meta_data: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
 
 
 class MessageCreate(MessageBase):
@@ -42,6 +39,6 @@ class MessageRead(MessageBase):
 
 class MessageUpdate(BaseSchema):
     status: Optional[str] = None
-    meta_data: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
     summary_id: Optional[int] = None
     # Other fields (role, content, content_type, tool_call_id) are not updatable via this schema as per plan.
