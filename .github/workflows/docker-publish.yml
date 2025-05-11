@@ -2,7 +2,7 @@ name: Build & Push Docker images
 
 on:
   push:
-    branches: [ main ] # Или master, в зависимости от твоей основной ветки
+    branches: [ master ]
 
 permissions:
   contents: read       # Для actions/checkout
