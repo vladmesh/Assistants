@@ -1,0 +1,227 @@
+# Этот файл docker-compose-prod.yml предназначен для запуска приложения
+# с использованием предварительно собранных образов из GitHub Container Registry (ghcr.io).
+# Не забудьте заменить 'YOUR_GITHUB_LOGIN_OR_ORGANIZATION' на ваш логин/организацию в GitHub.
+# Также убедитесь, что Docker на сервере аутентифицирован в ghcr.io для скачивания приватных образов.
+
+services:
+  assistant_service:
+    image: ghcr.io/vladmesh/assistant_service:latest
+    container_name: assistant-service
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
+      - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+      - LOG_LEVEL=DEBUG
+    env_file:
+      - .env
+    # volumes:
+    #   - ./assistant_service/src:/src  # Исходный код, обычно не монтируется в prod
+    depends_on:
+      redis:
+        condition: service_healthy
+      rest_service:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "pidof", "python"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  telegram_bot_service:
+    image: ghcr.io/vladmesh/telegram_bot_service:latest
+    container_name: telegram-bot-service
+    environment:
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+      - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
+      - REST_SERVICE_URL=http://rest_service:8000
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+    # volumes:
+    #   - ./telegram_bot_service/src:/src  # Исходный код, обычно не монтируется в prod
+    depends_on:
+      redis:
+        condition: service_healthy
+      rest_service:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "pidof", "python"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 8s
+      timeout: 10s
+      retries: 6
+
+  rest_service:
+    image: ghcr.io/vladmesh/rest_service:latest
+    container_name: rest-service
+    environment:
+      - ASYNC_DATABASE_URL=${ASYNC_DATABASE_URL}
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    # volumes:
+    #   - ./rest_service/src:/src # Исходный код
+    #   - ./rest_service/alembic:/alembic # Alembic миграции, если не включены в образ или нужны для выполнения команд
+    #   - ./rest_service/alembic.ini:/alembic.ini # Конфигурация Alembic
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      start_period: 60s
+      timeout: 10s
+      retries: 8
+
+  cron_service:
+    image: ghcr.io/vladmesh/cron_service:latest
+    container_name: cron-service
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
+      - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+    # volumes:
+    #   - ./cron_service/src:/src  # Исходный код
+    depends_on:
+      redis:
+        condition: service_healthy
+      rest_service:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "ps", "aux", "|", "grep", "python"] # Возможно, стоит улучшить healthcheck для cron
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  google_calendar_service:
+    image: ghcr.io/vladmesh/google_calendar_service:latest
+    container_name: google-calendar-service
+    ports:
+      - "8001:8000"
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - REST_SERVICE_URL=http://rest_service:8000
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
+      - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+    env_file:
+      - .env
+    # volumes:
+    #   - ./google_calendar_service/src:/src # Исходный код
+    #   - ./shared_models:/shared_models # Если shared_models не включены в образ и нужны в runtime
+    depends_on:
+      rest_service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 180s
+      timeout: 10s
+      retries: 3
+
+  admin_service:
+    image: ghcr.io/vladmesh/admin_service:latest
+    container_name: admin-service
+    environment:
+      - REST_SERVICE_URL=http://rest_service:8000
+    env_file:
+      - .env
+    ports:
+      - "8501:8501"
+    # volumes:
+    #   - ./admin_service/src:/src # Исходный код
+    depends_on:
+      rest_service:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-stack-server --appendonly yes --dir /data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 4
+
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   container_name: qdrant
+  #   restart: always
+  #   ports:
+  #     - "6333:6333" # REST API
+  #     - "6334:6334" # gRPC API
+  #   volumes:
+  #     - ./qdrant_data:/qdrant/storage
+  #   environment:
+  #     QDRANT__SERVICE__GRPC_PORT: 6334
+  #   networks:
+  #     - app_network
+  #   healthcheck:
+  #     test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333 || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 30s
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  # qdrant_data: # Если qdrant используется 
