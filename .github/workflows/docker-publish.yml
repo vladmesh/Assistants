@@ -38,7 +38,7 @@ jobs:
     - name: Build and push ${{ matrix.service }}
       uses: docker/build-push-action@v5
       with:
-        context: ./${{ matrix.service }} # Контекст сборки для каждого сервиса
+        context: .
         file: ./${{ matrix.service }}/Dockerfile # Путь к Dockerfile сервиса
         push: true
         tags: | # Теги для образа
