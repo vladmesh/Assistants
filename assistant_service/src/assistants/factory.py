@@ -1,5 +1,5 @@
 import asyncio  # Add asyncio
-from datetime import datetime, timezone  # Add timezone
+from datetime import datetime, timedelta, timezone  # Add timezone and timedelta
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -19,12 +19,16 @@ from langgraph.checkpoint.redis.ashallow import (  # Correct import for shallow 
 )
 
 # Import the recommended serializer
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from services.rest_service import RestServiceClient
 
 # Import ToolFactory
 from tools.factory import ToolFactory
 
+# Импортируем модели Pydantic для глобальных настроек
+from shared_models.api_schemas.global_settings import (
+    GlobalSettingsBase,
+    GlobalSettingsRead,
+)
 from shared_models.enums import AssistantType
 
 logger = get_logger(__name__)
@@ -32,7 +36,7 @@ logger = get_logger(__name__)
 
 class AssistantFactory:
     def __init__(self, settings: Settings):
-        """Initialize the factory with settings, REST client, and Redis checkpointer"""
+        """Initialize the factory with settings and REST client"""
         self.settings = settings
         self.rest_client = RestServiceClient()
         # Cache for user_id -> (secretary_id, assignment_updated_at)
@@ -44,34 +48,23 @@ class AssistantFactory:
         # Lock for cache access
         self._cache_lock = asyncio.Lock()
 
-        # --- START CHECKPOINTER INIT ---
-        # 1. Create Redis client for the checkpointer
-        redis_url = (
-            f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
-        )
-        self.redis_client_for_checkpoint = aioredis.from_url(redis_url)
-        logger.info("Created dedicated Redis client for checkpointer.")
+        # --- Атрибуты кэша для глобальных настроек ---
+        self._global_settings_cache: Optional[GlobalSettingsRead] = None
+        self._global_settings_last_fetched: Optional[datetime] = None
+        self._global_settings_cache_ttl = timedelta(
+            minutes=5
+        )  # Время жизни кэша - 5 минут
+        # Удаляем дефолтные значения и кэш
+        # ---------------------------------------------
 
-        # 2. Instantiate AsyncShallowRedisSaver directly with the client
-        self.checkpointer = AsyncShallowRedisSaver(
-            redis_client=self.redis_client_for_checkpoint
-        )
-        logger.info(f"Instantiated checkpointer: {type(self.checkpointer).__name__}")
-
-        # 3. Set the serializer
-        # self.checkpointer.serde = JsonPlusSerializer()
-        logger.info(
-            f"Set serializer for checkpointer: {type(self.checkpointer.serde).__name__}"
-        )
-        # --- END CHECKPOINTER INIT ---
+        # --- Инициализация логгера ---
+        # Убедиться, что logger инициализирован в __init__ или доступен как self.logger
+        self.logger = get_logger(__name__)
+        # -----------------------------
 
         # Initialize ToolFactory, passing self (the AssistantFactory instance)
         self.tool_factory = ToolFactory(settings=settings, assistant_factory=self)
-        logger.info(
-            f"AssistantFactory initialized with checkpointer: {type(self.checkpointer).__name__}"
-            f" and ToolFactory"
-        )
-        # Note: Consider calling await self.checkpointer.asetup() during app startup
+        logger.info("AssistantFactory initialized with ToolFactory")
 
     async def close(self):
         """Close REST client, checkpointer Redis client, and assistant instances"""
@@ -124,56 +117,54 @@ class AssistantFactory:
             self._secretary_assignments.clear()  # Clear assignments cache too
         logger.info("AssistantFactory closed REST client and cleared caches.")
 
-    async def setup_checkpointer(self):
-        """Initializes the checkpointer by calling its setup method if available."""
-        # Check if the checkpointer has the 'asetup' method (for async setup)
-        if hasattr(self.checkpointer, "asetup") and asyncio.iscoroutinefunction(
-            getattr(self.checkpointer, "asetup")
-        ):
-            logger.info(
-                f"Attempting to setup checkpointer indices for {type(self.checkpointer).__name__}..."
+    async def get_global_settings(self) -> GlobalSettingsBase:
+        """
+        Публичный метод для получения глобальных настроек.
+        Будет использоваться Orchestrator для получения настроек при создании AssistantState.
+
+        Returns:
+            GlobalSettingsBase: объект с глобальными настройками
+        """
+        return await self._get_cached_global_settings()
+
+    async def _get_cached_global_settings(self) -> GlobalSettingsBase:
+        """Fetches global settings from REST or cache without fallback defaults."""
+        now = datetime.now(timezone.utc)
+        cache_valid = (
+            self._global_settings_cache is not None
+            and self._global_settings_last_fetched is not None
+            and (now - self._global_settings_last_fetched)
+            < self._global_settings_cache_ttl
+        )
+
+        if (
+            cache_valid and self._global_settings_cache is not None
+        ):  # Доп. проверка для mypy
+            self.logger.debug("Returning cached global settings.")
+            return self._global_settings_cache
+
+        self.logger.info("Fetching global settings from REST service...")
+        try:
+            # Убедиться, что self.rest_client инициализирован в __init__
+            settings = await self.rest_client.get_global_settings()
+            if settings:
+                self._global_settings_cache = settings
+                self._global_settings_last_fetched = now
+                self.logger.info(
+                    f"Successfully fetched and cached global settings: {settings.model_dump()}"
+                )
+                return settings
+            else:
+                # API вернул 200 OK, но тело ответа пустое (None)
+                self.logger.error("Global settings endpoint returned empty response.")
+                raise ValueError("Failed to fetch global settings (empty response)")
+        except Exception as e:
+            # Прокидываем ошибку дальше без маскирования
+            self.logger.error(
+                f"Error fetching global settings: {e}. Exception will be propagated.",
+                exc_info=True,
             )
-            try:
-                # Call the asynchronous setup method
-                await self.checkpointer.asetup()
-                logger.info(
-                    f"Checkpointer {type(self.checkpointer).__name__} setup complete."
-                )
-            except Exception as e:
-                # Log detailed error if setup fails
-                logger.exception(
-                    f"Failed to setup checkpointer {type(self.checkpointer).__name__}",
-                    error=str(e),
-                    exc_info=True,
-                )
-                # Depending on requirements, you might want to raise the error
-                # or handle it gracefully (e.g., allow app to continue with warnings)
-                # raise  # Uncomment to make setup failure critical
-        # Check if the checkpointer has the 'setup' method (for sync setup)
-        elif hasattr(self.checkpointer, "setup") and not asyncio.iscoroutinefunction(
-            getattr(self.checkpointer, "setup")
-        ):
-            logger.info(
-                f"Attempting to setup checkpointer indices for {type(self.checkpointer).__name__} (sync)..."
-            )
-            try:
-                # Call the synchronous setup method
-                self.checkpointer.setup()
-                logger.info(
-                    f"Checkpointer {type(self.checkpointer).__name__} setup complete (sync)."
-                )
-            except Exception as e:
-                logger.exception(
-                    f"Failed to setup checkpointer {type(self.checkpointer).__name__} (sync)",
-                    error=str(e),
-                    exc_info=True,
-                )
-                # raise # Uncomment if sync setup failure should be critical
-        else:
-            # Log if no setup method is found (might be okay for some checkpointers)
-            logger.warning(
-                f"Checkpointer {type(self.checkpointer).__name__} does not have a recognized setup method (asetup/setup)."
-            )
+            raise
 
     async def get_user_secretary(self, user_id: int) -> BaseAssistant:
         """Get secretary assistant for user using the cached assignments.
@@ -280,9 +271,15 @@ class AssistantFactory:
             cached_data = self._assistant_cache.get(cache_key)
             if cached_data:
                 instance, loaded_at = cached_data
+                # TODO: Add logic here to check if instance config is outdated
+                #       based on `loaded_at` and `assistant_data.updated_at`
+                #       If outdated, proceed to fetch/create new instance below.
+                self.logger.debug(
+                    f"Returning cached assistant {assistant_uuid} for user {user_id}"
+                )
                 return instance
 
-        logger.info(
+        self.logger.info(
             f"Assistant {assistant_uuid} for user {user_id} not in cache, creating new instance...",
             user_id=user_id,
         )
@@ -299,12 +296,13 @@ class AssistantFactory:
                 str(assistant_uuid)
             )
 
+            # ---> ПОЛУЧЕНИЕ ГЛОБАЛЬНЫХ НАСТРОЕК <---
+            global_settings = await self._get_cached_global_settings()
+            # -----------------------------------------
+
             # --- Prepare config and create tools ---
-            # Construct the config dictionary expected by LangGraphAssistant
-            # Note: Ensure assistant_data has attributes like .config, .model, .instructions
             assistant_config_dict = getattr(assistant_data, "config", {}) or {}
             config_for_assistant = {
-                # Extract relevant fields from assistant_data and settings
                 "model_name": assistant_data.model,
                 "temperature": assistant_config_dict.get("temperature", 0.7),
                 "api_key": assistant_config_dict.get(
@@ -315,7 +313,6 @@ class AssistantFactory:
                     "timeout", self.settings.HTTP_CLIENT_TIMEOUT
                 ),
                 "tools": tool_definitions,  # Pass raw tool definitions if needed by base class
-                # Add other fields from assistant_data.config if necessary
                 **assistant_config_dict,
             }
 
@@ -325,52 +322,33 @@ class AssistantFactory:
                 assistant_id=str(assistant_data.id),
             )
 
-            # Log tool loading results
-            if len(created_tools) != len(tool_definitions):
-                logger.warning(
-                    f"Initialized assistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id} with "
-                    f"{len(created_tools)} out of {len(tool_definitions)} defined tools due to initialization errors. "
-                    f"Check previous logs for details.",
-                    extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
-                )
-            elif not tool_definitions:
-                logger.info(
-                    f"Assistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id} initialized with no tools defined.",
-                    extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
-                )
-            else:
-                logger.info(
-                    f"Successfully initialized all {len(created_tools)} defined tools for assistant '{assistant_data.name}' ({assistant_uuid}) for user {user_id}.",
-                    extra={"assistant_id": str(assistant_uuid), "user_id": user_id},
-                )
-
             # --- Create Assistant Instance ---
+            # Use the actual enum member for comparison
             assistant_type = assistant_data.assistant_type
             assistant_instance: BaseAssistant
 
-            # Compare the enum member directly
             if assistant_type == AssistantType.LLM:
-                logger.debug(
+                self.logger.debug(
                     f"Creating LangGraphAssistant instance for {assistant_uuid}, user {user_id}"
                 )
-                # Ensure all required args are present
                 assistant_instance = LangGraphAssistant(
                     assistant_id=str(assistant_uuid),
                     name=assistant_data.name,
-                    config=config_for_assistant,
+                    config=config_for_assistant,  # Pass the prepared dict
                     tools=created_tools,
-                    user_id=user_id,  # Pass user_id to assistant instance
-                    checkpointer=self.checkpointer,  # Pass the checkpointer
-                    rest_client=self.rest_client,  # Pass the factory's rest_client
+                    user_id=user_id,
+                    rest_client=self.rest_client,
+                    # ---> Передаем новые глобальные настройки <---
+                    summarization_prompt=global_settings.summarization_prompt,
+                    context_window_size=global_settings.context_window_size,
+                    # -------------------------------------------
                 )
-                # ****** NEW: Load initial data AFTER creating instance ******
-                logger.info(
+                # Load initial data after creating instance
+                self.logger.info(
                     f"Loading initial data for LangGraphAssistant {assistant_uuid} user {user_id}"
                 )
                 await assistant_instance._load_initial_data()
-                # ***********************************************************
             else:
-                # Use f-string for cleaner logging
                 raise ValueError(
                     f"Unknown or unsupported assistant type '{assistant_type}' for assistant {assistant_uuid}"
                 )
@@ -380,14 +358,13 @@ class AssistantFactory:
                 async with self._cache_lock:
                     self._assistant_cache[cache_key] = (
                         assistant_instance,
-                        datetime.now(timezone.utc),
-                    )  # Use timezone.utc
-                logger.info(
+                        datetime.now(timezone.utc),  # Use timezone.utc
+                    )
+                self.logger.info(
                     f"Assistant {assistant_uuid} for user {user_id} created and added to cache."
                 )
                 return assistant_instance
             else:
-                # This case should ideally not happen if assistant_type is validated
                 raise ValueError("Failed to create assistant instance.")
 
         except Exception as e:

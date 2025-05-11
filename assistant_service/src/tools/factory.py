@@ -7,7 +7,9 @@ from langchain_core.tools import Tool
 
 # Import shared models
 from tools.calendar_tool import CalendarCreateTool, CalendarListTool
-from tools.reminder_tool import ReminderTool
+
+# Updated import for reminder tools
+from tools.reminder_tool import ReminderCreateTool, ReminderDeleteTool, ReminderListTool
 from tools.sub_assistant_tool import SubAssistantTool  # Import SubAssistantTool
 
 # Import specific tool implementation classes
@@ -62,8 +64,12 @@ class ToolFactory:
                 tool_class: Optional[Type[Tool]] = None
 
                 # Map tool_type to class
-                if tool_type == "reminder":
-                    tool_class = ReminderTool
+                if tool_type == "reminder_create":  # Changed from "reminder"
+                    tool_class = ReminderCreateTool
+                elif tool_type == "reminder_list":
+                    tool_class = ReminderListTool
+                elif tool_type == "reminder_delete":
+                    tool_class = ReminderDeleteTool
                 elif tool_type == "time":
                     tool_class = TimeToolWrapper
                 elif tool_type == "calendar":
@@ -93,6 +99,13 @@ class ToolFactory:
                     logger.info(
                         f"Attempting to fetch sub-assistant with ID: {sub_assistant_id}"
                     )
+                    # Ensure assistant_factory is not None before calling get_assistant_by_id
+                    # This check is technically redundant due to the earlier check, but good for type checkers
+                    if self.assistant_factory is None:
+                        raise ValueError(
+                            "AssistantFactory is None, cannot fetch sub-assistant."
+                        )
+
                     sub_assistant_instance = (
                         await self.assistant_factory.get_assistant_by_id(
                             sub_assistant_id, user_id=user_id
@@ -102,18 +115,16 @@ class ToolFactory:
                         f"Successfully fetched sub-assistant: {sub_assistant_instance.name}"
                     )
 
-                    # Prepare ALL args as kwargs
                     sub_assistant_tool_args = {
                         "name": tool_name,
                         "description": tool_description,
                         "settings": self.settings,
                         "user_id": user_id,
                         "sub_assistant": sub_assistant_instance,
-                        "parent_assistant_id": assistant_id,  # Name expected by SubAssistantTool.__init__
+                        "parent_assistant_id": assistant_id,
                         "sub_assistant_db_id": sub_assistant_id,
                         "tool_id": tool_id_str,
                     }
-                    # Call constructor with all args as kwargs
                     tool_instance = SubAssistantTool(**sub_assistant_tool_args)
                     logger.info(f"Initialized SubAssistantTool: {tool_instance.name}")
 
@@ -121,16 +132,16 @@ class ToolFactory:
                     logger.warning(
                         f"Unknown or unsupported tool type: {tool_type} for tool: {tool_name}"
                     )
-                    # No tool_class assigned, loop will continue
 
-                # Generic tool creation for other types (if tool_class was assigned)
-                if tool_class:
+                if (
+                    tool_class and not tool_instance
+                ):  # Ensure tool_instance isn't already set (e.g. for SubAssistantTool)
                     base_tool_args = {
                         "name": tool_name,
                         "description": tool_description,
-                        "settings": self.settings,  # Pass settings
+                        "settings": self.settings,
                         "user_id": user_id,
-                        "assistant_id": assistant_id,  # This is the PARENT assistant's ID
+                        "assistant_id": assistant_id,
                         "tool_id": tool_id_str,
                     }
                     tool_instance = tool_class(**base_tool_args)
@@ -138,16 +149,13 @@ class ToolFactory:
                         f"Initialized tool: {tool_instance.name} (Type: {tool_type}) - Desc: {tool_instance.description}"
                     )
 
-                # If tool instance was successfully created (either sub_assistant or generic)
                 if tool_instance:
                     tools.append(tool_instance)
 
             except Exception as e:
-                # Log any error during initialization of THIS tool_def and skip adding it
                 logger.error(
                     f"Failed to initialize tool '{tool_def.name}' (Type: {tool_def.tool_type}) for assistant {assistant_id}: {e}",
                     exc_info=True,
                 )
-                # Do not append the tool if initialization failed
 
         return tools

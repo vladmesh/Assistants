@@ -2,7 +2,7 @@ import logging
 from typing import List, Optional, Sequence
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
-from langgraph.graph.message import add_messages
+from langgraph.graph.message import add_messages as original_add_messages
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +113,9 @@ def custom_message_reducer(
     """
     left = current_state_messages if current_state_messages is not None else []
     right = new_messages if new_messages is not None else []
+    # return right
 
-    combined_messages = add_messages(left, right)
+    combined_messages = original_add_messages(left, right)
 
     if not combined_messages:
         return []

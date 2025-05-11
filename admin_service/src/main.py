@@ -9,6 +9,7 @@ import structlog
 import yaml
 from config.settings import settings
 from pages.assistants.assistants import show_assistants_page
+from pages.system_settings.global_settings import show_global_settings_page
 from pages.tools.tools import show_tools_page
 from pages.users.users import show_users_page
 from rest_client import RestServiceClient
@@ -118,3 +119,5 @@ elif auth_status is True:
         show_assistants_page(rest_client)
     elif page == settings.NAV_ITEMS[2]:  # Tools
         show_tools_page(rest_client)
+    elif page == settings.NAV_ITEMS[3]:  # Глобальные настройки
+        show_global_settings_page(rest_client)

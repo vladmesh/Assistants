@@ -34,7 +34,7 @@ def create_migration(message: str):
 
     # Create migration in the container
     result = subprocess.run(
-        f'docker exec {container_id} python manage.py migrate "{message}"',
+        f'docker exec {container_id} python manage.py revision --autogenerate "{message}"',
         shell=True,
         capture_output=True,
         text=True,
@@ -75,6 +75,21 @@ def create_migration(message: str):
 def apply_migrations() -> int:
     """Apply all pending migrations."""
     return run_command("docker compose exec rest_service python manage.py upgrade")
+
+
+def upgrade_one_step() -> int:
+    """Apply the next pending migration."""
+    return run_command("docker compose exec rest_service python manage.py upgrade +1")
+
+
+def get_current_revision() -> int:
+    """Show the current revision in the database."""
+    return run_command("docker compose exec rest_service python manage.py current")
+
+
+def get_migration_history() -> int:
+    """Show the Alembic migration history."""
+    return run_command("docker compose exec rest_service python manage.py history")
 
 
 def run_tests(service: Optional[str] = None) -> int:
@@ -143,6 +158,15 @@ def main():
     # Apply migrations command
     subparsers.add_parser("upgrade", help="Apply all pending migrations")
 
+    # Apply one migration step command
+    subparsers.add_parser("upgrade-step", help="Apply the next pending migration")
+
+    # Show current revision command
+    subparsers.add_parser("current", help="Show the current database revision")
+
+    # Show migration history command
+    subparsers.add_parser("history", help="Show the migration history")
+
     # Run tests command
     test_parser = subparsers.add_parser("test", help="Run tests")
     test_parser.add_argument("--service", help="Service to test")
@@ -177,6 +201,12 @@ def main():
         return create_migration(args.message)
     elif args.command == "upgrade":
         return apply_migrations()
+    elif args.command == "upgrade-step":
+        return upgrade_one_step()
+    elif args.command == "current":
+        return get_current_revision()
+    elif args.command == "history":
+        return get_migration_history()
     elif args.command == "test":
         return run_tests(args.service)
     elif args.command == "rebuild":

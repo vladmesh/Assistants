@@ -57,14 +57,14 @@ class BaseGoogleCalendarTool(BaseTool):
             return "Error: User ID not available for authorization check."
         try:
             response = await client.get(
-                f"{self.rest_url}/calendar/user/{self.user_id}/token"
+                f"{self.rest_url}/calendar/user/{self.user_id}/token", timeout=30.0
             )
             if response.status_code == 404 or (
                 response.status_code == 200 and not response.json()
             ):
                 # No token found, request auth URL
                 auth_response = await client.get(
-                    f"{self.base_url}/auth/url/{self.user_id}"
+                    f"{self.base_url}/auth/url/{self.user_id}", timeout=30.0
                 )
                 auth_response.raise_for_status()
                 auth_url = auth_response.json().get("auth_url")
@@ -132,7 +132,7 @@ class BaseGoogleCalendarTool(BaseTool):
                     f"Requesting new auth URL for user {self.user_id} due to invalid_grant"
                 )
                 auth_response = await client.get(
-                    f"{self.base_url}/auth/url/{self.user_id}"
+                    f"{self.base_url}/auth/url/{self.user_id}", timeout=30.0
                 )
                 auth_response.raise_for_status()  # Raise for non-200 status
                 auth_url = auth_response.json().get("auth_url")
@@ -227,7 +227,9 @@ class CalendarCreateTool(BaseGoogleCalendarTool):
             try:
                 # Make the API call (specific to create tool)
                 response = await client.post(
-                    f"{self.base_url}/events/{self.user_id}", json=event_data
+                    f"{self.base_url}/events/{self.user_id}",
+                    json=event_data,
+                    timeout=30.0,
                 )
                 response.raise_for_status()
                 created_event = response.json()
@@ -290,7 +292,9 @@ class CalendarListTool(BaseGoogleCalendarTool):
             try:
                 # Make the API call (specific to list tool)
                 response = await client.get(
-                    f"{self.base_url}/events/{self.user_id}", params=params
+                    f"{self.base_url}/events/{self.user_id}",
+                    params=params,
+                    timeout=30.0,
                 )
                 response.raise_for_status()
                 events = response.json()

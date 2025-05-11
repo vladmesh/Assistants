@@ -1,7 +1,11 @@
 import asyncio
+import os
+import random
+import sys
 from typing import AsyncGenerator, Generator
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from config import Settings
 from database import get_session
@@ -9,72 +13,107 @@ from httpx import AsyncClient
 from main import app  # Assuming your FastAPI app is defined in main.py
 from models.assistant import Assistant
 from models.user import TelegramUser
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel.pool import StaticPool
 
-# Load test settings (adjust path if needed)
+# Load test settings
 TEST_SETTINGS = Settings(_env_file=".env.test")
 
-# Use an in-memory SQLite database for testing
-DATABASE_URL = "sqlite+aiosqlite:///./test.db"
-# Alternative for synchronous tests if needed:
-# SYNC_DATABASE_URL = "sqlite:///./test_sync.db"
-
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,  # Set to True to see SQL queries
-    connect_args={"check_same_thread": False},  # Needed for SQLite
-    poolclass=StaticPool,
-)
+# Проверка наличия переменной ASYNC_DATABASE_URL
+DATABASE_URL = os.environ.get("ASYNC_DATABASE_URL")
+if not DATABASE_URL:
+    print(
+        "ERROR: ASYNC_DATABASE_URL environment variable is not set. Tests cannot run without database connection."
+    )
+    sys.exit(1)
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def setup_database() -> AsyncGenerator[None, None]:
-    """Create the database tables before running tests and drop them after."""
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    yield
-    async with engine.begin() as conn:
+@pytest.fixture(scope="session")
+def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
+    """Create an instance of the default event loop for each test case."""
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def test_engine():
+    """Create a test engine once per session."""
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
+
+    yield engine
+
+    # Close engine at the end of the session
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def setup_database(test_engine):
+    """Create the database tables before each test and drop them after."""
+    # Пересоздаем все таблицы для каждого теста
+    async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+    yield
+
+    # Таблицы будут удалены перед следующим тестом, так что очистка здесь не обязательна
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
     """Provide a database session for each test function, ensuring cleanup."""
-    async with engine.connect() as connection:
-        # Begin a nested transaction (uses SAVEPOINT)
-        await connection.begin_nested()
-        # Then create the session based on this connection
-        async with AsyncSession(connection, expire_on_commit=False) as session:
+    # Create a new session for each test
+    session_factory = async_sessionmaker(
+        test_engine,
+        expire_on_commit=False,
+        autoflush=False,
+        autocommit=False,
+        class_=AsyncSession,
+    )
+
+    async with session_factory() as session:
+        try:
+            # Begin a transaction
             yield session
-            # Rollback the nested transaction. This effectively reverts
-            # all changes made within the session, including commits
-            # made within the test function or its fixtures if they use
-            # the same session object.
-            await connection.rollback()
+        finally:
+            # Always rollback at the end to ensure clean state
+            await session.rollback()
+            await session.close()
 
 
 @pytest_asyncio.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Provide an AsyncClient for making requests to the test application."""
 
+    # Override the get_session dependency with our test session
     def get_session_override() -> AsyncSession:
         return db_session
 
     app.dependency_overrides[get_session] = get_session_override
 
+    # Create a new client for each test
     async with AsyncClient(app=app, base_url="http://test") as async_client:
         yield async_client
 
+    # Clear dependency overrides after test
     app.dependency_overrides.clear()
 
 
 # Add fixtures for test data
 @pytest_asyncio.fixture(scope="function")
 async def test_user_id(db_session: AsyncSession) -> int:
-    user = TelegramUser(telegram_id=12345, username="testuser")
+    """Create a test user and return its ID."""
+    # Создаем пользователя с уникальным telegram_id для избежания конфликтов
+    telegram_id = 10000 + random.randint(1, 99999)
+    user = TelegramUser(telegram_id=telegram_id, username="testuser")
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -83,6 +122,8 @@ async def test_user_id(db_session: AsyncSession) -> int:
 
 @pytest_asyncio.fixture(scope="function")
 async def test_secretary_id(db_session: AsyncSession) -> UUID:
+    """Create a test secretary assistant and return its ID."""
+    # Create a secretary specifically for this test
     secretary = Assistant(
         name="Test Secretary Fixture",
         is_secretary=True,

@@ -8,6 +8,7 @@ from .calendar import CalendarCredentials
 from .reminder import Reminder
 
 if TYPE_CHECKING:
+    from .message import Message
     from .user_fact import UserFact
     from .user_secretary import UserSecretaryLink
     from .user_summary import UserSummary
@@ -34,3 +35,4 @@ class TelegramUser(BaseModel, table=True):
     reminders: List[Reminder] = Relationship(back_populates="user")
     user_facts: List["UserFact"] = Relationship(back_populates="user")
     summaries: List["UserSummary"] = Relationship(back_populates="user")
+    messages: List["Message"] = Relationship(back_populates="user")

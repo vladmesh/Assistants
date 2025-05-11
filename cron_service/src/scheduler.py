@@ -1,6 +1,5 @@
 import logging
 import time
-from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -98,7 +97,9 @@ def schedule_job(reminder):
             trigger = DateTrigger(run_date=run_date)
             trigger_args["trigger"] = trigger
             trigger_args["name"] = f"One-time reminder {reminder['id']}"
-            trigger_args["misfire_grace_time"] = 60 * 5  # Allow 5 minutes grace period
+            trigger_args["misfire_grace_time"] = (
+                60 * 120
+            )  # Allow 120 minutes grace period
 
         elif reminder["type"] == "recurring" and reminder.get("cron_expression"):
             cron_parts = reminder["cron_expression"].split()

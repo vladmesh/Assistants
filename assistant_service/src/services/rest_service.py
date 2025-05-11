@@ -18,6 +18,8 @@ from tenacity import (
 # Use schemas from shared_models.api_schemas instead of old models
 from shared_models.api_schemas import (
     AssistantRead,
+    GlobalSettingsRead,
+    GlobalSettingsUpdate,
     ReminderCreate,
     ReminderRead,
     TelegramUserRead,
@@ -26,6 +28,9 @@ from shared_models.api_schemas import (
     UserSummaryCreateUpdate,
     UserSummaryRead,
 )
+
+# Import new message models
+from shared_models.api_schemas.message import MessageCreate, MessageRead, MessageUpdate
 from shared_models.api_schemas.user_fact import UserFactRead
 
 logger = get_logger(__name__)
@@ -349,27 +354,97 @@ class RestServiceClient:
     async def create_reminder(
         self, reminder_data: ReminderCreate
     ) -> Optional[ReminderRead]:
-        """Create a new reminder."""
+        """Create a new reminder.
+
+        Args:
+            reminder_data: Reminder creation data.
+
+        Returns:
+            ReminderRead object if successful, None otherwise.
+        """
         try:
             response_data = await self._request(
-                "POST", "/api/reminders/", json=reminder_data.model_dump()
+                "POST", "/api/reminders/", json=reminder_data.model_dump(mode="json")
             )
-            return ReminderRead(**response_data) if response_data else None
-        except RestServiceError as e:  # Changed exception handling
-            # Log details if needed, re-raise
+            if response_data:
+                return ReminderRead(**response_data)
+            return None  # Should not happen if API returns 201 with body
+        except RestServiceError as e:
             logger.error(
-                "Failed to create reminder",
-                data=reminder_data.model_dump(),
-                error=str(e),
-            )
-            raise
-        except Exception:
-            logger.exception(
-                "Unexpected error creating reminder",
-                data=reminder_data.model_dump(),
+                f"Failed to create reminder for user {reminder_data.user_id}: {e}",
                 exc_info=True,
             )
-            return None  # Return None on unexpected errors
+            return None
+        except Exception:
+            logger.exception(
+                f"Unexpected error creating reminder for user {reminder_data.user_id}",
+                exc_info=True,
+            )
+            return None
+
+    async def get_user_active_reminders(self, user_id: int) -> List[ReminderRead]:
+        """Get a list of active reminders for a specific user.
+
+        Args:
+            user_id: The ID of the user.
+
+        Returns:
+            A list of ReminderRead objects.
+        """
+        try:
+            # GET /api/reminders/user/{user_id}?status=active
+            response_data = await self._request(
+                "GET", f"/api/reminders/user/{user_id}", params={"status": "active"}
+            )
+            if isinstance(response_data, list):
+                return [ReminderRead(**item) for item in response_data]
+            logger.error(
+                f"Received unexpected data format for user active reminders: {type(response_data)}",
+                user_id=user_id,
+                data_received=response_data,
+            )
+            return []
+        except RestServiceError as e:
+            logger.error(
+                f"Failed to get active reminders for user {user_id}: {e}", exc_info=True
+            )
+            return []
+        except Exception:
+            logger.exception(
+                f"Unexpected error getting active reminders for user {user_id}",
+                exc_info=True,
+            )
+            return []
+
+    async def delete_reminder(self, reminder_id: UUID) -> bool:
+        """Delete a reminder by its ID.
+
+        Args:
+            reminder_id: The UUID of the reminder to delete.
+
+        Returns:
+            True if deletion was successful (e.g., 204 No Content), False otherwise.
+        """
+        try:
+            # DELETE /api/reminders/{reminder_id}
+            # _request returns empty dict for 204, or raises error for others
+            await self._request("DELETE", f"/api/reminders/{str(reminder_id)}")
+            logger.info(f"Successfully deleted reminder {reminder_id}")
+            return True
+        except RestServiceError as e:
+            # Log specific error, but return False as per method contract for failure
+            logger.error(f"Failed to delete reminder {reminder_id}: {e}", exc_info=True)
+            # Distinguish 404 (not found, arguably a "successful" deletion if goal is absence)
+            # from other errors. For now, any RestServiceError means False.
+            # if "404" in str(e):
+            #     logger.warning(f"Reminder {reminder_id} not found for deletion.")
+            #     return True # Or False, depending on desired semantics for "not found"
+            return False
+        except Exception:
+            logger.exception(
+                f"Unexpected error deleting reminder {reminder_id}", exc_info=True
+            )
+            return False
 
     async def list_active_user_secretary_assignments(
         self,
@@ -478,72 +553,259 @@ class RestServiceClient:
     async def get_user_summary(
         self, user_id: int, secretary_id: UUID
     ) -> Optional[UserSummaryRead]:
-        """Get the latest summary for a user-secretary pair."""
+        """Gets the latest summary for a user-secretary pair from the API.
+
+        Args:
+            user_id: The user ID
+            secretary_id: The secretary ID
+
+        Returns:
+            The summary if found, None otherwise
+        """
+        # Format the secretary_id if it's a UUID object
+        try:
+            secretary_id_str = str(secretary_id)
+        except Exception as e:
+            logger.error(f"Invalid secretary_id format: {e}")
+            return None
+
         try:
             data = await self._request(
-                "GET", f"/api/users/{user_id}/secretaries/{secretary_id}/summary"
+                "GET",
+                f"/api/user-summaries/latest/",
+                params={"user_id": user_id, "assistant_id": secretary_id_str},
             )
-            if data:  # Check if data is not empty
-                return UserSummaryRead(**data)
-            else:
-                # If _request returns {} on 404 or empty response
-                logger.warning(
-                    f"No summary found for user_id={user_id}, secretary_id={secretary_id} (API returned empty)"
+            # Check if data is empty
+            if not data:
+                logger.info(
+                    f"No summary found for user {user_id}, secretary {secretary_id_str}"
                 )
                 return None
+            return UserSummaryRead(**data)  # Parse as Pydantic model
         except RestServiceError as e:
-            if "404" in str(e):
-                logger.warning(
-                    f"Summary not found (404) for user_id={user_id}, secretary_id={secretary_id}"
-                )
-                return None  # Explicitly return None on 404
-            logger.error(
-                f"Failed to get summary for user {user_id}, secretary {secretary_id}: {e}",
-                exc_info=True,
+            logger.warning(
+                f"Error getting user summary for {user_id}, {secretary_id_str}: {e}"
             )
-            raise  # Re-raise other REST errors
-        except Exception as e:
-            logger.exception(
-                f"Unexpected error getting summary for user {user_id}, secretary {secretary_id}",
-                exc_info=True,
-            )
-            raise RestServiceError(
-                f"Unexpected error getting summary for user {user_id}, secretary {secretary_id}"
-            ) from e
+            return None
 
-    async def create_or_update_user_summary(
-        self, user_id: int, secretary_id: UUID, summary_text: str
-    ) -> UserSummaryRead:
-        """Creates or updates the summary for a user-secretary pair."""
+    async def create_user_summary(
+        self, summary_data: UserSummaryCreateUpdate
+    ) -> Optional[UserSummaryRead]:
+        """Creates a new user summary.
+
+        Args:
+            summary_data: The summary data to create
+
+        Returns:
+            The created summary if successful, None otherwise
+        """
         try:
-            request_data = UserSummaryCreateUpdate(summary_text=summary_text)
-            request_json = request_data.model_dump()
             data = await self._request(
-                "PUT",
-                f"/api/users/{user_id}/secretaries/{secretary_id}/summary",
-                json=request_json,
+                "POST",
+                "/api/user-summaries/",
+                json=summary_data.model_dump(exclude_unset=True, mode="json"),
             )
+            if not data:
+                logger.warning("Empty response when creating user summary")
+                return None
             return UserSummaryRead(**data)
         except RestServiceError as e:
-            logger.error(
-                f"Failed to create/update summary for user {user_id}, secretary {secretary_id}: {e}",
-                exc_info=True,
+            logger.error(f"Error creating user summary: {e}")
+            return None
+
+    # New methods for message handling
+
+    async def create_message(
+        self, message_data: MessageCreate
+    ) -> Optional[MessageRead]:
+        """Creates a new message in the database.
+
+        Args:
+            message_data: The message data to create
+
+        Returns:
+            The created message if successful, None otherwise
+        """
+        try:
+            data = await self._request(
+                "POST",
+                "/api/messages/",
+                json=message_data.model_dump(mode="json", exclude_unset=True),
             )
-            raise  # Re-raise REST errors
+            if not data:
+                logger.warning("Empty response when creating message")
+                return None
+            return MessageRead(**data)
+        except RestServiceError as e:
+            logger.error(f"Error creating message: {e}")
+            return None
+
+    async def get_message(self, message_id: int) -> Optional[MessageRead]:
+        """Gets a message by ID.
+
+        Args:
+            message_id: The message ID
+
+        Returns:
+            The message if found, None otherwise
+        """
+        try:
+            data = await self._request("GET", f"/api/messages/{message_id}")
+            if not data:
+                logger.info(f"No message found with ID {message_id}")
+                return None
+            return MessageRead(**data)
+        except RestServiceError as e:
+            logger.warning(f"Error getting message {message_id}: {e}")
+            return None
+
+    async def get_messages(
+        self,
+        user_id: Optional[int] = None,
+        assistant_id: Optional[str] = None,
+        id_gt: Optional[int] = None,
+        id_lt: Optional[int] = None,
+        role: Optional[str] = None,
+        status: Optional[str] = None,
+        summary_id: Optional[int] = None,
+        limit: int = 100,
+        offset: int = 0,
+        sort_by: str = "id",
+        sort_order: str = "desc",
+    ) -> List[MessageRead]:
+        """Gets messages with filtering, sorting, and pagination.
+
+        Args:
+            user_id: Filter by user ID
+            assistant_id: Filter by assistant ID
+            id_gt: Filter for IDs greater than this value
+            id_lt: Filter for IDs less than this value
+            role: Filter by role (e.g., 'user', 'assistant')
+            status: Filter by status (e.g., 'pending_processing', 'processed')
+            summary_id: Filter by summary ID
+            limit: Maximum number of results to return
+            offset: Number of results to skip
+            sort_by: Field to sort by ('id' or 'timestamp')
+            sort_order: Sort order ('asc' or 'desc')
+
+        Returns:
+            List of messages matching the criteria
+        """
+
+        params = {
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+        }
+
+        # Add optional filters if provided
+        if user_id is not None:
+            params["user_id"] = user_id
+        if assistant_id is not None:
+            params["assistant_id"] = assistant_id
+        if id_gt is not None:
+            params["id_gt"] = id_gt
+        if id_lt is not None:
+            params["id_lt"] = id_lt
+        if role is not None:
+            params["role"] = role
+        if status is not None:
+            params["status"] = status
+        if summary_id is not None:
+            params["summary_id"] = summary_id
+
+        try:
+            data = await self._request("GET", "/api/messages/", params=params)
+            if not isinstance(data, list):
+                logger.error(f"Unexpected response format for messages: {type(data)}")
+                return []
+
+            result = [MessageRead(**item) for item in data]
+
+            return result
+        except RestServiceError as e:
+            logger.error(f"Error getting messages: {e}")
+            return []
+
+    async def update_message(
+        self, message_id: int, update_data: MessageUpdate
+    ) -> Optional[MessageRead]:
+        """Updates a message by ID.
+
+        Args:
+            message_id: The message ID to update
+            update_data: The update data
+
+        Returns:
+            The updated message if successful, None otherwise
+        """
+        try:
+            data = await self._request(
+                "PATCH",
+                f"/api/messages/{message_id}",
+                json=update_data.model_dump(exclude_unset=True, mode="json"),
+            )
+            if not data:
+                logger.warning(f"Empty response when updating message {message_id}")
+                return None
+            return MessageRead(**data)
+        except RestServiceError as e:
+            logger.error(f"Error updating message {message_id}: {e}")
+            return None
+
+    # --- Global Settings --- #
+
+    async def get_global_settings(self) -> "GlobalSettingsBase":
+        """Get global settings from REST service.
+
+        Returns:
+            GlobalSettingsBase: Object with global settings like context_window_size and summarization_prompt
+        """
+        try:
+            response = await self._request("GET", "/api/global-settings/")
+            # Ответ уже десериализован, так как _request возвращает словарь, а не Response объект
+            if response:
+                from shared_models.api_schemas.global_settings import GlobalSettingsBase
+
+                return GlobalSettingsBase(**response)
+            else:
+                logger.error("Failed to get global settings: empty response")
+                # Не возвращаем значения по умолчанию - пусть падает
+                raise ValueError("Failed to retrieve global settings: empty response")
         except Exception as e:
-            logger.exception(
-                f"Unexpected error creating/updating summary for user {user_id}, secretary {secretary_id}",
-                exc_info=True,
-            )
-            raise RestServiceError(
-                f"Unexpected error creating/updating summary for user {user_id}, secretary {secretary_id}"
-            ) from e
+            logger.error(f"Error getting global settings: {e}", exc_info=True)
+            # Не маскируем ошибку возвращением дефолтных значений, проксируем исключение дальше
+            raise ValueError(f"Failed to retrieve global settings: {e}") from e
+
+    # async def update_global_settings(
+    #     self, data: GlobalSettingsUpdate
+    # ) -> Optional[GlobalSettingsRead]:
+    #     """Update the global system settings.
+
+    #     Args:
+    #         data: GlobalSettingsUpdate object with fields to update.
+
+    #     Returns:
+    #         Updated GlobalSettingsRead object.
+
+    #     Raises:
+    #         RestServiceError: If the request fails.
+    #     """
+    #     updated_data = await self._request(
+    #         "PUT",
+    #         "/api/global-settings/",
+    #         json=data.model_dump(
+    #             exclude_unset=True
+    #         ),  # Use model_dump and exclude_unset
+    #     )
+    #     if updated_data:
+    #         return GlobalSettingsRead(**updated_data)
+    #     return None  # Should indicate an error if PUT succeeded but returned nothing
 
     async def close_session(self):
-        """Closes the underlying HTTPX client session."""
-        if hasattr(self, "_client") and self._client and not self._client.is_closed:
-            await self._client.aclose()
-            logger.info("RestServiceClient HTTP session closed.")
+        """Alias for close to maintain compatibility if needed"""
+        await self.close()
 
     async def __aenter__(self):
         return self

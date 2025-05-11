@@ -22,19 +22,24 @@ async def get_user_facts_by_user_id(
 ) -> Sequence[UserFact]:
     """Get all facts for a specific user."""
     statement = select(UserFact).where(UserFact.user_id == user_id)
-    result = await db.exec(statement)
-    return result.all()
+    result = await db.execute(statement)
+    return result.scalars().all()
 
 
 async def get_user_fact_by_id(db: AsyncSession, fact_id: UUID) -> UserFact | None:
     """Get a user fact by its ID."""
     statement = select(UserFact).where(UserFact.id == fact_id)
-    result = await db.exec(statement)
-    return result.first()
+    result = await db.execute(statement)
+    return result.scalars().first()
 
 
 async def delete_user_fact(db: AsyncSession, db_user_fact: UserFact) -> None:
     """Delete a user fact."""
+    if not isinstance(db_user_fact, UserFact):
+        db_user_fact = await get_user_fact_by_id(db, db_user_fact.id)
+        if not db_user_fact:
+            raise ValueError("UserFact not found")
+
     await db.delete(db_user_fact)
     await db.commit()
     return None

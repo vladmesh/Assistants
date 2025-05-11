@@ -10,11 +10,13 @@ from fastapi.responses import JSONResponse
 # from api.endpoints import checkpoints # Import checkpoints separately
 from routers import assistant_tools  # Assuming this is also in routers
 from routers import checkpoints  # Import checkpoints from routers
+from routers import messages  # Добавлен импорт messages
 from routers import secretaries  # Assuming this is also in routers
 from routers import user_facts  # Add user_facts
 from routers import (  # user_secretary_links, # Removed non-existent router
     assistants,
     calendar,
+    global_settings,
     reminders,
     tools,
     user_summaries,
@@ -80,7 +82,10 @@ app.include_router(
     user_facts.router, prefix="/api", tags=["User Facts"]
 )  # Add user_facts router
 app.include_router(user_summaries.router, prefix="/api", tags=["User Summaries"])
-# app.include_router(user_secretary_links.router, prefix="/api") # Removed non-existent router
+app.include_router(
+    messages.router, prefix="/api", tags=["Messages"]
+)  # Добавлен префикс "/api"
+app.include_router(global_settings.router, prefix="/api", tags=["Global Settings"])
 app.include_router(checkpoints.router, prefix="/api")
 
 

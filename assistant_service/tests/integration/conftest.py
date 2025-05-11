@@ -5,7 +5,6 @@ from typing import Any, List, Optional
 import pytest
 import pytest_asyncio
 import redis.asyncio as redis
-from config.settings import Settings
 from langchain_core.callbacks import AsyncCallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage

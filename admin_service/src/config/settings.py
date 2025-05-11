@@ -20,7 +20,15 @@ class Settings(BaseSettings):
     APP_LAYOUT: str = "wide"
 
     # Navigation
-    NAV_ITEMS: list[str] = ["Пользователи", "Ассистенты", "Инструменты"]
+    NAV_ITEMS: list[str] = [
+        "Пользователи",
+        "Ассистенты",
+        "Инструменты",
+        "Глобальные настройки",
+    ]
+
+    # Database settings (if admin panel needed direct DB access, which it doesn't currently)
+    # POSTGRES_USER = os.getenv("POSTGRES_USER", "admin")
 
     model_config = SettingsConfigDict(
         env_file=".env",
