@@ -167,7 +167,7 @@ def _convert_db_message_to_langchain(db_message) -> BaseMessage:
         msg = HumanMessage(content=content, id=msg_id)
     elif db_message.role == "assistant":
         msg = AIMessage(content=content, id=msg_id)
-    elif db_message.role in ["tool_request", "tool_response"]:
+    elif db_message.role == "tool":
         # For tool messages, we might need additional processing based on your schema
         msg = ToolMessage(
             content=content,
