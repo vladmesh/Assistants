@@ -35,15 +35,13 @@ async def save_input_message_node(
         return state  # Return state unchanged
 
     # Get current message
-    messages = state.get("messages", [])
-    if not messages:
+    input_message = state.get("initial_message", None)
+    if input_message is None:
         logger.warning(
             "No messages in state, nothing to save.",
             extra=log_extra,
         )
         return state  # Return state unchanged
-
-    input_message = messages[0]
 
     # Convert user_id to int
     try:
