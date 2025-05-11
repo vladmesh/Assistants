@@ -152,6 +152,5 @@ async def save_response_node(
                 extra=log_extra,
                 exc_info=True,
             )
-
     # No need to update state here as we're at the end of processing
     return state
