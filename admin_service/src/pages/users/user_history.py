@@ -19,8 +19,48 @@ def render_user_history_page(user_id: int, rest_client: RestServiceClient):
     summaries = run_async(rest_client.get_user_summaries(user_id=user_id))
 
     # Display summaries if they exist
+    st.subheader("Саммари")
+
+    # Add new summary button
+    with st.expander("➕ Добавить новое саммари", expanded=False):
+        new_summary_text = st.text_area(
+            "Текст саммари",
+            key="new_summary_text",
+            height=200,
+        )
+
+        # Get list of assistants for selection
+        assistants = run_async(rest_client.get_assistants())
+        assistant_options = {a.name: a.id for a in assistants}
+
+        selected_assistant = st.selectbox(
+            "Выберите ассистента",
+            options=list(assistant_options.keys()),
+            format_func=lambda x: x,
+        )
+
+        if st.button("Создать саммари"):
+            if not new_summary_text:
+                st.error("Введите текст саммари")
+            else:
+                try:
+                    summary_data = UserSummaryCreateUpdate(
+                        user_id=user_id,
+                        assistant_id=assistant_options[selected_assistant],
+                        summary_text=new_summary_text,
+                    )
+                    created_summary = run_async(
+                        rest_client.create_user_summary(summary_data)
+                    )
+                    if created_summary:
+                        st.success("Саммари создано")
+                        st.rerun()
+                    else:
+                        st.error("Ошибка при создании саммари")
+                except Exception as e:
+                    st.error(f"Ошибка при создании саммари: {e}")
+
     if summaries:
-        st.subheader("Саммари")
         for summary in summaries:
             with st.expander(f"Саммари от {summary.created_at}"):
                 # Allow editing summary
@@ -30,25 +70,39 @@ def render_user_history_page(user_id: int, rest_client: RestServiceClient):
                     key=f"summary_{summary.id}",
                 )
 
-                if new_summary != summary.summary_text:
-                    if st.button("Сохранить изменения", key=f"save_{summary.id}"):
-                        try:
-                            updated_summary = run_async(
-                                rest_client.update_user_summary(
-                                    summary_id=summary.id,
-                                    summary_data=UserSummaryCreateUpdate(
-                                        user_id=user_id,
-                                        assistant_id=summary.assistant_id,
-                                        summary_text=new_summary,
-                                        last_message_id_covered=summary.last_message_id_covered,
-                                        token_count=summary.token_count,
-                                    ),
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    if new_summary != summary.summary_text:
+                        if st.button("Сохранить изменения", key=f"save_{summary.id}"):
+                            try:
+                                updated_summary = run_async(
+                                    rest_client.update_user_summary(
+                                        summary_id=summary.id,
+                                        summary_data=UserSummaryCreateUpdate(
+                                            user_id=user_id,
+                                            assistant_id=summary.assistant_id,
+                                            summary_text=new_summary,
+                                            last_message_id_covered=summary.last_message_id_covered,
+                                            token_count=summary.token_count,
+                                        ),
+                                    )
                                 )
-                            )
-                            st.success("Саммари обновлено")
-                            st.rerun()
+                                st.success("Саммари обновлено")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Ошибка при обновлении саммари: {e}")
+
+                with col2:
+                    if st.button("Удалить", key=f"delete_{summary.id}"):
+                        try:
+                            if run_async(rest_client.delete_user_summary(summary.id)):
+                                st.success("Саммари удалено")
+                                st.rerun()
+                            else:
+                                st.error("Ошибка при удалении саммари")
                         except Exception as e:
-                            st.error(f"Ошибка при обновлении саммари: {e}")
+                            st.error(f"Ошибка при удалении саммари: {e}")
 
                 # Display summary metadata
                 st.write(f"ID: {summary.id}")
