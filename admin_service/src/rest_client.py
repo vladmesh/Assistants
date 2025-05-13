@@ -14,10 +14,13 @@ from shared_models.api_schemas import (
     AssistantUpdate,
     GlobalSettingsRead,
     GlobalSettingsUpdate,
+    MessageRead,
     TelegramUserRead,
     ToolCreate,
     ToolRead,
     ToolUpdate,
+    UserSummaryCreateUpdate,
+    UserSummaryRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -255,3 +258,57 @@ class RestServiceClient:
         )
         response.raise_for_status()
         return GlobalSettingsRead(**response.json())
+
+    async def get_user_summaries(self, user_id: int) -> List[UserSummaryRead]:
+        """Get all summaries for a user."""
+        try:
+            response = await self._client.get(
+                f"{self.base_url}/api/user-summaries/", params={"user_id": user_id}
+            )
+            return [UserSummaryRead(**summary) for summary in response.json()]
+        except Exception as e:
+            logger.error(f"Error getting user summaries: {e}")
+            return []
+
+    async def update_user_summary(
+        self, summary_id: int, summary_data: UserSummaryCreateUpdate
+    ) -> Optional[UserSummaryRead]:
+        """Update a user summary."""
+        try:
+            response = await self._client.put(
+                f"{self.base_url}/api/user-summaries/{summary_id}",
+                json=summary_data.model_dump(exclude_unset=True),
+            )
+            return UserSummaryRead(**response.json())
+        except Exception as e:
+            logger.error(f"Error updating user summary: {e}")
+            return None
+
+    async def get_messages(
+        self,
+        user_id: int,
+        assistant_id: Optional[UUID] = None,
+        limit: int = 100,
+        offset: int = 0,
+        sort_by: str = "id",
+        sort_order: str = "desc",
+    ) -> List[MessageRead]:
+        """Get messages for a user."""
+        try:
+            params = {
+                "user_id": user_id,
+                "limit": limit,
+                "offset": offset,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+            }
+            if assistant_id:
+                params["assistant_id"] = str(assistant_id)
+
+            response = await self._client.get(
+                f"{self.base_url}/api/messages/", params=params
+            )
+            return [MessageRead(**message) for message in response.json()]
+        except Exception as e:
+            logger.error(f"Error getting messages: {e}")
+            return []
