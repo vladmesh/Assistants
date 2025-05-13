@@ -18,44 +18,45 @@ def render_user_history_page(user_id: int, rest_client: RestServiceClient):
     # Get user summaries
     summaries = run_async(rest_client.get_user_summaries(user_id=user_id))
 
-    if not summaries:
-        st.info("У пользователя нет истории")
-        return
+    # Display summaries if they exist
+    if summaries:
+        st.subheader("Саммари")
+        for summary in summaries:
+            with st.expander(f"Саммари от {summary.created_at}"):
+                # Allow editing summary
+                new_summary = st.text_area(
+                    "Текст саммари",
+                    value=summary.summary_text,
+                    key=f"summary_{summary.id}",
+                )
 
-    # Display summaries
-    st.subheader("Саммари")
-    for summary in summaries:
-        with st.expander(f"Саммари от {summary.created_at}"):
-            # Allow editing summary
-            new_summary = st.text_area(
-                "Текст саммари", value=summary.summary_text, key=f"summary_{summary.id}"
-            )
-
-            if new_summary != summary.summary_text:
-                if st.button("Сохранить изменения", key=f"save_{summary.id}"):
-                    try:
-                        updated_summary = run_async(
-                            rest_client.update_user_summary(
-                                summary_id=summary.id,
-                                summary_data=UserSummaryCreateUpdate(
-                                    user_id=user_id,
-                                    assistant_id=summary.assistant_id,
-                                    summary_text=new_summary,
-                                    last_message_id_covered=summary.last_message_id_covered,
-                                    token_count=summary.token_count,
-                                ),
+                if new_summary != summary.summary_text:
+                    if st.button("Сохранить изменения", key=f"save_{summary.id}"):
+                        try:
+                            updated_summary = run_async(
+                                rest_client.update_user_summary(
+                                    summary_id=summary.id,
+                                    summary_data=UserSummaryCreateUpdate(
+                                        user_id=user_id,
+                                        assistant_id=summary.assistant_id,
+                                        summary_text=new_summary,
+                                        last_message_id_covered=summary.last_message_id_covered,
+                                        token_count=summary.token_count,
+                                    ),
+                                )
                             )
-                        )
-                        st.success("Саммари обновлено")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Ошибка при обновлении саммари: {e}")
+                            st.success("Саммари обновлено")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Ошибка при обновлении саммари: {e}")
 
-            # Display summary metadata
-            st.write(f"ID: {summary.id}")
-            st.write(f"Ассистент ID: {summary.assistant_id}")
-            st.write(f"Последнее сообщение: {summary.last_message_id_covered}")
-            st.write(f"Количество токенов: {summary.token_count}")
+                # Display summary metadata
+                st.write(f"ID: {summary.id}")
+                st.write(f"Ассистент ID: {summary.assistant_id}")
+                st.write(f"Последнее сообщение: {summary.last_message_id_covered}")
+                st.write(f"Количество токенов: {summary.token_count}")
+    else:
+        st.info("У пользователя нет саммари")
 
     # Get messages
     st.subheader("Сообщения")
