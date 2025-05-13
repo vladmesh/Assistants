@@ -1,8 +1,3 @@
-# Этот файл docker-compose-prod.yml предназначен для запуска приложения
-# с использованием предварительно собранных образов из GitHub Container Registry (ghcr.io).
-# Не забудьте заменить 'YOUR_GITHUB_LOGIN_OR_ORGANIZATION' на ваш логин/организацию в GitHub.
-# Также убедитесь, что Docker на сервере аутентифицирован в ghcr.io для скачивания приватных образов.
-
 services:
   assistant_service:
     image: ghcr.io/vladmesh/assistant_service:latest
@@ -16,8 +11,6 @@ services:
       - LOG_LEVEL=DEBUG
     env_file:
       - .env
-    # volumes:
-    #   - ./assistant_service/src:/src  # Исходный код, обычно не монтируется в prod
     depends_on:
       redis:
         condition: service_healthy
@@ -42,8 +35,6 @@ services:
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REST_SERVICE_URL=http://rest_service:8000
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-    # volumes:
-    #   - ./telegram_bot_service/src:/src  # Исходный код, обычно не монтируется в prod
     depends_on:
       redis:
         condition: service_healthy
@@ -66,8 +57,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     networks:
       - app_network
     healthcheck:
@@ -83,12 +72,6 @@ services:
       - ASYNC_DATABASE_URL=${ASYNC_DATABASE_URL}
     env_file:
       - .env
-    ports:
-      - "8000:8000"
-    # volumes:
-    #   - ./rest_service/src:/src # Исходный код
-    #   - ./rest_service/alembic:/alembic # Alembic миграции, если не включены в образ или нужны для выполнения команд
-    #   - ./rest_service/alembic.ini:/alembic.ini # Конфигурация Alembic
     depends_on:
       db:
         condition: service_healthy
@@ -110,8 +93,6 @@ services:
       - REDIS_DB=${REDIS_DB}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
-    # volumes:
-    #   - ./cron_service/src:/src  # Исходный код
     depends_on:
       redis:
         condition: service_healthy
@@ -128,8 +109,6 @@ services:
   google_calendar_service:
     image: ghcr.io/vladmesh/google_calendar_service:latest
     container_name: google-calendar-service
-    ports:
-      - "8001:8000"
     environment:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
@@ -143,9 +122,6 @@ services:
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
     env_file:
       - .env
-    # volumes:
-    #   - ./google_calendar_service/src:/src # Исходный код
-    #   - ./shared_models:/shared_models # Если shared_models не включены в образ и нужны в runtime
     depends_on:
       rest_service:
         condition: service_healthy
@@ -168,8 +144,6 @@ services:
       - .env
     ports:
       - "8501:8501"
-    # volumes:
-    #   - ./admin_service/src:/src # Исходный код
     depends_on:
       rest_service:
         condition: service_healthy
@@ -184,11 +158,15 @@ services:
   redis:
     image: redis/redis-stack-server:latest
     container_name: redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-stack-server --appendonly yes --dir /data
+    command:
+      [
+        "redis-server",
+        "--save", "5 1",       # спустя 5 секунд после первой записи — BGSAVE
+        "--appendonly", "yes", # AOF по-прежнему включён
+        "--dir", "/data"
+      ]
     networks:
       - app_network
     healthcheck:
