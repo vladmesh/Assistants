@@ -82,3 +82,11 @@ async def update_summary(
     await db.commit()
     await db.refresh(db_obj)
     return db_obj
+
+
+async def delete_summary(db: AsyncSession, *, id: int) -> None:
+    """Delete a user summary."""
+    summary = await get_summary_by_id(db, id=id)
+    if summary:
+        await db.delete(summary)
+        await db.commit()

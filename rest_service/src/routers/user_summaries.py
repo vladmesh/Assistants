@@ -132,3 +132,23 @@ async def update_summary_endpoint(
         db=db, db_obj=db_summary_to_update, obj_in=update_data
     )
     return updated_summary
+
+
+@router.delete(
+    "/user-summaries/{summary_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete User Summary",
+    description="Delete an existing summary.",
+)
+async def delete_summary_endpoint(
+    summary_id: int,
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    db_summary = await user_summary_crud.get_summary_by_id(db, id=summary_id)
+    if not db_summary:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Summary with id {summary_id} not found",
+        )
+
+    await user_summary_crud.delete_summary(db=db, id=summary_id)

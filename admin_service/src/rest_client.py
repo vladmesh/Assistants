@@ -312,3 +312,30 @@ class RestServiceClient:
         except Exception as e:
             logger.error(f"Error getting messages: {e}")
             return []
+
+    async def create_user_summary(
+        self, summary_data: UserSummaryCreateUpdate
+    ) -> Optional[UserSummaryRead]:
+        """Create a new user summary."""
+        try:
+            logger.info(f"Creating user summary with data: {summary_data.model_dump()}")
+            response = await self._client.post(
+                f"{self.base_url}/api/user-summaries/",
+                json=summary_data.model_dump(exclude_unset=True, mode="json"),
+            )
+            return UserSummaryRead(**response.json())
+        except Exception as e:
+            logger.error(f"Error creating user summary: {str(e)}")
+            logger.error(f"Summary data: {summary_data.model_dump()}")
+            return None
+
+    async def delete_user_summary(self, summary_id: int) -> bool:
+        """Delete a user summary."""
+        try:
+            await self._client.delete(
+                f"{self.base_url}/api/user-summaries/{summary_id}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting user summary: {e}")
+            return False
