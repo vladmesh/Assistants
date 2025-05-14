@@ -145,12 +145,13 @@ def show_assistants_page(rest_client: RestServiceClient):
             instructions = st.text_area("Инструкции")
             assistant_type = st.selectbox("Тип ассистента", ["llm", "openai_api"])
             openai_assistant_id = st.text_input("ID ассистента OpenAI (опционально)")
+            startup_message = st.text_area("Стартовое сообщение")
 
             submit_button = st.form_submit_button("Создать ассистента")
 
             if submit_button:
                 if not name or not model or not instructions:
-                    st.error("Пожалуйста, заполните все обязательные поля")
+                    st.error("Пожалуйста, заполните все обязательные поля: Имя, Модель, Инструкции")
                 else:
                     with st.spinner("Создаем ассистента..."):
                         new_assistant = AssistantCreate(
@@ -163,6 +164,7 @@ def show_assistants_page(rest_client: RestServiceClient):
                             openai_assistant_id=openai_assistant_id
                             if openai_assistant_id
                             else None,
+                            startup_message=startup_message,
                         )
                         created_assistant = run_async(
                             rest_client.create_assistant(new_assistant)
@@ -195,6 +197,9 @@ def show_assistants_page(rest_client: RestServiceClient):
                 value=assistant.openai_assistant_id or "",
             )
             new_is_active = st.checkbox("Активен", value=assistant.is_active)
+            new_startup_message = st.text_area(
+                "Стартовое сообщение", value=getattr(assistant, "startup_message", None) or ""
+            )
 
             col1, col2 = st.columns(2)
             with col1:
@@ -204,7 +209,7 @@ def show_assistants_page(rest_client: RestServiceClient):
 
             if submit_button:
                 if not new_name or not new_model or not new_instructions:
-                    st.error("Пожалуйста, заполните все обязательные поля")
+                    st.error("Пожалуйста, заполните все обязательные поля: Имя, Модель, Инструкции")
                 else:
                     with st.spinner("Обновляем ассистента..."):
                         updated_assistant = AssistantUpdate(
@@ -218,6 +223,7 @@ def show_assistants_page(rest_client: RestServiceClient):
                             if new_openai_assistant_id
                             else None,
                             is_active=new_is_active,
+                            startup_message=new_startup_message,
                         )
                         run_async(
                             rest_client.update_assistant(
