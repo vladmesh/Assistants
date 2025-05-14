@@ -41,6 +41,7 @@ class Assistant(BaseModel, table=True):
     model: str  # gpt-4, gpt-3.5-turbo и т.д.
     instructions: str  # Промпт/инструкции для ассистента
     description: Optional[str] = Field(default=None)  # Description for user selection
+    startup_message: Optional[str] = Field(default=None)  # Message to send when user selects this secretary
     assistant_type: Annotated[str, AssistantType] = Field(
         sa_column=Column(String), default=AssistantType.LLM.value
     )

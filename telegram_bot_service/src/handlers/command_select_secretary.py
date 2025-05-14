@@ -93,17 +93,65 @@ async def handle_select_secretary(**context: Any) -> None:
             # Вызов user_service
             await user_service.set_user_secretary(rest, user_id, secretary_id)
 
-            # 4. Confirm success to user
-            await telegram.answer_callback_query(
-                query_id
-            )  # Acknowledge the button press
-            confirmation_text = "Отлично! Секретарь назначен."
-            await telegram.send_message(chat_id, confirmation_text)
-            logger.info(
-                "Secretary assigned successfully via callback",
-                user_id=user_id,
-                secretary_id=secretary_id,
-            )
+            # 4. Get assistant details to check for startup_message
+            assistant_details = await rest.get_assistant_by_id(assistant_id=secretary_id) # Предполагаем, что secretary_id это assistant_id
+
+            if assistant_details and assistant_details.startup_message:
+                logger.info(
+                    "Startup message found for assistant",
+                    assistant_id=secretary_id,
+                    startup_message=assistant_details.startup_message,
+                )
+                # 4.1. Create a fake user message
+                await rest.create_message(
+                    user_id=user_id,
+                    assistant_id=secretary_id,
+                    role="user",
+                    content="привет", # Standard greeting to initiate conversation flow
+                    content_type="text",
+                    status="processed",
+                )
+                logger.info(
+                    "Fake user message created for startup",
+                    user_id=user_id,
+                    assistant_id=secretary_id,
+                )
+
+                # 4.2. Create the assistant's startup message
+                await rest.create_message(
+                    user_id=user_id,
+                    assistant_id=secretary_id,
+                    role="assistant",
+                    content=assistant_details.startup_message,
+                    content_type="text",
+                    status="processed",
+                )
+                logger.info(
+                    "Assistant startup message created in DB",
+                    user_id=user_id,
+                    assistant_id=secretary_id,
+                )
+
+                # 4.3. Send startup message to user and acknowledge callback
+                await telegram.answer_callback_query(query_id)
+                await telegram.send_message(chat_id, assistant_details.startup_message)
+                logger.info(
+                    "Startup message sent to user",
+                    chat_id=chat_id,
+                    assistant_id=secretary_id,
+                )
+            else:
+                # 4.4. No startup message, send standard confirmation
+                await telegram.answer_callback_query(
+                    query_id
+                )  # Acknowledge the button press
+                confirmation_text = "Отлично! Секретарь назначен."
+                await telegram.send_message(chat_id, confirmation_text)
+                logger.info(
+                    "Secretary assigned successfully (no startup message), standard confirmation sent",
+                    user_id=user_id,
+                    secretary_id=secretary_id,
+                )
 
         except RestClientError as e:
             logger.error(

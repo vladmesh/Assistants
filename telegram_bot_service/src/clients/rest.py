@@ -12,6 +12,8 @@ from shared_models.api_schemas import (
     TelegramUserCreate,
     TelegramUserRead,
     UserSecretaryLinkRead,
+    MessageCreate,
+    MessageRead,
 )
 
 logger = structlog.get_logger()
@@ -251,6 +253,70 @@ class RestClient:
         )
         # logger.info("Found active secretary for user", user_id=user_id, secretary_id=secretary_data.id) # Less verbose
         return secretary_data
+
+    async def get_assistant_by_id(self, assistant_id: UUID) -> Optional[AssistantRead]:
+        """Get assistant details by assistant_id."""
+        response_data = await self._make_request("GET", f"/assistants/{assistant_id}")
+        if response_data is None:
+            return None
+        return self._parse_response(
+            response_data,
+            AssistantRead,
+            context={"assistant_id": assistant_id, "method": "get_assistant_by_id"},
+        )
+
+    async def create_message(
+        self,
+        user_id: int,
+        assistant_id: UUID,
+        role: str,
+        content: str,
+        content_type: str,  # e.g., "text", "image_url"
+        status: Optional[str] = None,
+        # Potentially add other fields like message_type, status based on actual API
+    ) -> Optional[MessageRead]:
+        """Create a new message via the REST API."""
+        # Prepare payload dictionary first, then pass to MessageCreate
+        payload_dict = {
+            "user_id": user_id,
+            "assistant_id": assistant_id, # MessageCreate expects UUID, model_dump will handle serialization
+            "role": role,
+            "content": content,
+            "content_type": content_type,
+            # status and tool_call_id will use defaults from MessageBase if not provided
+        }
+        if status is not None: # Add status to payload if provided
+            payload_dict["status"] = status
+        
+        # Use MessageCreate schema to build and validate the payload
+        try:
+            message_payload = MessageCreate(**payload_dict)
+        except ValidationError as e:
+            logger.error(
+                "Validation error creating MessageCreate payload",
+                payload_dict=payload_dict,
+                errors=e.errors(),
+            )
+            raise RestClientError(f"Client-side validation failed for MessageCreate: {e}") from e
+
+        response_data = await self._make_request(
+            "POST", "/messages/", json=message_payload.model_dump(mode="json", exclude_none=True) # Use model_dump with mode="json"
+        )
+
+        if response_data is None:
+            logger.error(
+                "Create message request returned None unexpectedly (e.g. 404 or non-JSON 204)",
+                payload=message_payload.model_dump(mode="json", exclude_none=True),
+            )
+            # If a 204 No Content is a valid successful response for message creation,
+            # this logic might need adjustment. For now, assume None means an issue or unexpected 404.
+            return None # Or raise RestClientError if None is always an error for POST /messages/
+
+        return self._parse_response(
+            response_data,
+            MessageRead,
+            context={"payload": message_payload.model_dump(mode="json", exclude_none=True), "method": "create_message"},
+        )
 
     async def ping(self) -> bool:
         """Check if the REST service is healthy."""
