@@ -26,44 +26,43 @@ class GoogleCalendarService:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-        # Create client configuration
+    def _make_flow(self) -> Flow:
+        """Helper method to create a new Flow instance."""
         client_config = {
             "web": {
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "project_id": "smart-assistant",
+                "client_id": self.settings.GOOGLE_CLIENT_ID,
+                "project_id": "smart-assistant",  # Or from settings if it varies
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": settings.GOOGLE_TOKEN_URI,
-                "auth_provider_x509_cert_url": settings.GOOGLE_AUTH_PROVIDER_CERT_URL,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uris": [settings.GOOGLE_REDIRECT_URI],
+                "token_uri": self.settings.GOOGLE_TOKEN_URI,
+                "auth_provider_x509_cert_url": self.settings.GOOGLE_AUTH_PROVIDER_CERT_URL,
+                "client_secret": self.settings.GOOGLE_CLIENT_SECRET,
+                "redirect_uris": [self.settings.GOOGLE_REDIRECT_URI],
             }
         }
-
-        # Create flow with redirect URI
-        self._flow = Flow.from_client_config(
+        return Flow.from_client_config(
             client_config=client_config,
             scopes=self.SCOPES,
-            redirect_uri=settings.GOOGLE_REDIRECT_URI,
+            redirect_uri=self.settings.GOOGLE_REDIRECT_URI,
         )
 
     def get_auth_url(self, state: str) -> str:
         """Get Google OAuth URL for user authorization"""
-        auth_url, _ = self._flow.authorization_url(
+        flow = self._make_flow()
+        auth_url, _ = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
             prompt="consent",
             state=state,
         )
-
         return auth_url
 
     async def handle_callback(self, code: str) -> Credentials:
         """Handle OAuth callback and return credentials"""
         try:
+            flow = self._make_flow()
             # Exchange code for tokens
-            self._flow.fetch_token(code=code)
-            return self._flow.credentials
-
+            flow.fetch_token(code=code)
+            return flow.credentials
         except Exception as e:
             logger.error("Failed to handle callback", error=str(e))
             raise
