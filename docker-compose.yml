@@ -124,7 +124,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "ps", "aux", "|", "grep", "python"]
+      test: ["CMD-SHELL", "pidof python"]
       interval: 60s
       timeout: 10s
       retries: 3
