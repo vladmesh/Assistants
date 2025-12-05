@@ -33,14 +33,6 @@ def real_openai_client():
     return OpenAI()
 
 
-@pytest.fixture
-def openai_assistant_id():
-    """ID ассистента OpenAI для тестов (из .env)."""
-    # This might be needed for tests interacting with specific OpenAI assistants
-    # or if used as part of test data setup via REST service.
-    return os.getenv("OPENAI_ASSISTANT_ID")
-
-
 @pytest.fixture(scope="session")
 def redis_url():
     """Provides the Redis URL for the test container."""

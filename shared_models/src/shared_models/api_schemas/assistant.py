@@ -46,7 +46,6 @@ class AssistantBase(BaseSchema):
     description: Optional[str] = None
     startup_message: Optional[str] = None
     assistant_type: AssistantType = AssistantType.LLM
-    openai_assistant_id: Optional[str] = None  # Specific to OpenAI Assistants
     is_active: bool = True
 
 
@@ -62,7 +61,6 @@ class AssistantUpdate(BaseSchema):  # Allow partial updates
     description: Optional[str] = None
     startup_message: Optional[str] = None
     assistant_type: Optional[AssistantType] = None
-    openai_assistant_id: Optional[str] = None
     is_active: Optional[bool] = None
 
 

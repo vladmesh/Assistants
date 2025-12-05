@@ -45,7 +45,6 @@ class Assistant(BaseModel, table=True):
     assistant_type: Annotated[str, AssistantType] = Field(
         sa_column=Column(String), default=AssistantType.LLM.value
     )
-    openai_assistant_id: Optional[str] = Field(default=None, index=True)
     is_active: bool = Field(default=True, index=True)
 
     # Relationships
@@ -98,17 +97,4 @@ class Tool(BaseModel, table=True):
             raise ValueError("Invalid tool type")
 
 
-class UserAssistantThread(BaseModel, table=True):
-    """Хранение thread_id для каждого пользователя и ассистента"""
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: str = Field(index=True)  # ID пользователя из TelegramUser
-    assistant_id: UUID = Field(foreign_key="assistant.id", index=True)
-    thread_id: str  # Thread ID от OpenAI
-    last_used: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
-
-    class Config:
-        table_name = "user_assistant_threads"
-        unique_together = [
-            ("user_id", "assistant_id")
-        ]  # Один тред на пару пользователь-ассистент

@@ -143,8 +143,7 @@ def show_assistants_page(rest_client: RestServiceClient):
             is_secretary = st.checkbox("Является секретарем")
             model = st.text_input("Модель")
             instructions = st.text_area("Инструкции")
-            assistant_type = st.selectbox("Тип ассистента", ["llm", "openai_api"])
-            openai_assistant_id = st.text_input("ID ассистента OpenAI (опционально)")
+            assistant_type = st.selectbox("Тип ассистента", ["llm"])
             startup_message = st.text_area("Стартовое сообщение")
 
             submit_button = st.form_submit_button("Создать ассистента")
@@ -161,9 +160,6 @@ def show_assistants_page(rest_client: RestServiceClient):
                             model=model,
                             instructions=instructions,
                             assistant_type=assistant_type,
-                            openai_assistant_id=openai_assistant_id
-                            if openai_assistant_id
-                            else None,
                             startup_message=startup_message,
                         )
                         created_assistant = run_async(
@@ -189,12 +185,8 @@ def show_assistants_page(rest_client: RestServiceClient):
             new_instructions = st.text_area("Инструкции", value=assistant.instructions)
             new_assistant_type = st.selectbox(
                 "Тип ассистента",
-                ["llm", "openai_api"],
-                index=0 if assistant.assistant_type == "llm" else 1,
-            )
-            new_openai_assistant_id = st.text_input(
-                "ID ассистента OpenAI (опционально)",
-                value=assistant.openai_assistant_id or "",
+                ["llm"],
+                index=0,
             )
             new_is_active = st.checkbox("Активен", value=assistant.is_active)
             new_startup_message = st.text_area(
@@ -219,9 +211,6 @@ def show_assistants_page(rest_client: RestServiceClient):
                             model=new_model,
                             instructions=new_instructions,
                             assistant_type=new_assistant_type,
-                            openai_assistant_id=new_openai_assistant_id
-                            if new_openai_assistant_id
-                            else None,
                             is_active=new_is_active,
                             startup_message=new_startup_message,
                         )

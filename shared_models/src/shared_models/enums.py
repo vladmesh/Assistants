@@ -3,8 +3,7 @@ import enum
 
 # Assistant/Tool related enums
 class AssistantType(str, enum.Enum):
-    LLM = "llm"  # Direct interaction with LLM
-    OPENAI_API = "openai_api"  # Interaction via OpenAI Assistants API
+    LLM = "llm"  # Direct interaction with LLM via LangGraph
 
 
 class ToolType(str, enum.Enum):
