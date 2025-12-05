@@ -102,7 +102,9 @@ def send_reminder_trigger(reminder_data: dict[str, Any]) -> None:
         )  # Directly serialize the QueueTrigger instance
 
         logger.info(
-            f"Attempting to push QueueTrigger to Redis. Queue: {OUTPUT_QUEUE}, Message: {message_json}"
+            "Attempting to push QueueTrigger to Redis. Queue: %s, Message: %s",
+            OUTPUT_QUEUE,
+            message_json,
         )
         logger.info(
             f"--> ID of redis_client in send_reminder_trigger: {id(redis_client)}"
@@ -111,16 +113,22 @@ def send_reminder_trigger(reminder_data: dict[str, Any]) -> None:
         redis_client.rpush(OUTPUT_QUEUE, message_json)
 
         logger.info(
-            f"Reminder trigger event (as QueueTrigger) for {reminder_data.get('id')} sent to {OUTPUT_QUEUE}."
+            "Reminder trigger event (as QueueTrigger) for %s sent to %s.",
+            reminder_data.get("id"),
+            OUTPUT_QUEUE,
         )
 
     except KeyError as e:
         logger.error(
-            f"Missing essential key in reminder_data for {reminder_data.get('id', 'unknown')}: {e}"
+            "Missing essential key in reminder_data for %s: %s",
+            reminder_data.get("id", "unknown"),
+            e,
         )
     except TypeError as e:
         logger.error(
-            f"Type error constructing QueueTrigger for {reminder_data.get('id', 'unknown')}: {e}"
+            "Type error constructing QueueTrigger for %s: %s",
+            reminder_data.get("id", "unknown"),
+            e,
         )
     except Exception as e:
         logger.error(

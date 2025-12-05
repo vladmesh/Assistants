@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.models.rag_models import RagData, SearchQuery, SearchResult
@@ -20,20 +22,20 @@ async def health_check():
 @router.post("/data/add", response_model=RagData)
 async def add_data_endpoint(
     rag_data: RagData,
-    vector_db_service: VectorDBService = Depends(get_vector_db_service),
+    vector_db_service: Annotated[VectorDBService, Depends(get_vector_db_service)],
 ):
     """Эндпоинт для добавления данных в векторную базу данных."""
     try:
         await vector_db_service.add_data(rag_data)
         return rag_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/data/search", response_model=list[SearchResult])
 async def search_data_endpoint(
     search_query: SearchQuery,
-    vector_db_service: VectorDBService = Depends(get_vector_db_service),
+    vector_db_service: Annotated[VectorDBService, Depends(get_vector_db_service)],
 ):
     """Эндпоинт для поиска данных в векторной базе данных."""
     try:
@@ -46,4 +48,4 @@ async def search_data_endpoint(
         )
         return results
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

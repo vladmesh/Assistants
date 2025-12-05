@@ -50,11 +50,14 @@ def _job_func(reminder_data):
                 success = mark_reminder_completed(reminder_id)
                 if not success:
                     logger.warning(
-                        f"Call to mark_reminder_completed for {reminder_id} returned False."
+                        "Call to mark_reminder_completed for %s returned False.",
+                        reminder_id,
                     )
             except Exception as api_exc:
                 logger.error(
-                    f"Exception calling mark_reminder_completed for {reminder_id}: {api_exc}"
+                    "Exception calling mark_reminder_completed for %s: %s",
+                    reminder_id,
+                    api_exc,
                 )
 
     except Exception as e:
@@ -105,7 +108,9 @@ def schedule_job(reminder):
             cron_parts = reminder["cron_expression"].split()
             if len(cron_parts) != 5:
                 raise ValueError(
-                    f"Invalid CRON expression for {job_id}: {reminder['cron_expression']}"
+                    "Invalid CRON expression for %s: %s",
+                    job_id,
+                    reminder["cron_expression"],
                 )
 
             trigger = CronTrigger(
@@ -122,7 +127,8 @@ def schedule_job(reminder):
 
         else:
             logger.warning(
-                f"Invalid type or missing trigger info for reminder {reminder['id']}, skipping."
+                "Invalid type or missing trigger info for reminder %s, skipping.",
+                reminder["id"],
             )
             return
 
@@ -148,7 +154,7 @@ def schedule_job(reminder):
 
 
 def update_jobs_from_rest():
-    """Updates jobs in the scheduler by fetching active reminders from the REST service."""
+    """Fetch active reminders from REST and update scheduler."""
     retries = 0
     while retries < MAX_RETRIES:
         try:
@@ -157,9 +163,7 @@ def update_jobs_from_rest():
             reminders = fetch_active_reminders()
             logger.info(f"Fetched {len(reminders)} active reminders from REST service.")
 
-            if (
-                reminders is None
-            ):  # Handle case where fetch failed and returned None (or check for empty list if appropriate)
+            if reminders is None:  # Handle fetch failure returning None
                 raise ConnectionError("Failed to fetch reminders from REST service.")
 
             active_reminder_ids = {f"{JOB_ID_PREFIX}{r['id']}" for r in reminders}
@@ -189,14 +193,15 @@ def update_jobs_from_rest():
         except Exception as e:
             retries += 1
             logger.error(
-                f"Error updating reminders (attempt {retries}/{MAX_RETRIES}): {e}"
+                "Error updating reminders (attempt %s/%s): %s",
+                retries,
+                MAX_RETRIES,
+                e,
             )
             if retries < MAX_RETRIES:
                 time.sleep(RETRY_DELAY)
             else:
-                logger.error(
-                    "Max retries reached for updating reminders. Service might be unstable."
-                )
+                logger.error("Max retries updating reminders; service unstable.")
                 # Decide if we should raise or continue trying later
                 break  # Stop retrying for now
 
@@ -211,7 +216,7 @@ def start_scheduler():
             minutes=1,  # Check for updates every minute
             id="update_reminders_from_rest",
             name="Update Reminders",
-            misfire_grace_time=30,  # Allow 30 seconds grace period if update job misses schedule
+            misfire_grace_time=30,  # 30 seconds grace if update job misses schedule
         )
         # Perform an initial update immediately on start
         update_jobs_from_rest()

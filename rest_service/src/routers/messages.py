@@ -52,9 +52,7 @@ async def list_messages_endpoint(
     sort_by: Annotated[
         str, Query(description="Fields to sort by: id, timestamp")
     ] = "id",
-    sort_order: Annotated[
-        str, Query(description="Sort order: asc, desc")
-    ] = "asc",
+    sort_order: Annotated[str, Query(description="Sort order: asc, desc")] = "asc",
 ) -> list[Message]:
     logger.info(
         "Listing messages",

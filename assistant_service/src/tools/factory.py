@@ -101,8 +101,7 @@ class ToolFactory:
                         )
 
                     logger.info(
-                        "Attempting to fetch sub-assistant with ID: "
-                        f"{sub_assistant_id}"
+                        f"Attempting to fetch sub-assistant with ID: {sub_assistant_id}"
                     )
                     # Ensure assistant_factory is not None before calling
                     # get_assistant_by_id
