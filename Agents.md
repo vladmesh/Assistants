@@ -30,7 +30,7 @@ service_name/
 ├── Dockerfile.test        # Test environment Dockerfile
 ├── docker-compose.test.yml # Test environment configuration
 ├── pyproject.toml     # Service dependencies
-├── llm_context_*.md      # Service documentation
+├── Agents.md             # Service documentation
 └── __init__.py           # Package initialization
 ```
 
@@ -90,7 +90,7 @@ The project includes several management scripts:
 - **run_tests.sh** - Script for running tests in Docker containers
 - **run_formatters.sh** - Script for code formatting and linting
 
-Detailed information about each service is available in their respective `llm_context_*.md` files.
+Detailed information about each service is available in their respective `Agents.md` files.
 
 ## Deployment
 
@@ -141,8 +141,8 @@ The project uses environment variables for configuration:
 
 - **API Keys & Secrets:**
   - `OPENAI_API_KEY`: OpenAI API key (used by LangGraphAssistant).
-  - `OPEN_API_SECRETAR_ID`: OpenAI Assistant ID (Note: Typo in name: 'SECRETAR'). Likely related to deprecated `OpenAIAssistant` implementation and test fixtures. Not used by the primary `LangGraphAssistant`.
   - `TELEGRAM_TOKEN`: Telegram Bot token.
+  - `TAVILY_API_KEY`: Tavily API key for web search tool (optional).
   - `GOOGLE_*`: Google Calendar API credentials.
 
 - **Service Communication:**
@@ -460,4 +460,29 @@ This high-level summary encapsulates the primary components, deployment strategy
 - Regular dependency updates
 - Clean and maintainable code
 
-detailed information on each service in the "llm_context_**" files
+Detailed information on each service in their respective `Agents.md` files.
+
+---
+
+## Architecture Decision Records
+
+### ADR-001: LangGraph + LangChain as Primary Framework (2025-12)
+
+**Context:** The project initially experimented with multiple approaches for LLM orchestration:
+- Direct OpenAI Assistants API
+- Raw LangChain chains
+- LangGraph state machines
+
+**Decision:** Standardize on **LangGraph** with **LangChain** integrations.
+
+**Rationale:**
+- LangGraph provides flexible state machine for complex workflows (summarization, tool calls, sub-assistants)
+- LangChain offers mature tool abstractions and LLM provider integrations
+- Database-based persistence (via REST API) gives more control than LangGraph checkpointers
+- ReAct agent pattern (`create_react_agent`) handles tool calling elegantly
+
+**Consequences:**
+- Removed legacy `OPENAI_API` assistant type and related code
+- Removed `openai_assistant_id` field and `UserAssistantThread` table
+- Single `AssistantType.LLM` for all assistants using LangGraph
+- All context/state management done through custom graph nodes and REST API

@@ -4,7 +4,6 @@ from .assistant import (
     AssistantType,
     Tool,
     ToolType,
-    UserAssistantThread,
 )
 from .base import BaseModel
 from .calendar import CalendarCredentials
@@ -35,7 +34,6 @@ __all__ = [
     "Tool",
     "ToolType",
     "AssistantToolLink",
-    "UserAssistantThread",
     "UserSecretaryLink",
     "Reminder",
     "ReminderType",

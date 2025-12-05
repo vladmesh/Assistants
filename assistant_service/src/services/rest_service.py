@@ -101,53 +101,6 @@ class RestServiceClient:
             )
             return []  # Return empty list on unexpected errors
 
-    async def get_user_assistant_thread(
-        self, user_id: str, assistant_id: UUID
-    ) -> Optional[Any]:
-        """Get thread for user-assistant pair
-
-        Args:
-            user_id: User ID
-            assistant_id: Assistant ID
-
-        Returns:
-            UserAssistantThread object if found, None otherwise
-        """
-        try:
-            # Use _request helper
-            data = await self._request(
-                "GET", f"/api/users/{user_id}/assistants/{assistant_id}/thread"
-            )
-            return data  # Return raw dict for now
-        except RestServiceError as e:
-            if "404" in str(e):
-                logger.warning(
-                    f"Thread not found for user {user_id}, assistant {assistant_id}"
-                )
-                return None
-            raise
-
-    async def create_user_assistant_thread(
-        self, user_id: str, assistant_id: UUID, thread_id: str
-    ) -> Any:
-        """Create or update thread for user-assistant pair
-
-        Args:
-            user_id: User ID
-            assistant_id: Assistant ID
-            thread_id: OpenAI thread ID
-
-        Returns:
-            Created/updated UserAssistantThread object
-        """
-        # Use _request helper
-        data = await self._request(
-            "POST",
-            f"/api/users/{user_id}/assistants/{assistant_id}/thread",
-            json={"thread_id": thread_id},
-        )
-        return data  # Return raw dict for now
-
     async def get_user(self, user_id: int) -> TelegramUserRead:
         """Get user by ID
 
