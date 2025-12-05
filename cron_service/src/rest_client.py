@@ -43,6 +43,8 @@ def mark_reminder_completed(reminder_id: UUID) -> bool:
         return False
     except Exception as e:
         logger.error(
-            f"An unexpected error occurred while marking reminder {reminder_id} as completed: {e}"
+            "An unexpected error occurred while marking reminder %s as completed: %s",
+            reminder_id,
+            e,
         )
         return False

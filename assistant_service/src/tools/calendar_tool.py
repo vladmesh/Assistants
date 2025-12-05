@@ -367,9 +367,7 @@ class CalendarListTool(BaseGoogleCalendarTool):
                                 end_formatted = end_str
 
                     range_part = f" - {end_formatted}" if end_formatted else ""
-                    result += (
-                        f"- {summary} ({start_formatted}{range_part})\n"
-                    )
+                    result += f"- {summary} ({start_formatted}{range_part})\n"
                 return result.strip()
 
             except httpx.HTTPStatusError as e:

@@ -47,6 +47,4 @@ class TimeToolWrapper(BaseTool):
             current_time = datetime.now(tz)
             return current_time.strftime("%Y-%m-%d %H:%M:%S %Z")
         except Exception as e:
-            raise ToolExecutionError(
-                f"Error getting time: {str(e)}", self.name
-            ) from e
+            raise ToolExecutionError(f"Error getting time: {str(e)}", self.name) from e

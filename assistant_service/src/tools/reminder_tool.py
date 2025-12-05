@@ -48,8 +48,7 @@ class ReminderCreateSchema(BaseModel):
     cron_expression: str | None = Field(
         None,
         description=(
-            "CRON-выражение для 'recurring' напоминания "
-            "(например, '0 10 * * *')."
+            "CRON-выражение для 'recurring' напоминания (например, '0 10 * * *')."
         ),
     )
 
@@ -120,7 +119,7 @@ class ReminderCreateSchema(BaseModel):
             except Exception as e:
                 logger.error(f"Error processing datetime/timezone: {e}")
                 raise ValueError(
-                    "Ошибка при обработке даты/времени/таймзоны: " f"{str(e)}"
+                    f"Ошибка при обработке даты/времени/таймзоны: {str(e)}"
                 ) from e
         return None
 

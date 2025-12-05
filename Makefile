@@ -22,8 +22,9 @@ endif
 
 lint:
 ifeq ($(SERVICE),all)
-	@set -e; for s in $(SERVICES) shared_models; do $(MAKE) lint SERVICE=$$s; done
+	@set -e; for s in $(SERVICES) shared_models; do echo "started linter for $$s"; $(MAKE) lint SERVICE=$$s; done
 else
+	@echo "started linter for $(SERVICE)"
 	@$(MAKE) _ruff SERVICE=$(SERVICE) ARGS="check"
 endif
 
