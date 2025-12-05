@@ -2,6 +2,7 @@
 
 import pandas as pd
 import streamlit as st
+
 from rest_client import RestServiceClient
 from utils.async_utils import run_async
 
@@ -89,7 +90,8 @@ def show_users_page(rest_client: RestServiceClient):
                             )
                         )
                         st.success(
-                            f"Секретарь {selected_secretary.name} назначен пользователю "
+                            "Секретарь назначен: "
+                            f"{selected_secretary.name} -> "
                             f"{selected_user.username or selected_user.telegram_id}"
                         )
                     else:

@@ -1,6 +1,5 @@
 import os
 from functools import lru_cache
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,7 +14,7 @@ class Settings(BaseSettings):
 
     # API Keys (loaded from .env)
     OPENAI_API_KEY: str
-    TAVILY_API_KEY: Optional[str] = None
+    TAVILY_API_KEY: str | None = None
 
     # Redis settings
     REDIS_HOST: str = "redis"
@@ -35,12 +34,12 @@ class Settings(BaseSettings):
     OUTPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM")
 
     # Google Calendar settings
-    GOOGLE_CALENDAR_CREDENTIALS: Optional[str] = None
+    GOOGLE_CALENDAR_CREDENTIALS: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()
 

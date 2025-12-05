@@ -1,14 +1,13 @@
 import datetime
-from typing import Optional
 
-from models import GlobalSettings
+from shared_models.api_schemas import GlobalSettingsUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from shared_models.api_schemas import GlobalSettingsUpdate
+from models import GlobalSettings
 
 
-async def get_global_settings(db: AsyncSession) -> Optional[GlobalSettings]:
+async def get_global_settings(db: AsyncSession) -> GlobalSettings | None:
     """Fetches the single global settings record (id=1)."""
     result = await db.execute(select(GlobalSettings).where(GlobalSettings.id == 1))
     return result.scalars().first()
@@ -36,7 +35,7 @@ async def upsert_global_settings(
         for key, value in update_data.items():
             setattr(db_settings, key, value)
         # Manually update timestamp
-        db_settings.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        db_settings.updated_at = datetime.datetime.now(datetime.UTC)
         await db.commit()
         await db.refresh(db_settings)
         return db_settings

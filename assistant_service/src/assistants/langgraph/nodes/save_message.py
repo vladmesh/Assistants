@@ -1,19 +1,19 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
-from assistants.langgraph.state import AssistantState
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from services.rest_service import RestServiceClient
-
 from shared_models.api_schemas.message import MessageCreate
+
+from assistants.langgraph.state import AssistantState
+from services.rest_service import RestServiceClient
 
 logger = logging.getLogger(__name__)
 
 
 async def save_input_message_node(
     state: AssistantState, rest_client: RestServiceClient
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Saves the input message from the user to the database.
     The input message should be the first message in the state.messages sequence.
@@ -88,7 +88,10 @@ async def save_input_message_node(
         saved_message = await rest_client.create_message(message_data)
         if saved_message and saved_message.id:
             logger.info(
-                f"Successfully saved input message (ID: {saved_message.id}, Role: {role})",
+                (
+                    f"Successfully saved input message (ID: {saved_message.id}, "
+                    f"Role: {role})"
+                ),
                 extra=log_extra,
             )
             # Return updated state with the saved message ID

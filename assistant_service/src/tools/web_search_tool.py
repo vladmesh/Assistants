@@ -1,10 +1,9 @@
 """Web search tool using Tavily API"""
 
-from typing import Optional, Type
-
-from config.logger import get_logger
 from pydantic import BaseModel, Field
 from tavily import TavilyClient
+
+from config.logger import get_logger
 from tools.base import BaseTool
 from utils.error_handler import ToolExecutionError
 
@@ -27,11 +26,11 @@ class WebSearchTool(BaseTool):
     """Tool for searching the internet using Tavily API"""
 
     # Restore the Type annotation
-    args_schema: Type[WebSearchInput] = WebSearchInput
+    args_schema: type[WebSearchInput] = WebSearchInput
     # Remove custom __init__ to inherit from BaseTool
 
     # Class attribute for the client, initialized lazily
-    _client: Optional[TavilyClient] = None
+    _client: TavilyClient | None = None
 
     def _get_tavily_client(self) -> TavilyClient:
         """Lazy initialization of the Tavily client."""
@@ -45,7 +44,7 @@ class WebSearchTool(BaseTool):
                 logger.error(f"Failed to initialize TavilyClient: {e}", exc_info=True)
                 raise ToolExecutionError(
                     f"Failed to initialize Tavily client: {str(e)}", self.name
-                )
+                ) from e
         return self._client
 
     async def _execute(

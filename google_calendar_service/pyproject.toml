@@ -22,11 +22,7 @@ google-api-python-client = "^2.116.0"
 shared-models = {path = "../shared_models"}
 
 [tool.poetry.group.dev.dependencies]
-flake8 = "^6.1.0"
-flake8-pyproject = "^1.2.3"
 mypy = "^1.6.1"
-pylint = "^3.0.2"
-autoflake = "^2.3.1"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.3"
@@ -55,6 +51,21 @@ warn_no_return = true
 warn_unreachable = true
 strict_optional = true
 mypy_path = "src"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+ignore = ["E203"]
+fixable = ["ALL"]
+per-file-ignores = {"*/__init__.py" = ["F401"]}
 
 [[tool.mypy.overrides]]
 module = ["google_auth_oauthlib.*", "googleapiclient.*"]

@@ -1,17 +1,17 @@
-from typing import Any, Dict
+from typing import Any
 from uuid import UUID
 
 import redis.asyncio as aioredis
 import structlog
-from config.settings import settings
-
 from shared_models.queue import QueueMessage
+
+from config.settings import settings
 
 logger = structlog.get_logger()
 
 
 async def send_message_to_assistant(
-    user_id: UUID, content: str, metadata: Dict[str, Any]
+    user_id: UUID, content: str, metadata: dict[str, Any]
 ) -> None:
     """Formats a message and sends it to the assistant's input queue via Redis.
 

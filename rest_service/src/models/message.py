@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Annotated, Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from sqlalchemy import TEXT, TIMESTAMP, Column, ForeignKey, Index, Integer, String
+from sqlalchemy import TEXT, TIMESTAMP, Column, Index
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship
 
 from .base import BaseModel, get_utc_now
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class Message(BaseModel, table=True):
     __tablename__ = "messages"
 
-    id: Optional[int] = Field(
+    id: int | None = Field(
         default=None, primary_key=True, sa_column_kwargs={"autoincrement": True}
     )  # BIGSERIAL
     user_id: int = Field(foreign_key="telegramuser.id", index=True)
@@ -31,10 +31,10 @@ class Message(BaseModel, table=True):
     role: str = Field(index=True)
     content: str = Field(sa_column=Column(TEXT))
     content_type: str = Field(default="text")
-    tool_call_id: Optional[str] = Field(default=None, index=True)
+    tool_call_id: str | None = Field(default=None, index=True)
     status: str = Field(default="active", index=True)
-    summary_id: Optional[int] = Field(default=None, foreign_key="user_summaries.id")
-    meta_data: Optional[dict] = Field(sa_column=Column(JSONB))
+    summary_id: int | None = Field(default=None, foreign_key="user_summaries.id")
+    meta_data: dict | None = Field(sa_column=Column(JSONB))
 
     # Relationships
     user: "TelegramUser" = Relationship(back_populates="messages")
@@ -43,8 +43,5 @@ class Message(BaseModel, table=True):
 
     __table_args__ = (
         Index("ix_messages_user_id_assistant_id_id", "user_id", "assistant_id", "id"),
-        # Other indexes like (user_id, timestamp), (assistant_id, timestamp) might be beneficial
-        # depending on query patterns, but let's stick to the plan for now.
-        # The plan mentions: user_id, assistant_id, timestamp, tool_call_id, status, (user_id, assistant_id, id)
-        # Individual indexes on user_id, assistant_id, timestamp, tool_call_id, status are created by `index=True` on Fields.
+        # Add more indexes later if query patterns require them.
     )

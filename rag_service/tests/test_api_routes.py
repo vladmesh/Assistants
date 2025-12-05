@@ -5,7 +5,6 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-
 from src.main import app
 from src.models.rag_models import RagData, SearchQuery, SearchResult
 

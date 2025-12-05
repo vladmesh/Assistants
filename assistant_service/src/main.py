@@ -1,13 +1,11 @@
 import asyncio
 import signal  # Add signal handling
 
+from dotenv import load_dotenv
+
 from config.logger import get_logger
 from config.settings import get_settings
-from dotenv import load_dotenv
 from orchestrator import AssistantOrchestrator
-from services.rest_service import (  # Ensure this is imported if needed elsewhere
-    RestServiceClient,
-)
 
 logger = get_logger(__name__)
 load_dotenv()  # Load .env for API keys

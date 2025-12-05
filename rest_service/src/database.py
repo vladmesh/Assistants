@@ -1,12 +1,12 @@
 """Database initialization and session management"""
 
-
-from config import settings
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+from config import settings
 
 # Create async engine
 async_engine = create_async_engine(

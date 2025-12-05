@@ -1,20 +1,18 @@
-from typing import Any, Dict, Optional
+from typing import Any
+
+# from schemas.checkpoint import CheckpointCreate  # Keep absolute import
+from sqlalchemy import desc, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Use absolute import for models
 from models.checkpoint import Checkpoint
-from sqlalchemy import desc, select
-from sqlmodel import Session  # Use SQLModel session for async
-from sqlmodel.ext.asyncio.session import AsyncSession
-
-# from schemas.checkpoint import CheckpointCreate  # Keep absolute import
-from shared_models.api_schemas import CheckpointCreate  # Use shared schema
 
 
 async def create_checkpoint(
     db: AsyncSession,
     thread_id: str,
     checkpoint_data: bytes,
-    checkpoint_metadata: Optional[Dict[str, Any]],  # Add metadata parameter
+    checkpoint_metadata: dict[str, Any] | None,  # Add metadata parameter
 ) -> Checkpoint:
     db_checkpoint = Checkpoint(
         thread_id=thread_id,
@@ -27,9 +25,7 @@ async def create_checkpoint(
     return db_checkpoint
 
 
-async def get_latest_checkpoint(
-    db: AsyncSession, thread_id: str
-) -> Optional[Checkpoint]:
+async def get_latest_checkpoint(db: AsyncSession, thread_id: str) -> Checkpoint | None:
     stmt = (
         select(Checkpoint)
         .where(Checkpoint.thread_id == thread_id)

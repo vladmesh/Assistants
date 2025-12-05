@@ -2,9 +2,10 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from models.assistant import Assistant
 from models.user_secretary import UserSecretaryLink
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Assuming you have fixtures for AsyncClient (client) and AsyncSession (db_session)
 # and potentially fixtures to create a test user and a secretary assistant.

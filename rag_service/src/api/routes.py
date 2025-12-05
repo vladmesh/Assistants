@@ -1,5 +1,3 @@
-from typing import Dict, List
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.models.rag_models import RagData, SearchQuery, SearchResult
@@ -13,7 +11,7 @@ async def get_vector_db_service() -> VectorDBService:
     return VectorDBService()
 
 
-@router.get("/health", response_model=Dict[str, str])
+@router.get("/health", response_model=dict[str, str])
 async def health_check():
     """Эндпоинт для проверки работоспособности сервиса."""
     return {"status": "ok"}
@@ -32,7 +30,7 @@ async def add_data_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/data/search", response_model=List[SearchResult])
+@router.post("/data/search", response_model=list[SearchResult])
 async def search_data_endpoint(
     search_query: SearchQuery,
     vector_db_service: VectorDBService = Depends(get_vector_db_service),

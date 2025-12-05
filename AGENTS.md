@@ -13,12 +13,10 @@ smart-assistant/
 ├── telegram_bot_service/     # Telegram bot interface
 ├── rag_service/             # RAG service
 ├── scripts/                  # Utility scripts
-├── manage.py                # Project management script
-├── run_tests.sh            # Test execution script
-├── run_formatters.sh       # Code formatting script
+├── Makefile                # Lint/format/test entrypoint (dockerized ruff/pytest)
+├── .pre-commit-config.yaml # Ruff hooks for commits
 ├── docker-compose.yml      # Main Docker configuration
-├── pyproject.toml          # Poetry configuration
-└── poetry.lock            # Fixed dependency versions
+└── docker-compose-prod.yml # Production compose (GHCR images)
 ```
 
 Each service follows a consistent structure:
@@ -79,18 +77,15 @@ The project is divided into several independent microservices:
 
 ## Project Management
 
-The project includes several management scripts:
+Центральная точка входа — корневой `Makefile` (dockerized):
+- `make format [SERVICE=rest_service]` — `ruff format` + `ruff check --fix`.
+- `make lint [SERVICE=rest_service]` — `ruff check`.
+- `make test [SERVICE=rest_service]` — docker-compose.test.yml (или python:3.11 для shared_models).
+- Миграции rest_service: добавить новые цели (старый manage.py удалён).
 
-- **manage.py** - Main management script for:
-  - Database migrations
-  - Service testing
-  - Container management
-  - Service lifecycle control
+Pre-commit: `.pre-commit-config.yaml` (ruff --fix + ruff-format).
 
-- **run_tests.sh** - Script for running tests in Docker containers
-- **run_formatters.sh** - Script for code formatting and linting
-
-Detailed information about each service is available in their respective `Agents.md` files.
+Подробности по сервисам — в их `AGENTS.md`.
 
 ## Deployment
 
@@ -192,18 +187,14 @@ Tests are executed using Docker containers for isolation and consistency:
 
 ```bash
 # Run all tests
-./run_tests.sh
+make test
 
 # Run tests for specific services
-./run_tests.sh rest_service assistant_service
+make test SERVICE=rest_service
+make test SERVICE=assistant_service
 
-# Available services:
-# - rest_service
-# - cron_service
-# - telegram_bot_service
-# - assistant_service
-# - google_calendar_service
-# - rag_service
+# Available services: rest_service, cron_service, telegram_bot_service,
+# assistant_service, google_calendar_service, rag_service, shared_models
 ```
 
 ### Test Environment
@@ -257,50 +248,11 @@ Each service has its own test environment:
 
 ## Scripts & Tools
 
-### Management Scripts
+### Management
 
-The project provides several management scripts for development and deployment:
-
-#### manage.py
-
-Main management script with the following commands:
-
-```bash
-# Database Management
-./manage.py migrate "Migration message"  # Create new migration
-./manage.py upgrade                      # Apply pending migrations
-
-# Service Management
-./manage.py start [--service SERVICE]    # Start service(s)
-./manage.py stop [--service SERVICE]     # Stop service(s)
-./manage.py restart [--service SERVICE]  # Restart service(s)
-./manage.py rebuild [--service SERVICE]  # Rebuild service(s)
-
-# Testing
-./manage.py test [--service SERVICE]     # Run tests
-
-# Code Formatting
-./manage.py black [--service SERVICE]    # Run black formatter
-./manage.py isort [--service SERVICE]    # Run isort formatter
-```
-
-#### run_tests.sh
-
-Test execution script:
-```bash
-# Run all tests
-./run_tests.sh
-
-# Run specific service tests
-./run_tests.sh rest_service assistant_service
-```
-
-#### run_formatters.sh
-
-Code formatting script:
-- Runs black and isort on changed files
-- Checks formatting before commit
-- Provides instructions for fixing formatting issues
+- Корневой `Makefile` (lint/format/test).
+- `.pre-commit-config.yaml` (ruff hooks).
+- manage.py/run_tests.sh/run_formatters.sh — удалены, неактуальны.
 
 ### Development Tools
 

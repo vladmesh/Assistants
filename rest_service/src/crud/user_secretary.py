@@ -1,27 +1,27 @@
 import logging
-from typing import Optional
 from uuid import UUID
+
+from sqlalchemy.orm import selectinload  # Import selectinload
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.assistant import Assistant  # To check if assistant is secretary
 from models.user import TelegramUser  # To check user existence
 from models.user_secretary import UserSecretaryLink
-from sqlalchemy.orm import selectinload  # Import selectinload
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 
 async def get_active_secretary_for_user(
     db: AsyncSession, user_id: int
-) -> Optional[Assistant]:
+) -> Assistant | None:
     """Get the active secretary assistant assigned to a user, eagerly loading tools."""
     query = (
         select(Assistant)
         .join(UserSecretaryLink, UserSecretaryLink.secretary_id == Assistant.id)
         .where(UserSecretaryLink.user_id == user_id)
-        .where(UserSecretaryLink.is_active == True)
-        .where(Assistant.is_secretary == True)
+        .where(UserSecretaryLink.is_active.is_(True))
+        .where(Assistant.is_secretary.is_(True))
         .options(selectinload(Assistant.tools))  # Eagerly load tools
     )
     result = await db.execute(query)
@@ -51,7 +51,7 @@ async def assign_secretary_to_user(
     update_stmt = (
         UserSecretaryLink.__table__.update()
         .where(UserSecretaryLink.user_id == user_id)
-        .where(UserSecretaryLink.is_active == True)
+        .where(UserSecretaryLink.is_active.is_(True))
         .values(is_active=False)
     )
     await db.execute(update_stmt)
@@ -68,7 +68,9 @@ async def assign_secretary_to_user(
 
     if existing_link:
         logger.info(
-            f"Reactivating existing link for user {user_id} and secretary {secretary_id}"
+            "Reactivating existing link for user %s and secretary %s",
+            user_id,
+            secretary_id,
         )
         existing_link.is_active = True
         db.add(existing_link)
@@ -78,7 +80,9 @@ async def assign_secretary_to_user(
     else:
         # Create new active link
         logger.info(
-            f"Creating new active link for user {user_id} and secretary {secretary_id}"
+            "Creating new active link for user %s and secretary %s",
+            user_id,
+            secretary_id,
         )
         new_link = UserSecretaryLink(
             user_id=user_id, secretary_id=secretary_id, is_active=True
@@ -91,7 +95,7 @@ async def assign_secretary_to_user(
 
 async def get_secretary_assignment(
     db: AsyncSession, user_id: int, secretary_id: UUID
-) -> Optional[UserSecretaryLink]:
+) -> UserSecretaryLink | None:
     """Get a specific assignment link between a user and a secretary."""
     query = (
         select(UserSecretaryLink)
@@ -109,12 +113,14 @@ async def deactivate_secretary_assignment(
     link = await get_secretary_assignment(db, user_id, secretary_id)
     if not link or not link.is_active:
         logger.warning(
-            f"Active link not found to deactivate for user {user_id} and secretary {secretary_id}"
+            "Active link not found to deactivate for user %s and secretary %s",
+            user_id,
+            secretary_id,
         )
         return False
 
     link.is_active = False
     db.add(link)
     await db.commit()
-    logger.info(f"Deactivated link for user {user_id} and secretary {secretary_id}")
+    logger.info("Deactivated link for user %s and secretary %s", user_id, secretary_id)
     return True

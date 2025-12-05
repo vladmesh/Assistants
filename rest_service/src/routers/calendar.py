@@ -1,15 +1,16 @@
-from typing import Optional
+from typing import Annotated
 
-import crud.calendar as calendar_crud
 import structlog
-from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.calendar import CalendarCredentials
+from shared_models.api_schemas import CalendarCredentialsCreate, CalendarCredentialsRead
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import CalendarCredentialsCreate, CalendarCredentialsRead
+import crud.calendar as calendar_crud
+from database import get_session
+from models.calendar import CalendarCredentials
 
 logger = structlog.get_logger()
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
 
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/calendar", tags=["calendar"])
 async def update_calendar_token_route(
     user_id: int,
     creds_in: CalendarCredentialsCreate,
-    db: AsyncSession = Depends(get_session),
+    db: SessionDep,
 ) -> CalendarCredentials:
     """Update or create user's Google Calendar token"""
     logger.info("Attempting to update/create calendar token", user_id=user_id)
@@ -31,16 +32,16 @@ async def update_calendar_token_route(
         )
         logger.info("Calendar token updated/created successfully", user_id=user_id)
         return credentials
-    except ValueError as e:
+    except ValueError as exc:
         logger.error(
             "Failed update/create calendar token: User not found",
             user_id=user_id,
-            error=str(e),
+            error=str(exc),
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-    except Exception:
+        ) from exc
+    except Exception as exc:
         logger.exception(
             "Failed to update/create calendar token due to unexpected error",
             user_id=user_id,
@@ -48,13 +49,13 @@ async def update_calendar_token_route(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update token",
-        )
+        ) from exc
 
 
-@router.get("/user/{user_id}/token", response_model=Optional[CalendarCredentialsRead])
+@router.get("/user/{user_id}/token", response_model=CalendarCredentialsRead | None)
 async def get_calendar_token_route(
-    user_id: int, db: AsyncSession = Depends(get_session)
-) -> Optional[CalendarCredentials]:
+    user_id: int, db: SessionDep
+) -> CalendarCredentials | None:
     """Get user's Google Calendar token"""
     logger.info("Attempting to get calendar token", user_id=user_id)
     try:
@@ -64,20 +65,18 @@ async def get_calendar_token_route(
             return None
         logger.info("Calendar token retrieved successfully", user_id=user_id)
         return credentials
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "Failed to get calendar token due to unexpected error", user_id=user_id
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get token",
-        )
+        ) from exc
 
 
 @router.delete("/user/{user_id}/token", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_calendar_token_route(
-    user_id: int, db: AsyncSession = Depends(get_session)
-) -> None:
+async def delete_calendar_token_route(user_id: int, db: SessionDep) -> None:
     """Delete user's Google Calendar token"""
     logger.info("Attempting to delete calendar token", user_id=user_id)
     try:
@@ -89,11 +88,11 @@ async def delete_calendar_token_route(
             )
         logger.info("Calendar token deleted successfully", user_id=user_id)
         return None
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "Failed to delete calendar token due to unexpected error", user_id=user_id
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete token",
-        )
+        ) from exc

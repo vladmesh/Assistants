@@ -1,4 +1,3 @@
-from typing import List, Optional
 from uuid import UUID
 
 import structlog
@@ -65,12 +64,12 @@ class VectorDBService:
 
     async def search_data(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         data_type: str,
-        user_id: Optional[int],
-        assistant_id: Optional[UUID],
+        user_id: int | None,
+        assistant_id: UUID | None,
         top_k: int = 5,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Ищет данные в векторной базе данных."""
         try:
             search_filter = models.Filter(

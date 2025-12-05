@@ -1,6 +1,5 @@
 """Configuration settings for the admin panel."""
 
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,7 +26,7 @@ class Settings(BaseSettings):
         "Глобальные настройки",
     ]
 
-    # Database settings (if admin panel needed direct DB access, which it doesn't currently)
+    # Database settings (admin UI does not access DB directly)
     # POSTGRES_USER = os.getenv("POSTGRES_USER", "admin")
 
     model_config = SettingsConfigDict(

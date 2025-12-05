@@ -1,21 +1,23 @@
-from typing import List, Optional
+from typing import Annotated
 from uuid import UUID
 
-# Импортируем все необходимые CRUD-модули
-from crud import assistant as assistant_crud
-from crud import user as user_crud
-from crud import user_summary as user_summary_crud
-from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from models.user_summary import UserSummary
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # Import Pydantic schemas from shared_models
 from shared_models.api_schemas.user_summary import (
     UserSummaryCreateUpdate,
     UserSummaryRead,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
+# Импортируем все необходимые CRUD-модули
+from crud import assistant as assistant_crud
+from crud import user as user_crud
+from crud import user_summary as user_summary_crud
+from database import get_session
+from models.user_summary import UserSummary
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter(
     tags=["User Summaries"],
     responses={404: {"description": "Not found"}},
@@ -31,7 +33,7 @@ router = APIRouter(
 )
 async def create_summary_endpoint(
     summary_in: UserSummaryCreateUpdate,
-    db: AsyncSession = Depends(get_session),
+    db: SessionDep,
 ) -> UserSummary:
     user = await user_crud.get_user_by_id(db, user_id=summary_in.user_id)
     if not user:
@@ -52,14 +54,14 @@ async def create_summary_endpoint(
     return db_summary
 
 
-@router.get("/user-summaries/", response_model=List[UserSummaryRead])
+@router.get("/user-summaries/", response_model=list[UserSummaryRead])
 async def list_summaries_endpoint(
-    user_id: Optional[int] = Query(None),
-    assistant_id: Optional[UUID] = Query(None),
-    limit: int = Query(default=100, le=1000),
-    offset: int = Query(default=0),
-    db: AsyncSession = Depends(get_session),
-) -> List[UserSummary]:
+    db: SessionDep,
+    user_id: Annotated[int | None, Query()] = None,
+    assistant_id: Annotated[UUID | None, Query()] = None,
+    limit: Annotated[int, Query(le=1000)] = 100,
+    offset: Annotated[int, Query()] = 0,
+) -> list[UserSummary]:
     summaries = await user_summary_crud.get_multi_summaries(
         db=db, user_id=user_id, assistant_id=assistant_id, skip=offset, limit=limit
     )
@@ -68,15 +70,15 @@ async def list_summaries_endpoint(
 
 @router.get(
     "/user-summaries/latest/",
-    response_model=Optional[UserSummaryRead],
+    response_model=UserSummaryRead | None,
     summary="Get Latest User Summary",
     description="Retrieve the *latest* summary for a specific user and assistant.",
 )
 async def read_latest_summary_endpoint(
-    user_id: int = Query(...),
-    assistant_id: UUID = Query(...),
-    db: AsyncSession = Depends(get_session),
-) -> Optional[UserSummary]:
+    db: SessionDep,
+    user_id: Annotated[int, Query(...)],
+    assistant_id: Annotated[UUID, Query(...)],
+) -> UserSummary | None:
     db_summary = await user_summary_crud.get_latest_by_user_and_assistant(
         db=db, user_id=user_id, assistant_id=assistant_id
     )
@@ -84,9 +86,7 @@ async def read_latest_summary_endpoint(
 
 
 @router.get("/user-summaries/{summary_id}", response_model=UserSummaryRead)
-async def get_summary_endpoint(
-    summary_id: int, db: AsyncSession = Depends(get_session)
-) -> UserSummary:
+async def get_summary_endpoint(summary_id: int, db: SessionDep) -> UserSummary:
     db_summary = await user_summary_crud.get_summary_by_id(db=db, id=summary_id)
     if not db_summary:
         raise HTTPException(
@@ -99,7 +99,7 @@ async def get_summary_endpoint(
 async def update_summary_endpoint(
     summary_id: int,
     summary_in: UserSummaryCreateUpdate,
-    db: AsyncSession = Depends(get_session),
+    db: SessionDep,
 ) -> UserSummary:
     db_summary_to_update = await user_summary_crud.get_summary_by_id(
         db=db, id=summary_id
@@ -142,7 +142,7 @@ async def update_summary_endpoint(
 )
 async def delete_summary_endpoint(
     summary_id: int,
-    db: AsyncSession = Depends(get_session),
+    db: SessionDep,
 ) -> None:
     db_summary = await user_summary_crud.get_summary_by_id(db, id=summary_id)
     if not db_summary:

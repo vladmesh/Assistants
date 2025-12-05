@@ -1,20 +1,19 @@
 import json
 import time  # Import time
-from datetime import datetime, timezone as dt_timezone_class
-from typing import Any, Optional, Type
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID  # Import UUID for reminder_id type hint in delete_reminder
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import httpx
-from config.logger import get_logger
 from pydantic import BaseModel, Field, field_validator, model_validator
+from shared_models.api_schemas import ReminderCreate  # For ReminderCreateTool
+
+from config.logger import get_logger
 
 # Import RestServiceClient and specific schemas
 from services.rest_service import RestServiceClient
 from tools.base import BaseTool
 from utils.error_handler import ToolError
-
-from shared_models.api_schemas import ReminderCreate  # For ReminderCreateTool
 
 logger = get_logger(__name__)
 
@@ -29,19 +28,29 @@ class ReminderCreateSchema(BaseModel):
     payload: str = Field(
         ..., description="Содержимое напоминания в формате JSON-строки"
     )
-    trigger_at: Optional[str] = Field(
+    trigger_at: str | None = Field(
         None,
-        description="Дата и время для 'one_time' напоминания в формате ISO (YYYY-MM-DD HH:MM). Обязательно вместе с timezone.",
+        description=(
+            "Дата и время для 'one_time' напоминания в формате ISO "
+            "(YYYY-MM-DD HH:MM). Обязательно вместе с timezone."
+        ),
     )
-    timezone: Optional[str] = Field(
+    timezone: str | None = Field(
         None,
-        description="Временная зона. Для 'one_time' напоминаний (где используется trigger_at) это поле обязательно. "
-                    "Для 'recurring' напоминаний (где используется cron_expression) это поле опционально в случае, если час не указан в CRON выражении; "
-                    "Если указываешь час в CRON выражении, то timezone нужен обязательно.",
+        description=(
+            "Временная зона. Для 'one_time' напоминаний (где используется "
+            "trigger_at) это поле обязательно. Для 'recurring' напоминаний "
+            "(где используется cron_expression) это поле опционально в случае, "
+            "если час не указан в CRON выражении; Если указываешь час в CRON "
+            "выражении, то timezone нужен обязательно."
+        ),
     )
-    cron_expression: Optional[str] = Field(
+    cron_expression: str | None = Field(
         None,
-        description="CRON-выражение для 'recurring' напоминания (например, '0 10 * * *').",
+        description=(
+            "CRON-выражение для 'recurring' напоминания "
+            "(например, '0 10 * * *')."
+        ),
     )
 
     @field_validator("payload")
@@ -50,8 +59,8 @@ class ReminderCreateSchema(BaseModel):
         try:
             json.loads(v)
             return v
-        except json.JSONDecodeError:
-            raise ValueError("payload должен быть валидной JSON строкой")
+        except json.JSONDecodeError as exc:
+            raise ValueError("payload должен быть валидной JSON строкой") from exc
 
     @model_validator(mode="before")
     @classmethod
@@ -67,7 +76,8 @@ class ReminderCreateSchema(BaseModel):
         if reminder_type == "one_time":
             if not trigger_at or not timezone_val:
                 raise ValueError(
-                    "Для 'one_time' напоминания необходимо указать trigger_at и timezone."
+                    "Для 'one_time' напоминания необходимо указать trigger_at и "
+                    "timezone."
                 )
             if cron_expression:
                 raise ValueError(
@@ -88,7 +98,7 @@ class ReminderCreateSchema(BaseModel):
 
         return data
 
-    def get_trigger_datetime_utc(self) -> Optional[datetime]:
+    def get_trigger_datetime_utc(self) -> datetime | None:
         """Convert trigger_at with timezone to UTC datetime."""
         if self.type == "one_time" and self.trigger_at and self.timezone:
             try:
@@ -100,17 +110,18 @@ class ReminderCreateSchema(BaseModel):
 
                 if local_dt.tzinfo is None:
                     local_dt = local_dt.replace(tzinfo=local_tz)
-                return local_dt.astimezone(dt_timezone_class.utc)
+                return local_dt.astimezone(UTC)
             except ValueError as e:
                 logger.error(f"Invalid datetime format: {self.trigger_at}. Error: {e}")
                 raise ValueError(
-                    f"Неверный формат даты/времени для trigger_at: '{self.trigger_at}'. Ожидается YYYY-MM-DD HH:MM."
-                )
+                    "Неверный формат даты/времени для trigger_at: "
+                    f"'{self.trigger_at}'. Ожидается YYYY-MM-DD HH:MM."
+                ) from e
             except Exception as e:
                 logger.error(f"Error processing datetime/timezone: {e}")
                 raise ValueError(
-                    f"Ошибка при обработке даты/времени/таймзоны: {str(e)}"
-                )
+                    "Ошибка при обработке даты/времени/таймзоны: " f"{str(e)}"
+                ) from e
         return None
 
 
@@ -132,10 +143,11 @@ class ReminderDeleteSchema(BaseModel):
 class BaseReminderTool(BaseTool):
     """Base class for Reminder tools."""
 
-    # rest_service_url is inherited from BaseTool if settings provides it, or can be set here.
+    # rest_service_url is inherited from BaseTool if settings provides it,
+    # or can be set here.
     # For clarity, let tools use settings.REST_SERVICE_URL via RestServiceClient
-    # _client: Optional[httpx.AsyncClient] = None # Not needed if using RestServiceClient
-    _rest_client: Optional[RestServiceClient] = None
+    # _client: Optional[httpx.AsyncClient] = None
+    _rest_client: RestServiceClient | None = None
 
     def get_rest_client(self) -> RestServiceClient:
         """Lazily initialize and return the RestServiceClient."""
@@ -149,8 +161,9 @@ class BaseReminderTool(BaseTool):
             self._rest_client = RestServiceClient(base_url=base_url)
         return self._rest_client
 
-    # _handle_api_error and _ensure_ids_present can be removed if RestServiceClient handles this
-    # For now, keeping _ensure_ids_present as it's tool-specific logic regarding assistant_id
+    # _handle_api_error and _ensure_ids_present can be removed if
+    # RestServiceClient handles this. Keeping _ensure_ids_present as it's
+    # tool-specific logic regarding assistant_id.
     def _ensure_ids_present(self) -> None:
         """Ensures user_id is present. Assistant_id check is optional for some tools."""
         if not self.user_id:
@@ -159,8 +172,8 @@ class BaseReminderTool(BaseTool):
                 tool_name=self.name,
                 error_code="USER_ID_REQUIRED",
             )
-        # assistant_id is not strictly required for list/delete by user, but useful for logging.
-        # if not self.assistant_id: # Example if we wanted to make it mandatory for some base tools
+        # assistant_id is not required for list/delete but useful for logging.
+        # if not self.assistant_id:
         #     raise ToolError(
         #         message="Assistant ID is required for this tool.",
         #         tool_name=self.name,
@@ -174,15 +187,15 @@ class BaseReminderTool(BaseTool):
 class ReminderCreateTool(BaseReminderTool):
     """Инструмент для создания напоминаний."""
 
-    args_schema: Type[ReminderCreateSchema] = ReminderCreateSchema
+    args_schema: type[ReminderCreateSchema] = ReminderCreateSchema
 
     async def _execute(
         self,
         type: str,
         payload: str,
-        trigger_at: Optional[str] = None,
-        timezone: Optional[str] = None,
-        cron_expression: Optional[str] = None,
+        trigger_at: str | None = None,
+        timezone: str | None = None,
+        cron_expression: str | None = None,
     ) -> str:
         """Создает напоминание через RestServiceClient."""
         start_time = time.perf_counter()
@@ -211,15 +224,21 @@ class ReminderCreateTool(BaseReminderTool):
                 message=f"Ошибка валидации: {str(e)}",
                 tool_name=self.name,
                 error_code="INVALID_INPUT",
-            )
+            ) from e
 
         trigger_datetime_utc_iso = None
         final_cron_expression = reminder_input_schema.cron_expression
 
         if reminder_input_schema.type == "one_time":
-            if not reminder_input_schema.trigger_at or not reminder_input_schema.timezone:
+            if (
+                not reminder_input_schema.trigger_at
+                or not reminder_input_schema.timezone
+            ):
                 raise ToolError(
-                    message="Для 'one_time' напоминания необходимо указать trigger_at и timezone.",
+                    message=(
+                        "Для 'one_time' напоминания необходимо указать "
+                        "trigger_at и timezone."
+                    ),
                     tool_name=self.name,
                     error_code="INVALID_INPUT",
                 )
@@ -228,77 +247,110 @@ class ReminderCreateTool(BaseReminderTool):
                 trigger_datetime_utc_iso = dt_utc.isoformat()
             final_cron_expression = None
 
-        elif reminder_input_schema.type == "recurring" and reminder_input_schema.cron_expression and reminder_input_schema.timezone:
+        elif (
+            reminder_input_schema.type == "recurring"
+            and reminder_input_schema.cron_expression
+            and reminder_input_schema.timezone
+        ):
             try:
                 cron_parts = reminder_input_schema.cron_expression.split()
                 if len(cron_parts) == 5:
-                    minute_cron, hour_cron, day_month_cron, month_cron, day_week_cron = cron_parts
-                    
+                    (
+                        minute_cron,
+                        hour_cron,
+                        day_month_cron,
+                        month_cron,
+                        day_week_cron,
+                    ) = cron_parts
+
                     if hour_cron.isdigit():
                         local_hour = int(hour_cron)
                         if not (0 <= local_hour <= 23):
                             logger.warning(
                                 f"Час в CRON '{local_hour}' вне диапазона 0-23. "
-                                f"Используется оригинальное CRON выражение: '{reminder_input_schema.cron_expression}'.",
-                                extra=log_extra
+                                "Используется оригинальное CRON выражение: "
+                                f"'{reminder_input_schema.cron_expression}'.",
+                                extra=log_extra,
                             )
                         else:
                             context_minute_for_conversion = 0
                             if minute_cron.isdigit():
                                 context_minute_for_conversion = int(minute_cron)
                                 if not (0 <= context_minute_for_conversion <= 59):
-                                     context_minute_for_conversion = 0
-                            
-                            now_in_user_tz = datetime.now(ZoneInfo(reminder_input_schema.timezone))
-                            local_dt_for_conversion = now_in_user_tz.replace(
-                                hour=local_hour, minute=context_minute_for_conversion, second=0, microsecond=0
+                                    context_minute_for_conversion = 0
+
+                            now_in_user_tz = datetime.now(
+                                ZoneInfo(reminder_input_schema.timezone)
                             )
-                            
-                            utc_dt = local_dt_for_conversion.astimezone(dt_timezone_class.utc)
+                            local_dt_for_conversion = now_in_user_tz.replace(
+                                hour=local_hour,
+                                minute=context_minute_for_conversion,
+                                second=0,
+                                microsecond=0,
+                            )
+
+                            utc_dt = local_dt_for_conversion.astimezone(UTC)
                             utc_hour = utc_dt.hour
-                            
-                            final_cron_expression = f"{minute_cron} {utc_hour} {day_month_cron} {month_cron} {day_week_cron}"
-                            log_extra["original_cron"] = reminder_input_schema.cron_expression
+
+                            final_cron_expression = (
+                                f"{minute_cron} {utc_hour} {day_month_cron} "
+                                f"{month_cron} {day_week_cron}"
+                            )
+                            log_extra["original_cron"] = (
+                                reminder_input_schema.cron_expression
+                            )
                             log_extra["converted_cron"] = final_cron_expression
-                            log_extra["conversion_timezone"] = reminder_input_schema.timezone
+                            log_extra["conversion_timezone"] = (
+                                reminder_input_schema.timezone
+                            )
                             logger.info(
                                 f"Конвертировано CRON выражение с учетом timezone. "
-                                f"Оригинал: '{reminder_input_schema.cron_expression}' ({reminder_input_schema.timezone}), "
+                                "Оригинал: "
+                                f"'{reminder_input_schema.cron_expression}' "
+                                f"({reminder_input_schema.timezone}), "
                                 f"Результат (UTC): '{final_cron_expression}'.",
-                                extra=log_extra
+                                extra=log_extra,
                             )
                     else:
                         logger.warning(
-                            f"Час '{hour_cron}' в CRON выражении '{reminder_input_schema.cron_expression}' не является простой цифрой. "
-                            f"Конвертация в UTC не выполнена. Используется оригинальное выражение.",
-                            extra=log_extra
+                            "Час '{hour_cron}' в CRON выражении "
+                            f"'{reminder_input_schema.cron_expression}' не является "
+                            "простой цифрой. Конвертация в UTC не выполнена. "
+                            "Используется оригинальное выражение.",
+                            extra=log_extra,
                         )
                 else:
                     logger.warning(
-                        f"CRON выражение '{reminder_input_schema.cron_expression}' имеет неверный формат (не 5 частей). "
-                        f"Конвертация в UTC не выполнена. Используется оригинальное выражение.",
-                        extra=log_extra
+                        "CRON выражение "
+                        f"'{reminder_input_schema.cron_expression}' имеет неверный "
+                        "формат (не 5 частей). Конвертация в UTC не выполнена. "
+                        "Используется оригинальное выражение.",
+                        extra=log_extra,
                     )
             except ZoneInfoNotFoundError:
-                 logger.warning(
-                    f"Неверная временная зона '{reminder_input_schema.timezone}' указана для CRON выражения "
-                    f"'{reminder_input_schema.cron_expression}'. Используется оригинальное выражение.",
-                    extra=log_extra
-                 )            
-            except ValueError as ve:
-                 logger.warning(
-                    f"Ошибка значения при попытке конвертировать CRON выражение '{reminder_input_schema.cron_expression}' "
-                    f"с timezone '{reminder_input_schema.timezone}': {str(ve)}. "
-                    f"Используется оригинальное выражение.",
-                    extra=log_extra
+                logger.warning(
+                    "Неверная временная зона "
+                    f"'{reminder_input_schema.timezone}' указана для CRON выражения "
+                    f"'{reminder_input_schema.cron_expression}'. "
+                    "Используется оригинальное выражение.",
+                    extra=log_extra,
                 )
-            except Exception as e: 
+            except ValueError as ve:
+                logger.warning(
+                    "Ошибка значения при попытке конвертировать CRON выражение "
+                    f"'{reminder_input_schema.cron_expression}' "
+                    f"с timezone '{reminder_input_schema.timezone}': {str(ve)}. "
+                    "Используется оригинальное выражение.",
+                    extra=log_extra,
+                )
+            except Exception as e:
                 logger.exception(
-                    f"Непредвиденная ошибка при конвертации CRON выражения '{reminder_input_schema.cron_expression}' "
+                    "Непредвиденная ошибка при конвертации CRON выражения "
+                    f"'{reminder_input_schema.cron_expression}' "
                     f"с timezone '{reminder_input_schema.timezone}': {str(e)}. "
-                    f"Используется оригинальное выражение.",
-                    exc_info=True, 
-                    extra=log_extra
+                    "Используется оригинальное выражение.",
+                    exc_info=True,
+                    extra=log_extra,
                 )
         elif reminder_input_schema.type == "recurring":
             trigger_datetime_utc_iso = None
@@ -310,7 +362,7 @@ class ReminderCreateTool(BaseReminderTool):
             type=reminder_input_schema.type,
             payload=reminder_input_schema.payload,
             status="active",  # Default status
-            trigger_at=trigger_datetime_utc_iso, 
+            trigger_at=trigger_datetime_utc_iso,
             cron_expression=final_cron_expression,
         )
 
@@ -353,13 +405,13 @@ class ReminderCreateTool(BaseReminderTool):
                 message=f"Непредвиденная ошибка: {str(e)}",
                 tool_name=self.name,
                 error_code="UNEXPECTED_ERROR",
-            )
+            ) from e
 
 
 class ReminderListTool(BaseReminderTool):
     """Инструмент для получения списка активных напоминаний пользователя."""
 
-    args_schema: Type[ReminderListSchema] = ReminderListSchema
+    args_schema: type[ReminderListSchema] = ReminderListSchema
 
     async def _execute(self) -> str:
         """Получает список активных напоминаний через RestServiceClient."""
@@ -406,7 +458,8 @@ class ReminderListTool(BaseReminderTool):
                             r.payload[:50] + "..." if len(r.payload) > 50 else r.payload
                         )
                         logger.warning(
-                            f"Reminder payload is a string but not valid JSON: {r.payload[:100]}",
+                            "Reminder payload is a string but not valid JSON: "
+                            f"{r.payload[:100]}",
                             tool_name=self.name,
                             reminder_id=str(r.id),
                         )
@@ -432,9 +485,8 @@ class ReminderListTool(BaseReminderTool):
                         if len(payload_text) > 50
                         else payload_text
                     )
-                elif (
-                    not payload_summary
-                ):  # If payload_summary wasn't set above (e.g. not string, not dict, not parsable)
+                # If payload_summary wasn't set above (e.g. not string, dict, parsable)
+                elif not payload_summary:
                     payload_summary = "(не удалось отобразить содержимое)"
 
                 trigger_info = ""
@@ -452,7 +504,10 @@ class ReminderListTool(BaseReminderTool):
                             f"Однократно: {dt_obj.strftime('%Y-%m-%d %H:%M:%S %Z')}"
                         )
                     except ValueError:
-                        trigger_info = f"Однократно: {str(r.trigger_at)} (не удалось распарсить дату)"
+                        trigger_info = (
+                            "Однократно: "
+                            f"{str(r.trigger_at)} (не удалось распарсить дату)"
+                        )
                 elif r.type == "recurring" and r.cron_expression:
                     trigger_info = f"Повторяющееся: {r.cron_expression}"
 
@@ -478,13 +533,13 @@ class ReminderListTool(BaseReminderTool):
                 message=f"Непредвиденная ошибка: {str(e)}",
                 tool_name=self.name,
                 error_code="UNEXPECTED_ERROR",
-            )
+            ) from e
 
 
 class ReminderDeleteTool(BaseReminderTool):
     """Инструмент для удаления напоминания по ID."""
 
-    args_schema: Type[ReminderDeleteSchema] = ReminderDeleteSchema
+    args_schema: type[ReminderDeleteSchema] = ReminderDeleteSchema
 
     async def _execute(self, reminder_id: UUID) -> str:
         """Удаляет напоминание по ID через RestServiceClient."""
@@ -506,16 +561,19 @@ class ReminderDeleteTool(BaseReminderTool):
 
             if success:
                 logger.info(
-                    f"Reminder {reminder_id} successfully deleted via RestServiceClient",
+                    f"Reminder {reminder_id} successfully deleted via "
+                    "RestServiceClient",
                     extra=log_extra,
                 )
                 return f"Напоминание с ID {reminder_id} успешно удалено."
             else:
                 # RestServiceClient.delete_reminder logs error and returns False.
-                # ToolError might have been raised by RestServiceClient if it were configured to do so for HTTP errors.
-                # For now, assume False means a non-exception failure reported by the client.
+                # ToolError might have been raised by RestServiceClient if it were
+                # configured to do so for HTTP errors. For now, assume False means a
+                # non-exception failure reported by the client.
                 logger.warning(
-                    f"Deletion of reminder {reminder_id} reported as failed by RestServiceClient",
+                    f"Deletion of reminder {reminder_id} reported as failed by "
+                    "RestServiceClient",
                     extra=log_extra,
                 )
                 raise ToolError(
@@ -539,4 +597,4 @@ class ReminderDeleteTool(BaseReminderTool):
                 message=f"Непредвиденная ошибка: {str(e)}",
                 tool_name=self.name,
                 error_code="UNEXPECTED_ERROR",
-            )
+            ) from e

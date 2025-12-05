@@ -2,20 +2,20 @@ import asyncio
 import os
 import random
 import sys
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 from uuid import UUID
 
 import pytest
 import pytest_asyncio
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlmodel import SQLModel
+
 from config import Settings
 from database import get_session
-from httpx import AsyncClient
 from main import app  # Assuming your FastAPI app is defined in main.py
 from models.assistant import Assistant
 from models.user import TelegramUser
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlmodel import SQLModel
 
 # Load test settings
 TEST_SETTINGS = Settings(_env_file=".env.test")
@@ -24,7 +24,8 @@ TEST_SETTINGS = Settings(_env_file=".env.test")
 DATABASE_URL = os.environ.get("ASYNC_DATABASE_URL")
 if not DATABASE_URL:
     print(
-        "ERROR: ASYNC_DATABASE_URL environment variable is not set. Tests cannot run without database connection."
+        "ERROR: ASYNC_DATABASE_URL environment variable is not set. "
+        "Tests cannot run without database connection."
     )
     sys.exit(1)
 

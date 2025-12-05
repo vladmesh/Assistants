@@ -1,16 +1,15 @@
 # assistant_service/src/tools/user_fact_tool.py
 import time
-from typing import Optional, Type
 
 import httpx
-from config.logger import get_logger
 from pydantic import BaseModel, Field
-from tools.base import BaseTool
-from utils.error_handler import ToolError
-
 from shared_models.api_schemas.user_fact import (
     UserFactCreate,  # Import the correct schema
 )
+
+from config.logger import get_logger
+from tools.base import BaseTool
+from utils.error_handler import ToolError
 
 logger = get_logger(__name__)
 
@@ -25,10 +24,10 @@ class UserFactTool(BaseTool):
     """Инструмент для добавления факта о пользователе."""
 
     # Use the input schema for args validation
-    args_schema: Type[UserFactSchema] = UserFactSchema
+    args_schema: type[UserFactSchema] = UserFactSchema
 
     # Add lazy client initialization similar to ReminderTool
-    _client: Optional[httpx.AsyncClient] = None
+    _client: httpx.AsyncClient | None = None
 
     def get_client(self) -> httpx.AsyncClient:
         """Lazily initialize and return the httpx client."""
@@ -68,7 +67,7 @@ class UserFactTool(BaseTool):
                 error_code="USER_ID_REQUIRED",
             )
 
-        # Input validation happens automatically via BaseTool/Langchain if args_schema is set correctly
+        # Input validation handled via args_schema/BaseTool
 
         # Prepare data using the shared model for the API call
         try:
@@ -80,13 +79,13 @@ class UserFactTool(BaseTool):
                 message="Invalid User ID format. Expected an integer.",
                 tool_name=self.name,
                 error_code="INVALID_USER_ID_FORMAT",
-            )
+            ) from None
         except Exception as e:  # Catch potential model_dump errors
             raise ToolError(
                 message=f"Error preparing data for API: {e}",
                 tool_name=self.name,
                 error_code="DATA_PREPARATION_ERROR",
-            )
+            ) from e
 
         try:
             start_api_time = time.perf_counter()
@@ -100,7 +99,8 @@ class UserFactTool(BaseTool):
             api_duration_ms = round((time.perf_counter() - start_api_time) * 1000)
             log_extra["api_duration_ms"] = api_duration_ms
 
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            # Raise HTTPError for bad responses (4xx or 5xx)
+            response.raise_for_status()
 
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
@@ -115,10 +115,13 @@ class UserFactTool(BaseTool):
             log_extra["response_text"] = e.response.text
             logger.error(f"API call failed for {self.name}: {e}", extra=log_extra)
             raise ToolError(
-                message=f"Ошибка API при добавлении факта ({e.response.status_code}): {e.response.text}",
+                message=(
+                    "Ошибка API при добавлении факта "
+                    f"({e.response.status_code}): {e.response.text}"
+                ),
                 tool_name=self.name,
                 error_code="API_ERROR",
-            )
+            ) from e
         except httpx.RequestError as e:
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
@@ -129,7 +132,7 @@ class UserFactTool(BaseTool):
                 message=f"Сетевая ошибка при добавлении факта: {e}",
                 tool_name=self.name,
                 error_code="NETWORK_ERROR",
-            )
+            ) from e
         except Exception as e:
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
@@ -138,4 +141,4 @@ class UserFactTool(BaseTool):
                 message=f"Непредвиденная ошибка при добавлении факта: {e}",
                 tool_name=self.name,
                 error_code="UNEXPECTED_ERROR",
-            )
+            ) from e

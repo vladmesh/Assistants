@@ -1,5 +1,4 @@
 import asyncio
-import logging  # Keep for basicConfig potentially
 
 import structlog
 

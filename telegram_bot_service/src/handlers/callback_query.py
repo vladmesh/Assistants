@@ -1,6 +1,7 @@
 from typing import Any
 
 import structlog
+
 from clients.telegram import TelegramClient
 
 logger = structlog.get_logger()

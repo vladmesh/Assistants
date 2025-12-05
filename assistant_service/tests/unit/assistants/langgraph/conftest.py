@@ -3,13 +3,13 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-# Import necessary components with corrected paths
-from assistants.langgraph.graph_builder import build_full_graph
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledGraph
+
+# Import necessary components with corrected paths
+from assistants.langgraph.graph_builder import build_full_graph
 
 # Import the tool with corrected path
 from tools.user_fact_tool import UserFactTool

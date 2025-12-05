@@ -1,6 +1,7 @@
-from typing import Any, Dict
+from typing import Any
 
 import structlog
+
 from clients.rest import RestClient
 from clients.telegram import TelegramClient
 
@@ -17,7 +18,7 @@ logger = structlog.get_logger()
 
 
 async def dispatch_update(
-    update: Dict[str, Any], telegram: TelegramClient, rest: RestClient
+    update: dict[str, Any], telegram: TelegramClient, rest: RestClient
 ) -> None:
     """Determines the type of update and calls the appropriate handler."""
     try:
@@ -61,7 +62,7 @@ async def dispatch_update(
                 )
                 await message_text.handle_text_message(**context)
             else:
-                # Обработка других типов сообщений (фото, документы и т.д.) - пока пропускаем
+                # Обрабатываем медиа/документы позже, сейчас пропускаем
                 logger.debug(
                     "Received non-text message, skipping",
                     chat_id=chat_id,

@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 
 from pydantic import Field
 
@@ -26,11 +25,11 @@ class GlobalSettingsRead(GlobalSettingsBase):
 
 # Модель для обновления (все поля опциональны)
 class GlobalSettingsUpdate(BaseSchema):
-    summarization_prompt: Optional[str] = Field(
+    summarization_prompt: str | None = Field(
         default=None,
         description="The prompt used for summarizing conversation history.",
     )
-    context_window_size: Optional[int] = Field(
+    context_window_size: int | None = Field(
         default=None,
         gt=0,
         description="Maximum token limit for the context window (> 0).",

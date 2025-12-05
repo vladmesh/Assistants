@@ -1,6 +1,9 @@
-from typing import Any, List
+from typing import Any
 
 import structlog
+
+# Import shared models if needed for type hints (AssistantRead?)
+from shared_models.api_schemas import TelegramUserRead
 
 # Обрати внимание: пути импорта изменились на clients
 from clients.rest import RestClient, RestClientError
@@ -9,12 +12,8 @@ from clients.telegram import TelegramClient
 # Используем user_service
 from services import user_service
 
-# Import shared models if needed for type hints (AssistantRead?)
-from shared_models.api_schemas import AssistantRead, TelegramUserRead
-
 # Импортируем фабрику клавиатур (будет создана позже)
-# from keyboards.secretary_selection import create_secretary_selection_keyboard # No longer needed here
-
+# from keyboards.secretary_selection import create_secretary_selection_keyboard
 
 
 logger = structlog.get_logger()
@@ -102,5 +101,8 @@ async def handle_start(**context: Any) -> None:
         )
         await telegram.send_message(
             chat_id,
-            "Извините, произошла непредвиденная ошибка при обработке команды /start. Попробуйте позже.",
+            (
+                "Извините, произошла непредвиденная ошибка при обработке команды "
+                "/start. Попробуйте позже."
+            ),
         )

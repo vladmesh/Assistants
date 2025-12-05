@@ -1,8 +1,9 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 from assistants.langgraph.state import AssistantState
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from services.rest_service import RestServiceClient
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ async def load_context_node(
     state: AssistantState,
     rest_client: RestServiceClient,
     history_limit: int = DEFAULT_HISTORY_LIMIT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Loads the conversation context from the database:
     1. Historical messages (up to a limit)
@@ -65,13 +66,13 @@ async def load_context_node(
         print(f"Error loading summary: {e}")
 
     # 2. Load historical messages
-    messages: List[BaseMessage] = []
-    last_message_id = None
+    messages: list[BaseMessage] = []
     if summary and summary.last_message_id_covered:
         # If we have a summary, load messages after the last summarized message
         try:
             print(
-                f"Loading messages after summary last_id: {summary.last_message_id_covered}"
+                "Loading messages after summary "
+                f"last_id: {summary.last_message_id_covered}"
             )
             raw_messages = await rest_client.get_messages(
                 user_id=user_id,
@@ -86,7 +87,10 @@ async def load_context_node(
             # Convert to BaseMessage objects
             messages = [_convert_db_message_to_langchain(msg) for msg in raw_messages]
             logger.info(
-                f"Loaded {len(messages)} messages after summary (last_id: {summary.last_message_id_covered})",
+                (
+                    f"Loaded {len(messages)} messages after summary "
+                    f"(last_id: {summary.last_message_id_covered})"
+                ),
                 extra=log_extra,
             )
         except Exception as e:
@@ -97,7 +101,7 @@ async def load_context_node(
     else:
         # If no summary, just load the most recent messages
         try:
-            print(f"Loading most recent messages (no summary)")
+            print("Loading most recent messages (no summary)")
             raw_messages = await rest_client.get_messages(
                 user_id=user_id,
                 assistant_id=assistant_id_str,
@@ -127,8 +131,8 @@ async def load_context_node(
         print(f"Error loading user facts: {e}")
 
     # 4. Prepare the updated state
-    # В полный контекст сначала идут исторические сообщения (отсортированные в БД по id),
-    # затем входящее сообщение
+    # В полный контекст сначала идут исторические сообщения
+    # (отсортированные в БД по id), затем входящее сообщение
 
     # Получаем initial_message_id, если он есть в state
     initial_message = state.get("initial_message")
@@ -159,7 +163,8 @@ def _convert_db_message_to_langchain(db_message) -> BaseMessage:
     msg_id = str(db_message.id)
 
     logger.debug(
-        f"Converting DB message: ID={msg_id}, Role={db_message.role}, Content Preview={content[:30]}..."
+        f"Converting DB message: ID={msg_id}, Role={db_message.role}, "
+        f"Content Preview={content[:30]}..."
     )
 
     # Map role to appropriate LangChain message class
@@ -184,6 +189,6 @@ def _convert_db_message_to_langchain(db_message) -> BaseMessage:
         msg = HumanMessage(content=content, id=msg_id)
 
     if not hasattr(msg, "id") or msg.id is None:
-        logger.warning(f"WARNING: Message has no ID attribute set")
+        logger.warning("WARNING: Message has no ID attribute set")
 
     return msg

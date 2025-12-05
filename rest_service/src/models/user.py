@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, Column
 from sqlmodel import Field, Relationship
@@ -17,22 +17,22 @@ if TYPE_CHECKING:
 class TelegramUser(BaseModel, table=True):
     """Represents a Telegram user interacting with the assistant."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     telegram_id: int = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
-    username: Optional[str]
-    timezone: Optional[str] = Field(default=None, index=True)  # User timezone
-    preferred_name: Optional[str] = Field(
+    username: str | None
+    timezone: str | None = Field(default=None, index=True)  # User timezone
+    preferred_name: str | None = Field(
         default=None
     )  # How the user wants to be addressed
 
     # Relationships
-    calendar_credentials: Optional[CalendarCredentials] = Relationship(
+    calendar_credentials: CalendarCredentials | None = Relationship(
         back_populates="user"
     )
-    secretary_links: List["UserSecretaryLink"] = Relationship(  # noqa: F821
+    secretary_links: list["UserSecretaryLink"] = Relationship(  # noqa: F821
         back_populates="user", sa_relationship_kwargs={"lazy": "selectin"}
     )
-    reminders: List[Reminder] = Relationship(back_populates="user")
-    user_facts: List["UserFact"] = Relationship(back_populates="user")
-    summaries: List["UserSummary"] = Relationship(back_populates="user")
-    messages: List["Message"] = Relationship(back_populates="user")
+    reminders: list[Reminder] = Relationship(back_populates="user")
+    user_facts: list["UserFact"] = Relationship(back_populates="user")
+    summaries: list["UserSummary"] = Relationship(back_populates="user")
+    messages: list["Message"] = Relationship(back_populates="user")

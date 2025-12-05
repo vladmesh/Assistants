@@ -1,9 +1,16 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+
+
+class QueueMessageType(str, Enum):
+    """Type of queue message."""
+
+    TOOL = "tool"
+    HUMAN = "human"
 
 
 class QueueMessageSource(str, Enum):
@@ -13,20 +20,71 @@ class QueueMessageSource(str, Enum):
     CRON = "cron"
     API = "api"
     CALENDAR = "calendar"
+    USER = "user"
+
+
+class QueueMessageContent(BaseModel):
+    """Content payload for queue messages."""
+
+    message: str
+    metadata: dict[str, Any] | None = None
+
+    def __str__(self) -> str:
+        return self.message
 
 
 class QueueMessage(BaseModel):
-    """Model for messages sent TO the assistant service, specifically for user input."""
+    """Message sent TO assistant service."""
 
+    type: QueueMessageType = QueueMessageType.HUMAN
     user_id: int
-    content: str  # Changed from Union type to simple string
-    metadata: Optional[Dict[str, Any]] = None  # Added optional metadata field
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    source: QueueMessageSource = QueueMessageSource.USER
+    content: QueueMessageContent | str
+    metadata: dict[str, Any] | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_content(cls, values: dict[str, Any]) -> dict[str, Any]:
+        content = values.get("content")
+        if isinstance(content, dict):
+            values["content"] = QueueMessageContent(**content)
+        return values
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dict."""
+        return self.model_dump()
 
     @classmethod
-    def from_string(cls, json_string: str) -> "QueueMessage":
-        """Deserialize from JSON string."""
-        return cls(**json.loads(json_string))
+    def from_dict(cls, data: dict[str, Any]) -> "QueueMessage":
+        """Deserialize from dict."""
+        return cls(**data)
+
+
+class ToolQueueMessage(QueueMessage):
+    """Message produced by a tool."""
+
+    tool_name: str
+    type: QueueMessageType = QueueMessageType.TOOL
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_type(cls, values: dict[str, Any]) -> dict[str, Any]:
+        values.setdefault("type", QueueMessageType.TOOL)
+        return values
+
+
+class HumanQueueMessage(QueueMessage):
+    """Message coming from a human user."""
+
+    chat_id: int
+    type: QueueMessageType = QueueMessageType.HUMAN
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_type(cls, values: dict[str, Any]) -> dict[str, Any]:
+        values.setdefault("type", QueueMessageType.HUMAN)
+        return values
 
 
 # --- Trigger Types and Model ---
@@ -46,11 +104,11 @@ class QueueTrigger(BaseModel):
     trigger_type: TriggerType  # Identifies the specific trigger event
     user_id: int  # The user this trigger pertains to
     source: QueueMessageSource  # The service that originated the trigger
-    payload: Dict[str, Any] = Field(
+    payload: dict[str, Any] = Field(
         default_factory=dict
     )  # Specific data associated with the trigger
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )  # Timestamp of trigger generation
 
     model_config = {
@@ -78,14 +136,14 @@ class QueueTrigger(BaseModel):
 
 class AssistantResponseMessage(BaseModel):
     """
-    Model for messages sent FROM the assistant service TO other services (e.g., Telegram bot) via the queue.
+    Model for messages sent from the assistant service to other services via the queue.
     """
 
     user_id: int  # Internal user ID (from rest_service DB)
     status: str = "success"  # "success" or "error"
-    source: Optional[str] = None  # e.g., "assistant", "tool:reminder_tool"
-    response: Optional[str] = None  # Text response content if status is "success"
-    error: Optional[str] = None  # Error message content if status is "error"
+    source: str | None = None  # e.g., "assistant", "tool:reminder_tool"
+    response: str | None = None  # Text response content if status is "success"
+    error: str | None = None  # Error message content if status is "error"
 
     @model_validator(mode="before")
     def check_status_and_content(cls, values):

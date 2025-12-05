@@ -1,5 +1,5 @@
-from typing import TYPE_CHECKING, List, Optional
-from uuid import UUID, uuid4
+from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import TEXT, Column
 from sqlmodel import Field, Relationship
@@ -15,11 +15,9 @@ if TYPE_CHECKING:
 
 # Inherit from BaseModel instead of just SQLModel
 class UserSummary(BaseModel, table=True):
-    """
-    Represents a summarized context for a specific user interacting with a specific secretary assistant.
-    """
+    """Summarized context for a user with a secretary assistant."""
 
-    id: Optional[int] = Field(
+    id: int | None = Field(
         default=None, primary_key=True, sa_column_kwargs={"autoincrement": True}
     )
     user_id: int = Field(foreign_key="telegramuser.id", index=True)
@@ -27,14 +25,14 @@ class UserSummary(BaseModel, table=True):
     summary_text: str = Field(
         sa_column=Column(TEXT)
     )  # Use TEXT for potentially long summaries
-    token_count: Optional[int] = Field(default=None, nullable=True)
+    token_count: int | None = Field(default=None, nullable=True)
 
     __tablename__ = "user_summaries"
 
     # Relationships
     user: "TelegramUser" = Relationship(back_populates="summaries")
     assistant: "Assistant" = Relationship(back_populates="user_summaries")
-    messages: List["Message"] = Relationship(
+    messages: list["Message"] = Relationship(
         back_populates="summary",
         sa_relationship_kwargs={"foreign_keys": "[Message.summary_id]"},
     )

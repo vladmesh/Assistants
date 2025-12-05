@@ -1,10 +1,9 @@
 """Tool data validation and transformation from REST service"""
 
-from typing import Optional
+from pydantic import BaseModel
 
 from config.logger import get_logger
 from config.settings import Settings
-from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -16,11 +15,11 @@ class RestServiceTool(BaseModel):
     name: str
     tool_type: str
     description: str
-    assistant_id: Optional[str] = None  # ID of sub-assistant for sub_assistant type
+    assistant_id: str | None = None  # ID of sub-assistant for sub_assistant type
     is_active: bool = True
-    settings: Optional[Settings] = None
+    settings: Settings | None = None
 
-    def to_tool(self, secretary_id: Optional[str] = None):
+    def to_tool(self, secretary_id: str | None = None):
         """Convert REST service tool to actual tool instance"""
         from .calendar_tool import CalendarCreateTool, CalendarListTool
         from .reminder_tool import ReminderTool

@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: make-format
+        name: make format
+        entry: bash -c "make format && git add -u"
+        language: system
+        stages: [commit]
+        pass_filenames: false
+      - id: make-lint-test
+        name: make lint && make test
+        entry: bash -c "make lint && make test"
+        language: system
+        stages: [push]
+        pass_filenames: false

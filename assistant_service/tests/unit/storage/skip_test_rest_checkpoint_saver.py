@@ -1,6 +1,5 @@
 import asyncio
 import base64
-from typing import Optional  # Import Optional for type hinting
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -164,7 +163,7 @@ class TestRestCheckpointSaver:
 
         with pytest.raises(
             CheckpointError,
-            match=f"Failed to save checkpoint due to request error",
+            match="Failed to save checkpoint due to request error",
         ):
             await checkpoint_saver.aput(
                 test_config, test_checkpoint_data, test_metadata
@@ -190,12 +189,12 @@ class TestRestCheckpointSaver:
 
         with pytest.raises(
             CheckpointError,
-            match=f"Failed to save checkpoint due to HTTP error 500",
+            match="Failed to save checkpoint due to HTTP error 500",
         ):
             await checkpoint_saver.aput(
                 test_config, test_checkpoint_data, test_metadata
             )
-        mock_response.raise_for_status.assert_called_once()  # Ensure raise_for_status was called
+        mock_response.raise_for_status.assert_called_once()  # Ensure call executed
 
     async def test_aput_no_thread_id(
         self, checkpoint_saver, test_checkpoint_data, test_metadata
@@ -238,7 +237,7 @@ class TestRestCheckpointSaver:
         mock_async_client.get.return_value = mock_response
 
         # Call aget_tuple
-        result_tuple: Optional[CheckpointTuple] = await checkpoint_saver.aget_tuple(
+        result_tuple: CheckpointTuple | None = await checkpoint_saver.aget_tuple(
             test_config
         )
 

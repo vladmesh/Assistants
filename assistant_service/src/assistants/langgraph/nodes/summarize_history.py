@@ -1,20 +1,18 @@
 import json
 import logging
-import uuid
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Literal
 
-from assistants.langgraph.state import AssistantState
-from assistants.langgraph.utils.token_counter import count_tokens
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
     BaseMessage,
-    HumanMessage,
     RemoveMessage,
     SystemMessage,
 )
-from services.rest_service import RestServiceClient
-
 from shared_models.api_schemas.user_summary import UserSummaryCreateUpdate
+
+from assistants.langgraph.state import AssistantState
+from assistants.langgraph.utils.token_counter import count_tokens
+from services.rest_service import RestServiceClient
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -41,7 +39,10 @@ def should_summarize(
 
     if not messages or context_limit <= 0:
         logger.warning(
-            f"[should_summarize] Skipping check: No messages ({len(messages)}) or context_limit <= 0 ({context_limit}).",
+            (
+                "[should_summarize] Skip: messages="
+                f"{len(messages)}, context_limit={context_limit}"
+            ),
             extra=log_extra,
         )
         return "assistant"
@@ -70,7 +71,10 @@ def should_summarize(
         system_prompt_tokens = count_tokens([temp_system_message])
     except Exception as e:
         logger.error(
-            f"[should_summarize] Error formatting/counting temp system prompt: {e}. Assuming 0 tokens.",
+            (
+                "[should_summarize] Error formatting/counting temp system prompt "
+                f"{e}. Assuming 0 tokens."
+            ),
             extra=log_extra,
         )
         system_prompt_tokens = 0
@@ -90,28 +94,33 @@ def should_summarize(
     decision = "summarize" if ratio >= threshold else "assistant"
 
     logger.info(
-        f"[should_summarize] Check result: Tokens={total_estimated_tokens}, Limit={context_limit}, Ratio={ratio:.2f}, Threshold={threshold:.2f}, Decision='{decision}'",
+        (
+            "[should_summarize] Tokens="
+            f"{total_estimated_tokens}, Limit={context_limit}, "
+            f"Ratio={ratio:.2f}, Threshold={threshold:.2f}, Decision='{decision}'"
+        ),
         extra=log_extra,
     )
 
     return decision
 
 
-async def _call_llm(llm: BaseChatModel, prompt: str) -> Optional[str]:
+async def _call_llm(llm: BaseChatModel, prompt: str) -> str | None:
     response = await llm.ainvoke(prompt)
 
     content = response.content if hasattr(response, "content") else str(response)
     return content
 
 
-def _make_json_chunk(messages: List[BaseMessage]) -> str:
+def _make_json_chunk(messages: list[BaseMessage]) -> str:
     logger.warning(f"[_make_json_chunk] Serializing {len(messages)} messages to JSON.")
     data = []
     for msg in messages:
         content = getattr(msg, "content", "")
         if not content:
             logger.warning(
-                f"[_make_json_chunk] Skipping empty message of type {type(msg).__name__}."
+                "[_make_json_chunk] Skipping empty message of type "
+                f"{type(msg).__name__}."
             )
             continue
         entry = {"type": type(msg).__name__.replace("Message", ""), "Content": content}
@@ -128,8 +137,8 @@ def _make_json_chunk(messages: List[BaseMessage]) -> str:
 
 
 def _select_messages(
-    messages: List[BaseMessage], tail_count: int
-) -> Tuple[List[BaseMessage], List[int], List[int]]:
+    messages: list[BaseMessage], tail_count: int
+) -> tuple[list[BaseMessage], list[int], list[int]]:
     """
     Selects head messages to summarize and their indices.
     Also collects message IDs for messages that will be summarized
@@ -138,7 +147,7 @@ def _select_messages(
         f"[_select_messages] Selecting messages with tail_count = {tail_count}."
     )
     # No longer need to find old summaries, reducer handles them.
-    # Filter out any potential system messages just in case reducer missed something (unlikely)
+    # Filter potential system messages in case reducer missed some
     non_system_messages = [
         (i, m) for i, m in enumerate(messages) if not isinstance(m, SystemMessage)
     ]
@@ -162,7 +171,7 @@ def _select_messages(
         f"[_select_messages] Selected {len(head_msgs)} head messages for summary."
     )
     logger.warning(
-        f"[_select_messages] Collected {len(message_ids)} message IDs for summarized messages."
+        f"[_select_messages] Collected {len(message_ids)} IDs for summarized messages."
     )
 
     # Returns head messages, indices to remove, and message IDs
@@ -174,7 +183,7 @@ async def summarize_history_node(
     summary_llm: BaseChatModel,
     rest_client: RestServiceClient,
     summarization_prompt: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Summarizes history, saves the summary via REST API, and returns updated state.
     Uses the provided summarization_prompt.
@@ -201,7 +210,7 @@ async def summarize_history_node(
         )
         return {"messages": []}
 
-    user_id_int: Optional[int] = None
+    user_id_int: int | None = None
     try:
         user_id_int = int(user_id_str)
     except ValueError:
@@ -267,7 +276,10 @@ async def summarize_history_node(
     try:
         await rest_client.create_user_summary(summary_data)
         logger.info(
-            f"Successfully saved summary (last_message_id={last_message_id}, tokens={token_count}).",
+            (
+                "Successfully saved summary "
+                f"(last_message_id={last_message_id}, tokens={token_count})."
+            ),
             extra=log_extra,
         )
     except Exception as e:
@@ -278,7 +290,8 @@ async def summarize_history_node(
     remove_instructions = [RemoveMessage(msg_id) for msg_id in message_ids]
 
     logger.warning(
-        f"[summarize_history_node] Created {len(remove_instructions)} RemoveMessage instructions using indices"
+        "[summarize_history_node] Created "
+        f"{len(remove_instructions)} RemoveMessage instructions"
     )
 
     return {

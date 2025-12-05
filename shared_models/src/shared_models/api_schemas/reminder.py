@@ -1,15 +1,12 @@
 import json
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import field_validator
 
-# Need enums from models, adjust path if needed
-# Assuming enums are accessible via models package (installed dependency)
-# If models are also in shared_models, adjust import like: from ..models.reminder import ...
+# Enums live in shared_models.enums; adjust if models are packaged separately
 # from models.reminder import ReminderStatus, ReminderType
-from ..enums import ReminderStatus, ReminderType  # Import from shared_models.enums
+from ..enums import ReminderStatus, ReminderType
 from .base import BaseSchema, TimestampSchema
 
 
@@ -17,8 +14,8 @@ class ReminderBase(BaseSchema):
     user_id: int
     assistant_id: UUID
     type: ReminderType
-    trigger_at: Optional[datetime] = None
-    cron_expression: Optional[str] = None
+    trigger_at: datetime | None = None
+    cron_expression: str | None = None
     payload: dict  # Store payload as dict for easier handling
     status: ReminderStatus = ReminderStatus.ACTIVE
 
@@ -28,8 +25,8 @@ class ReminderBase(BaseSchema):
         if isinstance(v, str):
             try:
                 return json.loads(v)
-            except json.JSONDecodeError:
-                raise ValueError("payload must be a valid JSON string")
+            except json.JSONDecodeError as err:
+                raise ValueError("payload must be a valid JSON string") from err
         elif isinstance(v, dict):
             return v
         raise TypeError("payload must be a dict or a valid JSON string")
@@ -40,10 +37,10 @@ class ReminderCreate(ReminderBase):
 
 
 class ReminderUpdate(BaseSchema):  # Allow partial updates
-    status: Optional[ReminderStatus] = None
+    status: ReminderStatus | None = None
     # Add other fields if they should be updatable
 
 
 class ReminderRead(ReminderBase, TimestampSchema):
     id: UUID
-    last_triggered_at: Optional[datetime] = None
+    last_triggered_at: datetime | None = None

@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
 from src.models.rag_models import RagData, SearchResult
 from src.services.vector_db_service import VectorDBService
 

@@ -1,5 +1,4 @@
 import os
-from typing import Dict
 
 import structlog
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,7 +31,7 @@ class Settings(BaseSettings):
     batch_size: int = 100  # number of updates to process at once
 
     # Redis connection settings
-    redis_settings: Dict = {
+    redis_settings: dict = {
         "encoding": "utf-8",
         "decode_responses": True,
         "retry_on_timeout": True,

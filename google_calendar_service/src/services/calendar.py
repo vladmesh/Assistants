@@ -1,15 +1,15 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from config.logger import get_logger
-from config.settings import Settings
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from schemas.calendar import CreateEventRequest
-
 from shared_models.api_schemas import CalendarCredentialsRead
+
+from config.logger import get_logger
+from config.settings import Settings
+from schemas.calendar import CreateEventRequest
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,9 @@ class GoogleCalendarService:
                 "project_id": "smart-assistant",  # Or from settings if it varies
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": self.settings.GOOGLE_TOKEN_URI,
-                "auth_provider_x509_cert_url": self.settings.GOOGLE_AUTH_PROVIDER_CERT_URL,
+                "auth_provider_x509_cert_url": (
+                    self.settings.GOOGLE_AUTH_PROVIDER_CERT_URL
+                ),
                 "client_secret": self.settings.GOOGLE_CLIENT_SECRET,
                 "redirect_uris": [self.settings.GOOGLE_REDIRECT_URI],
             }
@@ -80,9 +82,9 @@ class GoogleCalendarService:
     async def get_events(
         self,
         credentials_data: CalendarCredentialsRead,
-        time_min: Optional[datetime] = None,
-        time_max: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+        time_min: datetime | None = None,
+        time_max: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         """Get user's calendar events"""
         try:
             # Create credentials object using attribute access
@@ -138,7 +140,7 @@ class GoogleCalendarService:
 
     async def create_event(
         self, credentials_data: CalendarCredentialsRead, event_data: CreateEventRequest
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create new calendar event using simplified data model"""
         try:
             # Create credentials object using attribute access

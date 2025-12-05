@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 import os
 import sys
-from typing import List, Optional
 
 
-def run_alembic_command(command: str, args: List[str]) -> None:
+def run_alembic_command(command: str, args: list[str]) -> None:
     """Run alembic command with given arguments."""
     os.environ.setdefault("PYTHONPATH", "/app")
     from alembic import command as alembic_commands
     from alembic.config import Config
 
     alembic_cfg = Config("alembic.ini")
-    # alembic_cfg.set_main_option("script_location", "/app/alembic") # Ensure script location is correct if needed
+    # alembic_cfg.set_main_option("script_location", "/app/alembic")
 
     if command == "revision":
         # Find the message correctly, considering the --autogenerate flag
@@ -25,7 +24,7 @@ def run_alembic_command(command: str, args: List[str]) -> None:
                 if autogen_index + 1 < len(args):
                     message = args[autogen_index + 1]
             elif len(args) > 0:
-                # If no --autogenerate, assume first arg is message (for manual revision?)
+                # If no --autogenerate, assume first arg is message
                 message = args[0]
 
             if not message:
@@ -64,7 +63,8 @@ if __name__ == "__main__":
         print("Available commands:")
         print("  migrate <message> - Create a new migration")
         print(
-            "  upgrade [revision] - Apply migrations (default: head, use '+1' for one step)"
+            "  upgrade [revision] - Apply migrations "
+            "(default: head, use '+1' for one step)"
         )
         print("  downgrade [revision] - Rollback migrations (default: -1)")
         print("  current - Show current migration")

@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from .base import BaseSchema, TimestampSchema
@@ -10,8 +9,8 @@ class UserSummaryBase(BaseSchema):
     summary_text: str
     user_id: int
     assistant_id: UUID
-    last_message_id_covered: Optional[int] = None
-    token_count: Optional[int] = None
+    last_message_id_covered: int | None = None
+    token_count: int | None = None
 
 
 class UserSummaryCreateUpdate(UserSummaryBase):

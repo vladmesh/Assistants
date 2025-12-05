@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,5 +16,5 @@ class CreateEventRequest(BaseModel):
     title: str = Field(..., description="Event title")
     start_time: EventTime = Field(..., description="Event start time")
     end_time: EventTime = Field(..., description="Event end time")
-    description: Optional[str] = Field(None, description="Event description")
-    location: Optional[str] = Field(None, description="Event location")
+    description: str | None = Field(None, description="Event description")
+    location: str | None = Field(None, description="Event location")

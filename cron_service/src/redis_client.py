@@ -1,8 +1,8 @@
 import json
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 
 import redis
 
@@ -32,7 +32,7 @@ redis_client = redis.Redis(
 logger.info(f"--- CREATING redis_client instance with ID: {id(redis_client)} ---")
 
 
-def send_reminder_trigger(reminder_data: Dict[str, Any]) -> None:
+def send_reminder_trigger(reminder_data: dict[str, Any]) -> None:
     """
     Sends a reminder trigger event to the assistant via Redis using QueueTrigger format.
 
@@ -83,7 +83,7 @@ def send_reminder_trigger(reminder_data: Dict[str, Any]) -> None:
             # Consider adding original trigger_at if needed for logic
             # "original_trigger_at": reminder_data.get("trigger_at"),
             "triggered_at_event": datetime.now(
-                timezone.utc
+                UTC
             ).isoformat(),  # Timestamp of this trigger event
         }
 

@@ -1,6 +1,6 @@
 # This file makes Python treat the 'crud' directory as a package.
 
-from . import user_fact, user_secretary, user_summary, message
+from . import message, user_fact, user_secretary, user_summary
 from .assistant import (  # noqa: F401
     create_assistant,
     delete_assistant,

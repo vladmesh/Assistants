@@ -22,7 +22,8 @@ try:
     )
 except ImportError:
     st.error(
-        "Could not import shared models. Ensure shared_models package is installed and accessible."
+        "Could not import shared models. Ensure shared_models package is "
+        "installed and accessible."
     )
     st.stop()
 
@@ -99,8 +100,7 @@ def show_global_settings_page(rest_client: RestServiceClient):
                 # Update session state with the *returned* data from API
                 st.session_state[SESSION_STATE_KEY] = updated_settings
                 st.success("Настройки успешно сохранены!")
-                # Optional: Force immediate rerun if needed, though state update should handle it
-                # st.experimental_rerun()
+                # Optional: Force rerun if needed, though state update should handle it
             except httpx.RequestError as e:
                 st.error(f"Ошибка сети при сохранении настроек: {e}")
                 logger.error(
@@ -116,7 +116,8 @@ def show_global_settings_page(rest_client: RestServiceClient):
     ):
         # Explicitly check if loading failed (kept None in session state)
         st.warning(
-            "Не удалось загрузить настройки. Попробуйте обновить страницу или проверьте логи rest_service."
+            "Не удалось загрузить настройки. Попробуйте обновить страницу или "
+            "проверьте логи rest_service."
         )
     # else: # Initial state before loading attempt - spinner is shown
 

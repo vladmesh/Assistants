@@ -1,30 +1,31 @@
-from typing import List
+from typing import Annotated
 from uuid import UUID
 
-import crud.assistant as assistant_crud  # Import the CRUD module
 import structlog
-from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.assistant import Assistant  # Keep model import for response_model
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from shared_models.api_schemas import (
     AssistantCreate,
     AssistantRead,
     AssistantReadSimple,
     AssistantUpdate,
 )
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+import crud.assistant as assistant_crud  # Import the CRUD module
+from database import get_session
+from models.assistant import Assistant  # Keep model import for response_model
 
 logger = structlog.get_logger()
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter()
 
 
-@router.get("/assistants/", response_model=List[AssistantReadSimple])
+@router.get("/assistants/", response_model=list[AssistantReadSimple])
 async def list_assistants(
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
     skip: int = 0,
     limit: int = 100,
-) -> List[Assistant]:
+) -> list[Assistant]:
     """Get a list of all assistants"""
     logger.info("Listing assistants", skip=skip, limit=limit)
     assistants = await assistant_crud.get_assistants(db=session, skip=skip, limit=limit)
@@ -33,9 +34,7 @@ async def list_assistants(
 
 
 @router.get("/assistants/{assistant_id}", response_model=AssistantRead)
-async def get_assistant(
-    assistant_id: UUID, session: AsyncSession = Depends(get_session)
-) -> Assistant:
+async def get_assistant(assistant_id: UUID, session: SessionDep) -> Assistant:
     """Get an assistant by ID"""
     logger.info("Getting assistant by ID", assistant_id=str(assistant_id))
     assistant = await assistant_crud.get_assistant(
@@ -56,7 +55,7 @@ async def get_assistant(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_assistant(
-    assistant_in: AssistantCreate, session: AsyncSession = Depends(get_session)
+    assistant_in: AssistantCreate, session: SessionDep
 ) -> Assistant:
     """Create a new assistant"""
     logger.info(
@@ -70,22 +69,24 @@ async def create_assistant(
         )
         logger.info("Assistant created successfully", assistant_id=str(db_assistant.id))
         return db_assistant
-    except ValueError as e:
-        logger.error("Failed to create assistant due to invalid type", error=str(e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
+    except ValueError as exc:
+        logger.error("Failed to create assistant due to invalid type", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except Exception as exc:
         logger.exception("Failed to create assistant due to unexpected error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from exc
 
 
 @router.put("/assistants/{assistant_id}", response_model=AssistantRead)
 async def update_assistant(
     assistant_id: UUID,
     assistant_update: AssistantUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ) -> Assistant:
     """Update an assistant"""
     logger.info("Attempting to update assistant", assistant_id=str(assistant_id))
@@ -104,14 +105,16 @@ async def update_assistant(
             "Assistant updated successfully", assistant_id=str(updated_assistant.id)
         )
         return updated_assistant
-    except ValueError as e:
+    except ValueError as exc:
         logger.error(
             "Failed to update assistant due to invalid type",
             assistant_id=str(assistant_id),
-            error=str(e),
+            error=str(exc),
         )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except Exception as exc:
         logger.exception(
             "Failed to update assistant due to unexpected error",
             assistant_id=str(assistant_id),
@@ -119,13 +122,11 @@ async def update_assistant(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from exc
 
 
 @router.delete("/assistants/{assistant_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_assistant(
-    assistant_id: UUID, session: AsyncSession = Depends(get_session)
-) -> None:
+async def delete_assistant(assistant_id: UUID, session: SessionDep) -> None:
     """Delete an assistant"""
     logger.info("Attempting to delete assistant", assistant_id=str(assistant_id))
     try:
@@ -141,13 +142,15 @@ async def delete_assistant(
             )
         logger.info("Assistant deleted successfully", assistant_id=str(assistant_id))
         return None  # Return None for 204 No Content
-    except ValueError as e:
+    except ValueError as exc:
         # Catch the ValueError raised by CRUD on IntegrityError
         logger.warning(
-            f"Deletion conflict for assistant {assistant_id}: {e}", exc_info=True
+            f"Deletion conflict for assistant {assistant_id}: {exc}", exc_info=True
         )
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
+    except Exception as exc:
         # Catch any other unexpected errors
         logger.exception(
             f"Unexpected error deleting assistant {assistant_id}", exc_info=True
@@ -155,4 +158,4 @@ async def delete_assistant(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during deletion.",
-        )
+        ) from exc

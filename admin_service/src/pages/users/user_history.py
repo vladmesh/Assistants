@@ -1,15 +1,10 @@
-from typing import List, Optional
-from uuid import UUID
-
 import streamlit as st
-from rest_client import RestServiceClient
-from utils.async_utils import run_async
-
-from shared_models.api_schemas.message import MessageRead
 from shared_models.api_schemas.user_summary import (
     UserSummaryCreateUpdate,
-    UserSummaryRead,
 )
+
+from rest_client import RestServiceClient
+from utils.async_utils import run_async
 
 
 def render_user_history_page(user_id: int, rest_client: RestServiceClient):
@@ -76,7 +71,7 @@ def render_user_history_page(user_id: int, rest_client: RestServiceClient):
                     if new_summary != summary.summary_text:
                         if st.button("Сохранить изменения", key=f"save_{summary.id}"):
                             try:
-                                updated_summary = run_async(
+                                run_async(
                                     rest_client.update_user_summary(
                                         summary_id=summary.id,
                                         summary_data=UserSummaryCreateUpdate(

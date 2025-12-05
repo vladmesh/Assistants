@@ -1,4 +1,3 @@
-from typing import List, Optional
 from uuid import UUID
 
 # Need enums from models, adjust path if needed
@@ -14,8 +13,8 @@ from .base import BaseSchema, TimestampSchema
 class ToolBase(BaseSchema):
     name: str
     tool_type: ToolType
-    description: Optional[str] = None
-    assistant_id: Optional[UUID] = None  # For sub_assistant type
+    description: str | None = None
+    assistant_id: UUID | None = None  # For sub_assistant type
     is_active: bool = True
 
 
@@ -24,11 +23,11 @@ class ToolCreate(ToolBase):
 
 
 class ToolUpdate(BaseSchema):  # Allow partial updates
-    name: Optional[str] = None
-    tool_type: Optional[ToolType] = None
-    description: Optional[str] = None
-    assistant_id: Optional[UUID] = None
-    is_active: Optional[bool] = None
+    name: str | None = None
+    tool_type: ToolType | None = None
+    description: str | None = None
+    assistant_id: UUID | None = None
+    is_active: bool | None = None
 
 
 class ToolRead(ToolBase, TimestampSchema):
@@ -42,9 +41,9 @@ class AssistantBase(BaseSchema):
     name: str
     is_secretary: bool = False
     model: str
-    instructions: Optional[str] = None
-    description: Optional[str] = None
-    startup_message: Optional[str] = None
+    instructions: str | None = None
+    description: str | None = None
+    startup_message: str | None = None
     assistant_type: AssistantType = AssistantType.LLM
     is_active: bool = True
 
@@ -54,25 +53,25 @@ class AssistantCreate(AssistantBase):
 
 
 class AssistantUpdate(BaseSchema):  # Allow partial updates
-    name: Optional[str] = None
-    is_secretary: Optional[bool] = None
-    model: Optional[str] = None
-    instructions: Optional[str] = None
-    description: Optional[str] = None
-    startup_message: Optional[str] = None
-    assistant_type: Optional[AssistantType] = None
-    is_active: Optional[bool] = None
+    name: str | None = None
+    is_secretary: bool | None = None
+    model: str | None = None
+    instructions: str | None = None
+    description: str | None = None
+    startup_message: str | None = None
+    assistant_type: AssistantType | None = None
+    is_active: bool | None = None
 
 
 class AssistantRead(AssistantBase, TimestampSchema):
     id: UUID
-    tools: List[ToolRead] = []  # Include linked tools in read schema
+    tools: list[ToolRead] = []  # Include linked tools in read schema
 
 
 # A simpler version for creation response, without tools
 class AssistantReadSimple(AssistantBase, TimestampSchema):
     id: UUID
-    description: Optional[str] = None
+    description: str | None = None
 
 
 # ========= AssistantToolLink Schemas ==========

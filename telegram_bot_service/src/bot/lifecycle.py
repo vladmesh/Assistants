@@ -1,14 +1,14 @@
 import asyncio
 import logging
 import signal
-from typing import List, Optional
 
 import aiohttp
 import structlog
+from redis import asyncio as aioredis
+
 from clients.rest import RestClient
 from clients.telegram import TelegramClient
 from config.settings import settings
-from redis import asyncio as aioredis
 from services.response_processor import handle_assistant_responses
 
 # Импортируем функции, которые будут вызываться из этого модуля
@@ -23,10 +23,10 @@ class BotLifecycle:
     """Manages the bot's startup, running tasks, and shutdown."""
 
     def __init__(self) -> None:
-        self._telegram_client: Optional[TelegramClient] = None
-        self._rest_client: Optional[RestClient] = None
-        self._redis_client: Optional[aioredis.Redis] = None
-        self._tasks: List[asyncio.Task] = []
+        self._telegram_client: TelegramClient | None = None
+        self._rest_client: RestClient | None = None
+        self._redis_client: aioredis.Redis | None = None
+        self._tasks: list[asyncio.Task] = []
         self._should_stop = asyncio.Event()
 
     async def _initialize_clients(self) -> None:
@@ -57,7 +57,9 @@ class BotLifecycle:
             logger.info(
                 "Telegram connection verified", bot_username=bot_info.get("username")
             )
-            await self._rest_client.ping()  # Assuming a ping endpoint exists or implement one
+            await (
+                self._rest_client.ping()
+            )  # Assuming a ping endpoint exists or implement one
             await self._redis_client.ping()
             logger.info("Clients initialized and connections verified.")
         except Exception as e:
@@ -134,7 +136,8 @@ class BotLifecycle:
                 sig, lambda s=sig.name: asyncio.create_task(self._shutdown(s))
             )
         logger.info(
-            f"Signal handlers set up for {signal.SIGINT.name} and {signal.SIGTERM.name}."
+            "Signal handlers set",
+            signals=[signal.SIGINT.name, signal.SIGTERM.name],
         )
 
     async def run(self) -> None:

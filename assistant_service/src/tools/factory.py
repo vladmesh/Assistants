@@ -1,9 +1,11 @@
 # assistant_service/src/tools/factory.py
 import logging
-from typing import TYPE_CHECKING, List, Optional, Type
+from typing import TYPE_CHECKING, Optional
+
+from langchain_core.tools import Tool
+from shared_models.api_schemas import ToolRead  # Import new schema
 
 from config.settings import Settings
-from langchain_core.tools import Tool
 
 # Import shared models
 from tools.calendar_tool import CalendarCreateTool, CalendarListTool
@@ -16,8 +18,6 @@ from tools.sub_assistant_tool import SubAssistantTool  # Import SubAssistantTool
 from tools.time_tool import TimeToolWrapper
 from tools.user_fact_tool import UserFactTool  # Import the new tool
 from tools.web_search_tool import WebSearchTool
-
-from shared_models.api_schemas import ToolRead  # Import new schema
 
 if TYPE_CHECKING:
     from assistants.factory import AssistantFactory  # Import for type hinting
@@ -36,12 +36,13 @@ class ToolFactory:
         self.assistant_factory = assistant_factory  # Store the assistant factory
         if not self.assistant_factory:
             logger.warning(
-                "AssistantFactory not provided to ToolFactory. SubAssistantTool cannot be created."
+                "AssistantFactory not provided to ToolFactory. "
+                "SubAssistantTool cannot be created."
             )
 
     async def create_langchain_tools(
-        self, tool_definitions: List[ToolRead], user_id: str, assistant_id: str
-    ) -> List[Tool]:
+        self, tool_definitions: list[ToolRead], user_id: str, assistant_id: str
+    ) -> list[Tool]:
         """
         Creates Langchain Tool instances from a list of ToolRead definitions.
         Name and Description are now fetched from tool_definitions.
@@ -61,7 +62,7 @@ class ToolFactory:
                     str(tool_def.assistant_id) if tool_def.assistant_id else None
                 )
 
-                tool_class: Optional[Type[Tool]] = None
+                tool_class: type[Tool] | None = None
 
                 # Map tool_type to class
                 if tool_type == "reminder_create":  # Changed from "reminder"
@@ -79,7 +80,8 @@ class ToolFactory:
                         tool_class = CalendarListTool
                     else:
                         logger.warning(
-                            f"Unknown calendar tool name: {tool_name} for type {tool_type}"
+                            f"Unknown calendar tool name: {tool_name} for type "
+                            f"{tool_type}"
                         )
                 elif tool_type == "web_search":
                     tool_class = WebSearchTool
@@ -88,19 +90,24 @@ class ToolFactory:
                 elif tool_type == "sub_assistant":
                     if not self.assistant_factory:
                         raise ValueError(
-                            "Cannot create SubAssistantTool: AssistantFactory not available."
+                            "Cannot create SubAssistantTool: "
+                            "AssistantFactory not available."
                         )
 
                     if not sub_assistant_id:
                         raise ValueError(
-                            f"Sub-assistant DB ID missing for sub_assistant tool: {tool_name}"
+                            "Sub-assistant DB ID missing for sub_assistant tool: "
+                            f"{tool_name}"
                         )
 
                     logger.info(
-                        f"Attempting to fetch sub-assistant with ID: {sub_assistant_id}"
+                        "Attempting to fetch sub-assistant with ID: "
+                        f"{sub_assistant_id}"
                     )
-                    # Ensure assistant_factory is not None before calling get_assistant_by_id
-                    # This check is technically redundant due to the earlier check, but good for type checkers
+                    # Ensure assistant_factory is not None before calling
+                    # get_assistant_by_id
+                    # This check is technically redundant due to the earlier check,
+                    # but good for type checkers
                     if self.assistant_factory is None:
                         raise ValueError(
                             "AssistantFactory is None, cannot fetch sub-assistant."
@@ -112,7 +119,8 @@ class ToolFactory:
                         )
                     )
                     logger.info(
-                        f"Successfully fetched sub-assistant: {sub_assistant_instance.name}"
+                        "Successfully fetched sub-assistant: "
+                        f"{sub_assistant_instance.name}"
                     )
 
                     sub_assistant_tool_args = {
@@ -130,7 +138,8 @@ class ToolFactory:
 
                 else:
                     logger.warning(
-                        f"Unknown or unsupported tool type: {tool_type} for tool: {tool_name}"
+                        "Unknown or unsupported tool type: "
+                        f"{tool_type} for tool: {tool_name}"
                     )
 
                 if (
@@ -146,7 +155,9 @@ class ToolFactory:
                     }
                     tool_instance = tool_class(**base_tool_args)
                     logger.info(
-                        f"Initialized tool: {tool_instance.name} (Type: {tool_type}) - Desc: {tool_instance.description}"
+                        "Initialized tool: "
+                        f"{tool_instance.name} (Type: {tool_type}) - "
+                        f"Desc: {tool_instance.description}"
                     )
 
                 if tool_instance:
@@ -154,7 +165,9 @@ class ToolFactory:
 
             except Exception as e:
                 logger.error(
-                    f"Failed to initialize tool '{tool_def.name}' (Type: {tool_def.tool_type}) for assistant {assistant_id}: {e}",
+                    "Failed to initialize tool "
+                    f"'{tool_def.name}' (Type: {tool_def.tool_type}) for assistant "
+                    f"{assistant_id}: {e}",
                     exc_info=True,
                 )
 

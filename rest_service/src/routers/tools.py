@@ -1,23 +1,24 @@
-from typing import List
+from typing import Annotated
 from uuid import UUID
 
-import crud.tool as tool_crud
 import structlog
-from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.assistant import Tool
+from shared_models.api_schemas import ToolCreate, ToolRead, ToolUpdate
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import ToolCreate, ToolRead, ToolUpdate
+import crud.tool as tool_crud
+from database import get_session
+from models.assistant import Tool
 
 logger = structlog.get_logger()
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter()
 
 
-@router.get("/tools/", response_model=List[ToolRead])
+@router.get("/tools/", response_model=list[ToolRead])
 async def list_tools_route(
-    session: AsyncSession = Depends(get_session), skip: int = 0, limit: int = 100
-) -> List[Tool]:
+    session: SessionDep, skip: int = 0, limit: int = 100
+) -> list[Tool]:
     """Get a list of all tools."""
     logger.info("Listing tools", skip=skip, limit=limit)
     tools = await tool_crud.get_tools(db=session, skip=skip, limit=limit)
@@ -26,9 +27,7 @@ async def list_tools_route(
 
 
 @router.get("/tools/{tool_id}", response_model=ToolRead)
-async def get_tool_route(
-    tool_id: UUID, session: AsyncSession = Depends(get_session)
-) -> Tool:
+async def get_tool_route(tool_id: UUID, session: SessionDep) -> Tool:
     """Get a specific tool by its ID."""
     logger.info("Getting tool by ID", tool_id=str(tool_id))
     tool = await tool_crud.get_tool(db=session, tool_id=tool_id)
@@ -42,34 +41,32 @@ async def get_tool_route(
 
 
 @router.post("/tools/", response_model=ToolRead, status_code=status.HTTP_201_CREATED)
-async def create_tool_route(
-    tool_in: ToolCreate, session: AsyncSession = Depends(get_session)
-) -> Tool:
+async def create_tool_route(tool_in: ToolCreate, session: SessionDep) -> Tool:
     """Create a new tool."""
     logger.info("Attempting to create tool", name=tool_in.name, type=tool_in.tool_type)
     try:
         tool = await tool_crud.create_tool(db=session, tool_in=tool_in)
         logger.info("Tool created successfully", tool_id=str(tool.id))
         return tool
-    except ValueError as e:
-        logger.error("Failed to create tool: Invalid input", error=str(e))
+    except ValueError as exc:
+        logger.error("Failed to create tool: Invalid input", error=str(exc))
         # Check if it's a duplicate name error or enum error
-        detail = str(e)
+        detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST
         if "already exists" in detail:
             status_code = status.HTTP_409_CONFLICT
-        raise HTTPException(status_code=status_code, detail=detail)
-    except Exception:
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
         logger.exception("Failed to create tool due to unexpected error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from exc
 
 
 @router.put("/tools/{tool_id}", response_model=ToolRead)
 async def update_tool_route(
-    tool_id: UUID, tool_update: ToolUpdate, session: AsyncSession = Depends(get_session)
+    tool_id: UUID, tool_update: ToolUpdate, session: SessionDep
 ) -> Tool:
     """Update an existing tool."""
     logger.info("Attempting to update tool", tool_id=str(tool_id))
@@ -84,29 +81,29 @@ async def update_tool_route(
             )
         logger.info("Tool updated successfully", tool_id=str(updated_tool.id))
         return updated_tool
-    except ValueError as e:
+    except ValueError as exc:
         logger.error(
-            "Failed to update tool: Invalid input", tool_id=str(tool_id), error=str(e)
+            "Failed to update tool: Invalid input",
+            tool_id=str(tool_id),
+            error=str(exc),
         )
-        detail = str(e)
+        detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST
         if "already exists" in detail:
             status_code = status.HTTP_409_CONFLICT
-        raise HTTPException(status_code=status_code, detail=detail)
-    except Exception:
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
         logger.exception(
             "Failed to update tool due to unexpected error", tool_id=str(tool_id)
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from exc
 
 
 @router.delete("/tools/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_tool_route(
-    tool_id: UUID, session: AsyncSession = Depends(get_session)
-) -> None:
+async def delete_tool_route(tool_id: UUID, session: SessionDep) -> None:
     """Delete a tool."""
     logger.info("Attempting to delete tool", tool_id=str(tool_id))
     deleted = await tool_crud.delete_tool(db=session, tool_id=tool_id)

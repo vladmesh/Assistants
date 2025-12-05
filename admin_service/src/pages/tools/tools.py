@@ -4,11 +4,11 @@ from uuid import UUID
 
 import pandas as pd
 import streamlit as st
-from rest_client import RestServiceClient
-from utils.async_utils import run_async
-
 from shared_models.api_schemas import ToolCreate, ToolUpdate
 from shared_models.enums import ToolType
+
+from rest_client import RestServiceClient
+from utils.async_utils import run_async
 
 
 def show_tools_page(rest_client: RestServiceClient):
@@ -121,7 +121,7 @@ def show_tools_page(rest_client: RestServiceClient):
                             tool_type=ToolType(tool_type),
                             description=description,
                             assistant_id=assistant_id,
-                            # Assuming parameters are not handled by this simple form yet
+                            # Params are not handled by this simple form yet
                             parameters={},
                         )
                         # Call create_tool with the object

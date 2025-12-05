@@ -65,7 +65,7 @@
 # )
 # @patch("assistants.factory.RestServiceClient", new=MockRestServiceIntegration)
 # async def test_listen_for_human_message(test_redis, human_queue_message):
-#     """Integration test: Check listening and processing a human message via real Redis."""
+#     """Integration test: Check processing a human message via real Redis."""
 #     # Arrange
 #     # Use the correct redis_url and queue names from the mock_settings fixture
 #     settings = Settings()
@@ -77,11 +77,15 @@
 #     # and test_redis fixture uses the same url.
 
 #     # Act: Push message to the REAL Redis queue
-#     await test_redis.rpush(settings.INPUT_QUEUE, human_queue_message.model_dump_json())
+#     await test_redis.rpush(
+#         settings.INPUT_QUEUE, human_queue_message.model_dump_json()
+#     )
 
 #     # Start listening - run listen_for_messages in a background task
 #     # as it blocks. Process only one message.
-#     listen_task = asyncio.create_task(orchestrator.listen_for_messages(max_messages=1))
+#     listen_task = asyncio.create_task(
+#         orchestrator.listen_for_messages(max_messages=1)
+#     )
 
 #     # Wait for the task to complete (with a timeout)
 #     try:
@@ -106,7 +110,7 @@
 # # async def test_listen_for_reminder_event(
 # #     mock_settings, test_redis, mock_factory, mock_secretary, reminder_trigger_event
 # # ):
-# #     """Integration test: Check listening and processing a reminder event via real Redis."""
+# #     """Integration test: Check reminder event processing via real Redis."""
 # #     # Arrange
 # #     mock_settings.input_queue = "test:input:orchestrator_reminder"
 # #     mock_settings.output_queue = "test:output:orchestrator_reminder"
@@ -118,7 +122,9 @@
 # #     )
 
 # #     # Start listening
-# #     listen_task = asyncio.create_task(orchestrator.listen_for_messages(max_messages=1))
+# #     listen_task = asyncio.create_task(
+# #         orchestrator.listen_for_messages(max_messages=1)
+# #     )
 # #     try:
 # #         await asyncio.wait_for(listen_task, timeout=7.0)
 # #     except asyncio.TimeoutError:

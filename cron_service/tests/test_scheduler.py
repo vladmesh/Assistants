@@ -1,11 +1,10 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from dateutil.parser import isoparse
 from pytz import utc
-
 from src.scheduler import DateTrigger, _job_func, schedule_job
 
 logger = logging.getLogger(__name__)
@@ -43,7 +42,7 @@ def mock_rest_client():
 def sample_one_time_reminder():
     """Sample one-time reminder data from REST API."""
     # Make trigger_at slightly in the future for testing scheduling
-    future_time = datetime.now(timezone.utc) + timedelta(seconds=10)
+    future_time = datetime.now(UTC) + timedelta(seconds=10)
     return {
         "id": "uuid-one-time-1",
         "user_id": 123,
@@ -55,8 +54,8 @@ def sample_one_time_reminder():
         "payload": '{"text": "One time reminder", "priority": "normal"}',
         "status": "active",
         "last_triggered_at": None,
-        "created_at": datetime(2025, 4, 5, 10, 0, 0, tzinfo=timezone.utc).isoformat(),
-        "updated_at": datetime(2025, 4, 5, 10, 0, 0, tzinfo=timezone.utc).isoformat(),
+        "created_at": datetime(2025, 4, 5, 10, 0, 0, tzinfo=UTC).isoformat(),
+        "updated_at": datetime(2025, 4, 5, 10, 0, 0, tzinfo=UTC).isoformat(),
     }
 
 
@@ -74,8 +73,8 @@ def sample_recurring_reminder():
         "payload": '{"check_type": "daily_report", "report_id": "daily_456"}',
         "status": "active",
         "last_triggered_at": None,
-        "created_at": datetime(2025, 4, 5, 9, 0, 0, tzinfo=timezone.utc).isoformat(),
-        "updated_at": datetime(2025, 4, 5, 9, 0, 0, tzinfo=timezone.utc).isoformat(),
+        "created_at": datetime(2025, 4, 5, 9, 0, 0, tzinfo=UTC).isoformat(),
+        "updated_at": datetime(2025, 4, 5, 9, 0, 0, tzinfo=UTC).isoformat(),
     }
 
 

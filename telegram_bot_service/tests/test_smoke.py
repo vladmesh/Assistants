@@ -1,8 +1,9 @@
 import pytest
+from redis import asyncio as aioredis
+
 from clients.rest import RestClient
 from clients.telegram import TelegramClient
 from config.settings import settings
-from redis import asyncio as aioredis
 
 
 @pytest.mark.asyncio

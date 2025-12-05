@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
 from src.rest_client import RestServiceClient
 
@@ -29,7 +28,7 @@ class MockResponse:
 
 @pytest.fixture
 def mock_users():
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     return [
         {
             "id": 1,

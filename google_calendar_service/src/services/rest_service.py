@@ -1,18 +1,18 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import structlog
-from config.settings import Settings
 
 # Import new schemas and validation error
 from pydantic import ValidationError
-
 from shared_models.api_schemas import (
     CalendarCredentialsCreate,
     CalendarCredentialsRead,
     TelegramUserRead,
 )
+
+from config.settings import Settings
 
 logger = structlog.get_logger()
 
@@ -32,7 +32,7 @@ class RestService:
                 self.base_url += "/api"
         self.client = httpx.AsyncClient(timeout=30.0)  # Add timeout
 
-    async def _request(self, method: str, endpoint: str, **kwargs) -> Optional[Any]:
+    async def _request(self, method: str, endpoint: str, **kwargs) -> Any | None:
         """Helper method for making requests and handling common errors/responses."""
         url = f"{self.base_url}{endpoint}"  # Assumes endpoint starts with /
         try:
@@ -74,7 +74,7 @@ class RestService:
             )
             raise RestServiceError(f"Unexpected error for {url}: {e}") from e
 
-    async def get_user(self, user_id: int) -> Optional[TelegramUserRead]:
+    async def get_user(self, user_id: int) -> TelegramUserRead | None:
         """Get user from REST service by user_id. Returns parsed model or None."""
         try:
             response_data = await self._request("GET", f"/users/{user_id}")
@@ -93,14 +93,14 @@ class RestService:
             ) from e
         # Allow RestServiceError from _request to propagate
 
-    async def get_calendar_token(
-        self, user_id: int
-    ) -> Optional[CalendarCredentialsRead]:
-        """Get calendar token for user from REST service. Returns parsed model or None."""
+    async def get_calendar_token(self, user_id: int) -> CalendarCredentialsRead | None:
+        """Get calendar token for user from REST service.
+
+        Returns parsed model or None.
+        """
         try:
-            # Endpoint seems to be /calendar/user/{user_id}/token based on update method?
-            # Let's try the endpoint structure suggested by the PUT request log first.
-            # If this fails, it might just be /calendar/{user_id}
+            # Endpoint seems to be /calendar/user/{user_id}/token based on update
+            # method? If this fails, it might just be /calendar/{user_id}.
             # TODO: Verify the correct GET endpoint in rest_service routes/calendar.py
             response_data = await self._request(
                 "GET", f"/calendar/user/{user_id}/token"

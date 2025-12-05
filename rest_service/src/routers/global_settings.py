@@ -1,10 +1,13 @@
-import crud.global_settings as global_settings_crud
-from database import get_session
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+from shared_models.api_schemas import GlobalSettingsRead, GlobalSettingsUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared_models.api_schemas import GlobalSettingsRead, GlobalSettingsUpdate
+import crud.global_settings as global_settings_crud
+from database import get_session
 
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter(
     prefix="/global-settings",
     tags=["Global Settings"],
@@ -12,7 +15,7 @@ router = APIRouter(
 
 
 @router.get("/", response_model=GlobalSettingsRead)
-async def read_global_settings(db: AsyncSession = Depends(get_session)):
+async def read_global_settings(db: SessionDep):
     """Retrieve the global system settings.
 
     If settings do not exist, they will be created with default values.
@@ -25,9 +28,7 @@ async def read_global_settings(db: AsyncSession = Depends(get_session)):
 
 
 @router.put("/", response_model=GlobalSettingsRead)
-async def update_global_settings(
-    settings_in: GlobalSettingsUpdate, db: AsyncSession = Depends(get_session)
-):
+async def update_global_settings(settings_in: GlobalSettingsUpdate, db: SessionDep):
     """Update the global system settings.
 
     Creates the settings record if it doesn't exist.

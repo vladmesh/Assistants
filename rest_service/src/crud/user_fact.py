@@ -1,11 +1,11 @@
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
-from models import UserFact
+from shared_models.api_schemas.user_fact import UserFactCreate
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas.user_fact import UserFactCreate
+from models import UserFact
 
 
 async def create_user_fact(db: AsyncSession, user_fact_in: UserFactCreate) -> UserFact:

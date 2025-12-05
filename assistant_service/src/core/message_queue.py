@@ -1,9 +1,10 @@
 """Message queue implementation for assistant service."""
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 import redis.asyncio as redis
+
 from config.logger import get_logger
 from config.settings import Settings
 
@@ -42,7 +43,7 @@ class OLDMessageQueue:
             output_queue=self.output_queue,
         )
 
-    async def get_message(self, timeout: int = 0) -> Optional[Dict[str, Any]]:
+    async def get_message(self, timeout: int = 0) -> dict[str, Any] | None:
         """Get message from input queue.
 
         Args:
@@ -89,7 +90,7 @@ class OLDMessageQueue:
             logger.error("Failed to get message", error=str(e), exc_info=True)
             raise
 
-    async def send_response(self, response: Dict[str, Any]) -> None:
+    async def send_response(self, response: dict[str, Any]) -> None:
         """Send response to output queue.
 
         Args:

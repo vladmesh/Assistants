@@ -1,7 +1,6 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List
 
 from langchain_core.messages import BaseMessage, RemoveMessage
 
@@ -17,7 +16,7 @@ DEFAULT_LOG_FILE_PATH = "/src/messages_log.txt"
 async def log_messages_to_file(
     assistant_id: str,
     user_id: str,
-    messages: List[BaseMessage],
+    messages: list[BaseMessage],
     total_tokens: int,
     context_limit: int,
     log_file_path: str = DEFAULT_LOG_FILE_PATH,
@@ -32,7 +31,7 @@ async def log_messages_to_file(
     }
 
     try:
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         context_percentage = (
             (total_tokens / context_limit) * 100 if context_limit > 0 else 0
         )
@@ -44,9 +43,12 @@ async def log_messages_to_file(
             f.write(f"Step        : {step_name}\n")
             f.write(f"Assistant ID: {assistant_id}\n")
             f.write(f"User ID     : {user_id}\n")
-            f.write(
-                f"Context Info: Total Tokens = {total_tokens}, Limit = {context_limit}, Usage = {context_percentage:.2f}%\n"
+            context_line = (
+                "Context Info: "
+                f"Total={total_tokens}, Limit={context_limit}, "
+                f"Usage={context_percentage:.2f}%\n"
             )
+            f.write(context_line)
             f.write(f"Messages ({len(messages)} total):\n")
 
             # Filter out RemoveMessage before logging
@@ -73,8 +75,10 @@ async def log_messages_to_file(
                         msg_repr += f" (Name: {msg_name})"
                     f.write(f"  {msg_repr}\n")
 
-                    # Optional: Log full content for debugging specific types if needed
-                    # if isinstance(msg, ToolMessage) or (isinstance(msg, AIMessage) and msg.tool_calls):
+                    # Optional: log full content if needed
+                    # if isinstance(msg, ToolMessage) or (
+                    #     isinstance(msg, AIMessage) and msg.tool_calls
+                    # ):
                     #     await f.write(f"    Full Repr: {repr(msg)}\n")
 
                 except Exception as log_err:

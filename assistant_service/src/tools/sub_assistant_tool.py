@@ -1,9 +1,10 @@
-from typing import Any, Optional
+from typing import Any
+
+from langchain.schema import HumanMessage
 
 from assistants.base_assistant import BaseAssistant
 from config.logger import get_logger
 from config.settings import Settings
-from langchain.schema import HumanMessage
 from tools.base import BaseTool, SubAssistantSchema
 
 logger = get_logger(__name__)
@@ -16,7 +17,7 @@ class SubAssistantTool(BaseTool):
     args_schema: type[SubAssistantSchema] = SubAssistantSchema
     # Revert sub_assistant to simple type hint
     sub_assistant: BaseAssistant
-    sub_assistant_db_id: Optional[str] = None
+    sub_assistant_db_id: str | None = None
 
     # Restore original __init__ signature
     def __init__(
@@ -25,10 +26,10 @@ class SubAssistantTool(BaseTool):
         settings: Settings,
         user_id: str,
         parent_assistant_id: str,
-        sub_assistant_db_id: Optional[str] = None,
-        tool_id: Optional[str] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        sub_assistant_db_id: str | None = None,
+        tool_id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
         **kwargs: Any,  # Add kwargs to catch anything extra
     ):
         """Initialize the tool with a sub-assistant.
@@ -53,7 +54,7 @@ class SubAssistantTool(BaseTool):
             user_id=user_id,
             assistant_id=parent_assistant_id,  # This is the parent's ID
             tool_id=tool_id,
-            # Pass the sub_assistant instance ALSO in kwargs for potential BaseTool/Pydantic processing
+            # Pass sub_assistant in kwargs for potential BaseTool/Pydantic processing
             sub_assistant=sub_assistant,
             **kwargs,  # Pass any other unexpected kwargs up
         )

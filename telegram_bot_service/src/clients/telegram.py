@@ -1,8 +1,9 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import aiohttp
 import structlog
+
 from config.settings import settings
 
 logger = structlog.get_logger()
@@ -13,7 +14,7 @@ class TelegramClient:
 
     def __init__(self):
         self.base_url = f"https://api.telegram.org/bot{settings.telegram_token}"
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         logger.info("TelegramClient initialized", base_url=self.base_url)
 
     async def __aenter__(self):
@@ -24,7 +25,7 @@ class TelegramClient:
         if self.session:
             await self.session.close()
 
-    async def _make_request(self, method: str, **kwargs) -> Dict[str, Any]:
+    async def _make_request(self, method: str, **kwargs) -> dict[str, Any]:
         """Make request to Telegram API."""
         if not self.session:
             raise RuntimeError(
@@ -52,8 +53,8 @@ class TelegramClient:
             raise
 
     async def send_message(
-        self, chat_id: int, text: str, parse_mode: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, chat_id: int, text: str, parse_mode: str | None = None
+    ) -> dict[str, Any]:
         """Send message to chat."""
         logger.info(
             "Sending message", chat_id=chat_id, text=text, parse_mode=parse_mode
@@ -67,8 +68,8 @@ class TelegramClient:
         self,
         chat_id: int,
         text: str,
-        keyboard: List[List[Dict[str, str]]],
-        parse_mode: Optional[str] = None,
+        keyboard: list[list[dict[str, str]]],
+        parse_mode: str | None = None,
     ) -> None:
         """Send message with inline keyboard."""
         url = f"{self.base_url}/sendMessage"
@@ -94,7 +95,7 @@ class TelegramClient:
             )
 
     async def answer_callback_query(
-        self, callback_query_id: str, text: Optional[str] = None
+        self, callback_query_id: str, text: str | None = None
     ) -> None:
         """Answer callback query to remove the loading state on the button."""
         url = f"{self.base_url}/answerCallbackQuery"
@@ -124,7 +125,7 @@ class TelegramClient:
 
     async def get_updates(
         self, offset: int = 0, timeout: int = 30
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get updates from Telegram."""
         result = await self._make_request(
             "getUpdates",

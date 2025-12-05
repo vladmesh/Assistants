@@ -44,3 +44,18 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --cov=src --cov-report=term-missing"
 asyncio_mode = "auto" 
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+ignore = ["E203"]
+fixable = ["ALL"]
+per-file-ignores = {"*/__init__.py" = ["F401"]}

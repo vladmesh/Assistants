@@ -2,7 +2,6 @@ import os
 import sys
 from logging.config import fileConfig
 
-import sqlmodel
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
@@ -14,8 +13,7 @@ if src_path not in sys.path:
     sys.path.append(src_path)
 
 # Now imports from src should work
-import models  # Use direct import since /src is in sys.path
-from models.base import BaseModel  # Import BaseModel from the correct location
+from models.base import BaseModel  # noqa: E402 - import requires sys.path tweak
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
