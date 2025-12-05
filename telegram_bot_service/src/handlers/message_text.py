@@ -1,21 +1,11 @@
-from typing import Any, List
+from typing import Any
 
 import structlog
-
-# Обрати внимание: пути импорта изменились на clients
-from clients.rest import RestClient, RestClientError
-from clients.telegram import TelegramClient
-
-# Используем user_service
-from services import message_queue, user_service
-
-# Import shared models
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
 
-# Импортируем фабрику клавиатур (уже используется в command_start)
-# from keyboards.secretary_selection import create_secretary_selection_keyboard # No longer needed here
-
-
+from clients.rest import RestClient, RestClientError
+from clients.telegram import TelegramClient
+from services import message_queue, user_service
 
 logger = structlog.get_logger()
 
@@ -112,7 +102,7 @@ async def handle_text_message(**context: Any) -> None:
             prompt = (
                 "Похоже, у тебя еще не выбран секретарь. Пожалуйста, выбери одного:"
             )
-            success = await user_service.prompt_secretary_selection(
+            await user_service.prompt_secretary_selection(
                 telegram=telegram,
                 rest=rest,
                 chat_id=chat_id,
@@ -120,11 +110,8 @@ async def handle_text_message(**context: Any) -> None:
                 user_id_for_log=user_id,
             )
 
-            # No need for explicit success/failure handling here, as the function handles logs/user messages
-            # We just need to stop processing the original text message if a prompt was needed.
-            # The prompt_secretary_selection function returns False if it fails or if there are no secretaries,
-            # but in either case, we should just return here.
-            return  # Stop processing the original message regardless of prompt success/failure
+            # prompt_secretary_selection уже отправляет ответы/логи, просто выходим
+            return
 
         # 3. User exists and secretary is assigned, send message to queue
         logger.info(

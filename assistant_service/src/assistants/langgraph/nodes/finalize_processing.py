@@ -1,18 +1,18 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
+
+from shared_models.api_schemas.message import MessageUpdate
 
 from assistants.langgraph.state import AssistantState
 from services.rest_service import RestServiceClient
-
-from shared_models.api_schemas.message import MessageUpdate
 
 logger = logging.getLogger(__name__)
 
 
 async def finalize_processing_node(
     state: AssistantState, rest_client: RestServiceClient
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Finalizes message processing by:
     1. Updating statuses for summarized messages if summary was created
@@ -53,7 +53,8 @@ async def finalize_processing_node(
         assistant_id = UUID(assistant_id_str)
     except ValueError:
         logger.error(
-            f"Invalid Assistant ID format '{assistant_id_str}', cannot finalize processing.",
+            "Invalid Assistant ID format "
+            f"'{assistant_id_str}', cannot finalize processing.",
             extra=log_extra,
         )
         return state
@@ -95,7 +96,9 @@ async def finalize_processing_node(
                     )
 
             logger.info(
-                f"Updated {success_count}/{len(newly_summarized_message_ids)} messages with summary_id={summary_id}",
+                "Updated "
+                f"{success_count}/{len(newly_summarized_message_ids)} "
+                f"messages with summary_id={summary_id}",
                 extra=log_extra,
             )
         else:
@@ -136,7 +139,8 @@ async def finalize_processing_node(
                 )
             else:
                 logger.warning(
-                    f"Failed to update message status to 'processed' (ID: {initial_message_id})",
+                    "Failed to update message status to 'processed' "
+                    f"(ID: {initial_message_id})",
                     extra=log_extra,
                 )
         except Exception as e:

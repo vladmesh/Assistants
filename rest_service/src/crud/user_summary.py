@@ -1,21 +1,21 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import UUID
 
-from models.user_summary import UserSummary
+from shared_models.api_schemas import UserSummaryCreateUpdate
 from sqlalchemy import asc, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared_models.api_schemas import UserSummaryCreateUpdate
+from models.user_summary import UserSummary
 
 
-async def get_summary_by_id(db: AsyncSession, id: int) -> Optional[UserSummary]:
+async def get_summary_by_id(db: AsyncSession, id: int) -> UserSummary | None:
     result = await db.execute(select(UserSummary).where(UserSummary.id == id))
     return result.scalar_one_or_none()
 
 
 async def get_latest_by_user_and_assistant(
     db: AsyncSession, *, user_id: int, assistant_id: UUID
-) -> Optional[UserSummary]:
+) -> UserSummary | None:
     statement = (
         select(UserSummary)
         .where(UserSummary.user_id == user_id, UserSummary.assistant_id == assistant_id)
@@ -29,13 +29,13 @@ async def get_latest_by_user_and_assistant(
 async def get_multi_summaries(
     db: AsyncSession,
     *,
-    user_id: Optional[int] = None,
-    assistant_id: Optional[UUID] = None,
+    user_id: int | None = None,
+    assistant_id: UUID | None = None,
     skip: int = 0,
     limit: int = 100,
     sort_by: str = "id",
     sort_order: str = "desc",
-) -> List[UserSummary]:
+) -> list[UserSummary]:
     query = select(UserSummary)
     if user_id is not None:
         query = query.where(UserSummary.user_id == user_id)
@@ -68,7 +68,7 @@ async def update_summary(
     db: AsyncSession,
     *,
     db_obj: UserSummary,
-    obj_in: Union[UserSummaryCreateUpdate, Dict[str, Any]],
+    obj_in: UserSummaryCreateUpdate | dict[str, Any],
 ) -> UserSummary:
     if isinstance(obj_in, dict):
         update_data = obj_in

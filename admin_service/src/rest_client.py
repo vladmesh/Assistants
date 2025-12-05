@@ -1,12 +1,10 @@
 """REST client for the admin panel"""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 import httpx
-from config.settings import settings
-
 from shared_models.api_schemas import (
     AssistantCreate,
     AssistantRead,
@@ -23,13 +21,15 @@ from shared_models.api_schemas import (
     UserSummaryRead,
 )
 
+from config.settings import settings
+
 logger = logging.getLogger(__name__)
 
 
 class RestServiceClient:
     """Client for interacting with the REST service."""
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: str | None = None):
         """Initialize the client.
 
         Args:
@@ -38,19 +38,19 @@ class RestServiceClient:
         """
         self.base_url = (base_url or settings.REST_SERVICE_URL).rstrip("/")
         self._client = httpx.AsyncClient()
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
 
     async def close(self):
         """Close the HTTP client."""
         await self._client.aclose()
 
-    async def get_users(self) -> List[TelegramUserRead]:
+    async def get_users(self) -> list[TelegramUserRead]:
         """Get list of all users."""
         response = await self._client.get(f"{self.base_url}/api/users/")
         response.raise_for_status()
         return [TelegramUserRead(**user) for user in response.json()]
 
-    async def get_assistants(self) -> List[AssistantRead]:
+    async def get_assistants(self) -> list[AssistantRead]:
         """Get list of all assistants."""
         response = await self._client.get(f"{self.base_url}/api/assistants/")
         response.raise_for_status()
@@ -117,9 +117,7 @@ class RestServiceClient:
         )
         response.raise_for_status()
 
-    async def set_user_secretary(
-        self, user_id: int, secretary_id: Optional[UUID]
-    ) -> None:
+    async def set_user_secretary(self, user_id: int, secretary_id: UUID | None) -> None:
         """Set secretary for a user.
 
         Args:
@@ -144,7 +142,7 @@ class RestServiceClient:
         secretary_assistants = [a for a in assistants if a.is_secretary and a.is_active]
         return users, secretary_assistants
 
-    async def get_user_secretary(self, user_id: int) -> Optional[AssistantRead]:
+    async def get_user_secretary(self, user_id: int) -> AssistantRead | None:
         """Get secretary assistant for user.
 
         Args:
@@ -164,9 +162,10 @@ class RestServiceClient:
             if json_data:
                 return AssistantRead(**json_data)
             else:
-                # Handle cases where response is 200 OK but body is null or empty
+                # Handle 200 OK with empty body
                 logger.warning(
-                    f"Received success status but null/empty body for user {user_id} secretary."
+                    "Received success status but empty body for "
+                    f"user {user_id} secretary."
                 )
                 return None
         except httpx.HTTPStatusError as e:
@@ -174,13 +173,13 @@ class RestServiceClient:
                 return None
             raise
 
-    async def get_tools(self) -> List[ToolRead]:
+    async def get_tools(self) -> list[ToolRead]:
         """Get list of all tools."""
         response = await self._client.get(f"{self.base_url}/api/tools/")
         response.raise_for_status()
         return [ToolRead(**tool) for tool in response.json()]
 
-    async def get_assistant_tools(self, assistant_id: UUID) -> List[ToolRead]:
+    async def get_assistant_tools(self, assistant_id: UUID) -> list[ToolRead]:
         """Get list of tools for an assistant."""
         response = await self._client.get(
             f"{self.base_url}/api/assistants/{assistant_id}/tools"
@@ -259,7 +258,7 @@ class RestServiceClient:
         response.raise_for_status()
         return GlobalSettingsRead(**response.json())
 
-    async def get_user_summaries(self, user_id: int) -> List[UserSummaryRead]:
+    async def get_user_summaries(self, user_id: int) -> list[UserSummaryRead]:
         """Get all summaries for a user."""
         try:
             response = await self._client.get(
@@ -272,7 +271,7 @@ class RestServiceClient:
 
     async def update_user_summary(
         self, summary_id: int, summary_data: UserSummaryCreateUpdate
-    ) -> Optional[UserSummaryRead]:
+    ) -> UserSummaryRead | None:
         """Update a user summary."""
         try:
             response = await self._client.put(
@@ -287,12 +286,12 @@ class RestServiceClient:
     async def get_messages(
         self,
         user_id: int,
-        assistant_id: Optional[UUID] = None,
+        assistant_id: UUID | None = None,
         limit: int = 100,
         offset: int = 0,
         sort_by: str = "id",
         sort_order: str = "desc",
-    ) -> List[MessageRead]:
+    ) -> list[MessageRead]:
         """Get messages for a user."""
         try:
             params = {
@@ -315,7 +314,7 @@ class RestServiceClient:
 
     async def create_user_summary(
         self, summary_data: UserSummaryCreateUpdate
-    ) -> Optional[UserSummaryRead]:
+    ) -> UserSummaryRead | None:
         """Create a new user summary."""
         try:
             logger.info(f"Creating user summary with data: {summary_data.model_dump()}")

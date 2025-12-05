@@ -1,20 +1,19 @@
 import logging
-from typing import List, Optional
 from uuid import UUID
 
-from models.assistant import Assistant, AssistantType
+# from schemas import AssistantCreate, AssistantUpdate  # Assuming schemas are defined
+from shared_models.api_schemas import AssistantCreate, AssistantUpdate
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-# from schemas import AssistantCreate, AssistantUpdate  # Assuming schemas are defined
-from shared_models.api_schemas import AssistantCreate, AssistantUpdate
+from models.assistant import Assistant, AssistantType
 
 logger = logging.getLogger(__name__)
 
 
-async def get_assistant(db: AsyncSession, assistant_id: UUID) -> Optional[Assistant]:
+async def get_assistant(db: AsyncSession, assistant_id: UUID) -> Assistant | None:
     """Get an assistant by its ID, eagerly loading tools."""
     # Use select with options for loading relationships
     result = await db.execute(
@@ -29,7 +28,7 @@ async def get_assistant(db: AsyncSession, assistant_id: UUID) -> Optional[Assist
 
 async def get_assistants(
     db: AsyncSession, skip: int = 0, limit: int = 100
-) -> List[Assistant]:
+) -> list[Assistant]:
     """Get a list of assistants with pagination."""
     query = select(Assistant).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -47,10 +46,12 @@ async def create_assistant(
     # Ensure assistant_type is valid Enum member before creating
     try:
         assistant_type_enum = AssistantType(assistant_in.assistant_type)
-    except ValueError:
+    except ValueError as exc:
         logger.error(f"Invalid assistant_type value: {assistant_in.assistant_type}")
         # Consider raising a specific exception or handling it as needed
-        raise ValueError(f"Invalid assistant type: {assistant_in.assistant_type}")
+        raise ValueError(
+            f"Invalid assistant type: {assistant_in.assistant_type}"
+        ) from exc
 
     assistant_data = assistant_in.model_dump()
     assistant_data["assistant_type"] = assistant_type_enum  # Use the enum member
@@ -67,7 +68,7 @@ async def create_assistant(
 
 async def update_assistant(
     db: AsyncSession, assistant_id: UUID, assistant_in: AssistantUpdate
-) -> Optional[Assistant]:
+) -> Assistant | None:
     """Update an existing assistant."""
     db_assistant = await get_assistant(db, assistant_id)  # Reuse get_assistant
     if not db_assistant:
@@ -85,13 +86,14 @@ async def update_assistant(
             assistant_data["assistant_type"] = AssistantType(
                 assistant_data["assistant_type"]
             )
-        except ValueError:
+        except ValueError as exc:
             logger.error(
-                f"Invalid assistant_type value during update: {assistant_data['assistant_type']}"
+                "Invalid assistant_type value during update: %s",
+                assistant_data["assistant_type"],
             )
             raise ValueError(
                 f"Invalid assistant type: {assistant_data['assistant_type']}"
-            )
+            ) from exc
 
     # Update model fields
     for key, value in assistant_data.items():
@@ -118,7 +120,7 @@ async def delete_assistant(db: AsyncSession, assistant_id: UUID) -> bool:
         await db.commit()
         logger.info(f"Assistant deleted with ID: {assistant_id}")
         return True
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()  # Rollback the transaction
         logger.warning(
             f"Could not delete assistant {assistant_id} due to foreign key constraint.",
@@ -126,5 +128,7 @@ async def delete_assistant(db: AsyncSession, assistant_id: UUID) -> bool:
         )
         # Raise a specific error to be caught by the router
         raise ValueError(
-            f"Assistant {assistant_id} cannot be deleted because it is referenced by other records (e.g., tools, user links, reminders)."
-        )
+            "Assistant "
+            f"{assistant_id} cannot be deleted because it is referenced by other "
+            "records (e.g., tools, user links, reminders)."
+        ) from exc

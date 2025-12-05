@@ -1,10 +1,10 @@
 import json
 from datetime import datetime
-from typing import Optional, Type
 
 import httpx
 import structlog
 from pydantic import BaseModel, Field
+
 from tools.base import BaseTool
 
 logger = structlog.get_logger()
@@ -15,7 +15,7 @@ class EventTime(BaseModel):
 
     date_time: str = Field(
         ...,
-        description="Event date and time in ISO format (e.g., YYYY-MM-DDTHH:MM:SS+HH:MM)",
+        description="Event time in ISO, e.g. YYYY-MM-DDTHH:MM:SS+HH:MM",
     )
     time_zone: str = Field(
         default="UTC", description="Timezone for the event (e.g., Europe/Moscow)"
@@ -28,17 +28,17 @@ class CreateEventRequest(BaseModel):
     title: str = Field(..., description="Event title")
     start_time: EventTime = Field(..., description="Event start time")
     end_time: EventTime = Field(..., description="Event end time")
-    description: Optional[str] = Field(None, description="Event description")
-    location: Optional[str] = Field(None, description="Event location")
+    description: str | None = Field(None, description="Event description")
+    location: str | None = Field(None, description="Event location")
 
 
 class ListEventsRequest(BaseModel):
     """Model for listing calendar events"""
 
-    time_min: Optional[str] = Field(
+    time_min: str | None = Field(
         None, description="Start time for event search in ISO format (optional)"
     )
-    time_max: Optional[str] = Field(
+    time_max: str | None = Field(
         None, description="End time for event search in ISO format (optional)"
     )
 
@@ -50,7 +50,7 @@ class BaseGoogleCalendarTool(BaseTool):
     base_url: str = "http://google_calendar_service:8000"
     rest_url: str = "http://rest_service:8000/api"
 
-    async def _check_auth(self, client: httpx.AsyncClient) -> Optional[str]:
+    async def _check_auth(self, client: httpx.AsyncClient) -> str | None:
         """Check if user is authorized and return auth URL if not."""
         if not self.user_id:
             logger.warning("Cannot check auth without user_id")
@@ -77,8 +77,8 @@ class BaseGoogleCalendarTool(BaseTool):
                 else:
                     logger.error("Auth URL not found in response", user_id=self.user_id)
                     return "Ошибка: Не удалось получить URL для авторизации Google."
-            response.raise_for_status()  # Raise for other non-200 status codes from token check
-            return None  # Token exists or other non-404 error occurred during check (handled below)
+            response.raise_for_status()  # Raise for other non-200 token check
+            return None  # Token exists or other non-404 error handled below
         except httpx.HTTPStatusError as e:
             # Error during the token check itself (e.g., rest_service down)
             logger.error(
@@ -87,7 +87,10 @@ class BaseGoogleCalendarTool(BaseTool):
                 error=str(e),
                 exc_info=True,
             )
-            return f"Ошибка проверки токена авторизации ({e.response.status_code}): {e.response.text}"
+            return (
+                "Ошибка проверки токена авторизации "
+                f"({e.response.status_code}): {e.response.text}"
+            )
         except Exception as e:
             logger.error("Failed to check authorization", error=str(e), exc_info=True)
             return f"Ошибка проверки авторизации: {str(e)}"
@@ -122,14 +125,16 @@ class BaseGoogleCalendarTool(BaseTool):
         # Check for invalid_grant error specifically
         if e.response.status_code == 500 and "invalid_grant" in err_detail_text:
             logger.warning(
-                f"Invalid grant detected during calendar {action}. Requesting re-authentication.",
+                "Invalid grant during calendar "
+                f"{action}. Requesting re-authentication.",
                 user_id=self.user_id,
             )
             # --- Directly request new auth URL instead of calling _check_auth ---
             auth_url = None
             try:
                 logger.info(
-                    f"Requesting new auth URL for user {self.user_id} due to invalid_grant"
+                    "Requesting new auth URL for user "
+                    f"{self.user_id} due to invalid_grant"
                 )
                 auth_response = await client.get(
                     f"{self.base_url}/auth/url/{self.user_id}", timeout=30.0
@@ -161,14 +166,21 @@ class BaseGoogleCalendarTool(BaseTool):
 
             if auth_url:  # Check if we successfully got the auth URL
                 # Return the auth URL prompt
-                return f"Для {action} необходимо повторно авторизоваться из-за недействительного токена. Перейдите по ссылке: {auth_url}"
+                return (
+                    f"Для {action} необходимо повторно авторизоваться из-за "
+                    f"недействительного токена. Перейдите по ссылке: {auth_url}"
+                )
             else:
                 # Fallback if getting auth URL failed
                 logger.error(
                     "Failed to get re-authentication URL after invalid_grant",
                     user_id=self.user_id,
                 )
-                return f"Ошибка обновления токена Google при {action}. Пожалуйста, попробуйте переподключить календарь или обратитесь к администратору."
+                return (
+                    f"Ошибка обновления токена Google при {action}. "
+                    "Пожалуйста, попробуйте переподключить календарь или "
+                    "обратитесь к администратору."
+                )
 
         return err_msg  # Return original formatted error message if not invalid_grant
 
@@ -177,15 +189,15 @@ class BaseGoogleCalendarTool(BaseTool):
 class CalendarCreateTool(BaseGoogleCalendarTool):
     """Tool for creating events in Google Calendar. Uses common base class."""
 
-    args_schema: Type[CreateEventRequest] = CreateEventRequest
+    args_schema: type[CreateEventRequest] = CreateEventRequest
 
     async def _execute(
         self,
         title: str,
         start_time: dict,
         end_time: dict,
-        description: Optional[str] = None,
-        location: Optional[str] = None,
+        description: str | None = None,
+        location: str | None = None,
     ) -> str:
         """Create new calendar event"""
         if not self.user_id:
@@ -199,7 +211,10 @@ class CalendarCreateTool(BaseGoogleCalendarTool):
                     return auth_url  # Return auth check error
                 else:
                     # Return prompt to authorize
-                    return f"Для создания события необходимо авторизоваться. Перейдите по ссылке: {auth_url}"
+                    return (
+                        "Для создания события необходимо авторизоваться. "
+                        f"Перейдите по ссылке: {auth_url}"
+                    )
 
             # Prepare event data (specific to create tool)
             # Ensure start_time and end_time are JSON-serializable dicts
@@ -256,10 +271,10 @@ class CalendarCreateTool(BaseGoogleCalendarTool):
 class CalendarListTool(BaseGoogleCalendarTool):
     """Tool for listing events from Google Calendar. Uses common base class."""
 
-    args_schema: Type[ListEventsRequest] = ListEventsRequest
+    args_schema: type[ListEventsRequest] = ListEventsRequest
 
     async def _execute(
-        self, time_min: Optional[str] = None, time_max: Optional[str] = None
+        self, time_min: str | None = None, time_max: str | None = None
     ) -> str:
         """Get calendar events"""
         if not self.user_id:
@@ -280,7 +295,10 @@ class CalendarListTool(BaseGoogleCalendarTool):
                 else:
                     # Return prompt to authorize
                     logger.info("User needs authorization", user_id=self.user_id)
-                    return f"Для просмотра событий необходимо авторизоваться. Перейдите по ссылке: {auth_url}"
+                    return (
+                        "Для просмотра событий необходимо авторизоваться. "
+                        f"Перейдите по ссылке: {auth_url}"
+                    )
 
             # Prepare parameters (specific to list tool)
             params = {}
@@ -348,7 +366,10 @@ class CalendarListTool(BaseGoogleCalendarTool):
                             if start_formatted != end_str:
                                 end_formatted = end_str
 
-                    result += f"- {summary} ({start_formatted}{f' - {end_formatted}' if end_formatted else ''})\n"
+                    range_part = f" - {end_formatted}" if end_formatted else ""
+                    result += (
+                        f"- {summary} ({start_formatted}{range_part})\n"
+                    )
                 return result.strip()
 
             except httpx.HTTPStatusError as e:

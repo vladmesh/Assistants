@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - admin_service
+          - assistant_service
+          - cron_service
+          - google_calendar_service
+          - rag_service
+          - rest_service
+          - shared_models
+          - telegram_bot_service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Format check
+        run: make format-check SERVICE=${{ matrix.service }}
+
+      - name: Lint
+        run: make lint SERVICE=${{ matrix.service }}
+
+      - name: Tests
+        run: make test SERVICE=${{ matrix.service }}

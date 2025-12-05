@@ -1,16 +1,18 @@
-from typing import List, Optional
+import re  # For Markdown escaping
 from uuid import UUID
 
 import structlog
-from clients.rest import RestClient, RestClientError
-
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
+
+from clients.rest import RestClient, RestClientError
+from clients.telegram import TelegramClient
+from keyboards.secretary_selection import create_secretary_selection_keyboard
 
 logger = structlog.get_logger()
 
 
 async def get_or_create_telegram_user(
-    rest: RestClient, telegram_id: int, username: Optional[str]
+    rest: RestClient, telegram_id: int, username: str | None
 ) -> TelegramUserRead:
     """Gets or creates a user via the REST API.
 
@@ -36,7 +38,7 @@ async def get_or_create_telegram_user(
 
 async def get_user_by_telegram_id(
     rest: RestClient, telegram_id: int
-) -> Optional[TelegramUserRead]:
+) -> TelegramUserRead | None:
     """Retrieve a user by their Telegram ID."""
     logger.info("Getting user by Telegram ID", telegram_id=telegram_id)
     # Method was removed from RestClient as it duplicates get_user
@@ -46,7 +48,7 @@ async def get_user_by_telegram_id(
 
 async def get_assigned_secretary(
     rest: RestClient, user_id: UUID
-) -> Optional[AssistantRead]:
+) -> AssistantRead | None:
     """Gets the assigned secretary for a user via the REST API.
 
     Handles 404 by returning None.
@@ -81,7 +83,7 @@ async def set_user_secretary(
     )
 
 
-async def list_available_secretaries(rest: RestClient) -> List[AssistantRead]:
+async def list_available_secretaries(rest: RestClient) -> list[AssistantRead]:
     """Lists available secretaries via REST API."""
     logger.info("Listing available secretaries")
     try:
@@ -90,12 +92,11 @@ async def list_available_secretaries(rest: RestClient) -> List[AssistantRead]:
         # Use parse_obj_as for Pydantic v1 or TypeAdapter for Pydantic v2
         # For simplicity, assume REST client returns list of AssistantRead or similar
         # Let's assume it returns a list of dicts that need parsing
-        # from pydantic import parse_obj_as # Pydantic v1
+        # from pydantic import parse_obj_as  # Pydantic v1
         # secretaries = parse_obj_as(List[AssistantRead], response_data)
-        # Or handle parsing based on actual RestClient implementation
+        # Handle parsing based on actual RestClient implementation
         if isinstance(response_data, list):  # Basic check
-            # This part depends heavily on how RestClient returns data and Pydantic version
-            # Assuming RestClient has handled parsing or returns data parsable by AssistantRead.model_validate
+            # Assume RestClient returns data parsable by AssistantRead.model_validate
             try:
                 # Pydantic v2 style validation
                 secretaries = [
@@ -132,13 +133,6 @@ async def list_available_secretaries(rest: RestClient) -> List[AssistantRead]:
         raise RestClientError(f"Unexpected error listing secretaries: {e}") from e
 
 
-# --- NEW FUNCTION ---
-import re  # For Markdown escaping
-
-from clients.telegram import TelegramClient
-from keyboards.secretary_selection import create_secretary_selection_keyboard
-
-
 def escape_markdown_v2(text: str) -> str:
     """Escapes characters for Telegram MarkdownV2 parse mode."""
     # Characters to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
@@ -168,10 +162,10 @@ async def prompt_secretary_selection(
     Returns:
         True if the prompt was sent successfully, False otherwise.
     """
-    secretaries: List[AssistantRead] = []
+    secretaries: list[AssistantRead] = []
     try:
         secretaries = await list_available_secretaries(rest)
-    except RestClientError as e:
+    except RestClientError:
         # Error already logged in list_available_secretaries, just notify user
         await telegram.send_message(
             chat_id,
@@ -187,7 +181,10 @@ async def prompt_secretary_selection(
         )
         await telegram.send_message(
             chat_id,
-            "К сожалению, сейчас нет доступных секретарей для выбора. Попробуйте позже.",
+            (
+                "К сожалению, сейчас нет доступных секретарей для выбора. "
+                "Попробуйте позже."
+            ),
         )
         return False
 

@@ -1,6 +1,5 @@
 from uuid import UUID
 
-from .assistant import AssistantRead  # Needed for nested read response
 from .base import BaseSchema, TimestampSchema
 
 

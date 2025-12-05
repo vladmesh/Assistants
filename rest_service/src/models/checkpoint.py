@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import JSON, Column, DateTime, LargeBinary, String, func
 from sqlmodel import Field
@@ -23,11 +22,11 @@ class Checkpoint(BaseModel, table=True):
     )
     thread_id: str = Field(sa_column=Column(String, nullable=False, index=True))
     checkpoint_blob: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
-    checkpoint_metadata: Optional[dict] = Field(
+    checkpoint_metadata: dict | None = Field(
         sa_column=Column(JSON, nullable=True), alias="metadata"
     )
 
-    updated_at: Optional[datetime] = Field(
+    updated_at: datetime | None = Field(
         default=None,
         sa_column=Column(
             DateTime(timezone=True),
@@ -36,7 +35,7 @@ class Checkpoint(BaseModel, table=True):
             nullable=False,
         ),
     )
-    created_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(
         default=None,
         sa_column=Column(
             DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -1,8 +1,7 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from shared_models import QueueMessage, QueueMessageSource
 from shared_models.queue import QueueTrigger, TriggerType
 
@@ -14,7 +13,7 @@ def human_queue_message():
         user_id=123,
         content="Hello, assistant!",
         metadata={"chat_id": 456, "source": "telegram"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
 

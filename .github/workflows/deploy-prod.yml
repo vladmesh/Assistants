@@ -1,0 +1,70 @@
+name: Deploy Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to latest)"
+        required: false
+        default: "latest"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if required secrets are missing
+        env:
+          REQUIRED: "SSH_HOST SSH_USER SSH_KEY KNOWN_HOSTS DEPLOY_PATH"
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for key in $REQUIRED; do
+            value="${!key:-}"
+            if [ -z "$value" ]; then
+              missing+=("$key")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Deploy via ssh
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          REGISTRY: ${{ env.REGISTRY }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes ${SSH_USER}@${SSH_HOST} <<'EOF'
+            set -euo pipefail
+            cd "${DEPLOY_PATH}"
+            export IMAGE_TAG="${IMAGE_TAG}"
+            export REGISTRY="${REGISTRY}"
+            docker compose pull
+            docker compose up -d --remove-orphans
+          EOF

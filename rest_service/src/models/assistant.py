@@ -1,12 +1,10 @@
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, List, Optional
+from typing import TYPE_CHECKING, Annotated
 from uuid import UUID, uuid4
-
-from sqlalchemy import Column, String
-from sqlmodel import Field, Relationship
 
 # Import enums from shared_models
 from shared_models.enums import AssistantType, ToolType
+from sqlalchemy import Column, String
+from sqlmodel import Field, Relationship
 
 from .base import BaseModel
 
@@ -23,7 +21,7 @@ class AssistantToolLink(BaseModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     assistant_id: UUID = Field(foreign_key="assistant.id", index=True)
     tool_id: UUID = Field(foreign_key="tool.id", index=True)
-    sub_assistant_id: Optional[UUID] = Field(
+    sub_assistant_id: UUID | None = Field(
         default=None, foreign_key="assistant.id", index=True
     )
     is_active: bool = Field(default=True, index=True)
@@ -40,15 +38,17 @@ class Assistant(BaseModel, table=True):
     is_secretary: bool = Field(default=False, index=True)
     model: str  # gpt-4, gpt-3.5-turbo и т.д.
     instructions: str  # Промпт/инструкции для ассистента
-    description: Optional[str] = Field(default=None)  # Description for user selection
-    startup_message: Optional[str] = Field(default=None)  # Message to send when user selects this secretary
+    description: str | None = Field(default=None)  # Description for user selection
+    startup_message: str | None = Field(
+        default=None
+    )  # Message to send when user selects this secretary
     assistant_type: Annotated[str, AssistantType] = Field(
         sa_column=Column(String), default=AssistantType.LLM.value
     )
     is_active: bool = Field(default=True, index=True)
 
     # Relationships
-    tools: List["Tool"] = Relationship(
+    tools: list["Tool"] = Relationship(
         link_model=AssistantToolLink,
         sa_relationship_kwargs={
             "foreign_keys": [AssistantToolLink.assistant_id],
@@ -59,17 +59,17 @@ class Assistant(BaseModel, table=True):
             ),
         },
     )
-    user_links: List["UserSecretaryLink"] = Relationship(
+    user_links: list["UserSecretaryLink"] = Relationship(
         back_populates="secretary", sa_relationship_kwargs={"lazy": "selectin"}
     )
-    user_summaries: List["UserSummary"] = Relationship(back_populates="assistant")
-    reminders: List["Reminder"] = Relationship(
+    user_summaries: list["UserSummary"] = Relationship(back_populates="assistant")
+    reminders: list["Reminder"] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "[Reminder.assistant_id]",
             "cascade": "all, delete-orphan",
         }
     )
-    messages: List["Message"] = Relationship(back_populates="assistant")
+    messages: list["Message"] = Relationship(back_populates="assistant")
 
     def validate_type(self) -> None:
         """Проверяет корректность типа ассистента"""
@@ -86,7 +86,7 @@ class Tool(BaseModel, table=True):
         sa_column=Column(String), default=ToolType.TIME.value
     )
     description: str
-    assistant_id: Optional[UUID] = Field(
+    assistant_id: UUID | None = Field(
         default=None, foreign_key="assistant.id", index=True
     )  # Для sub_assistant, ссылка на ассистента, которого вызывает данный инструмент
     is_active: bool = Field(default=True, index=True)
@@ -95,6 +95,3 @@ class Tool(BaseModel, table=True):
         """Проверяет корректность типа инструмента"""
         if self.tool_type not in [t.value for t in ToolType]:
             raise ValueError("Invalid tool type")
-
-
-

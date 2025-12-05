@@ -3,15 +3,15 @@ from uuid import UUID
 
 import structlog
 
+# Import shared models if needed for type hints
+from shared_models.api_schemas import TelegramUserRead
+
 # Обрати внимание: пути импорта изменились на clients
 from clients.rest import RestClient, RestClientError
 from clients.telegram import TelegramClient
 
 # Используем user_service
 from services import user_service
-
-# Import shared models if needed for type hints
-from shared_models.api_schemas import TelegramUserRead
 
 logger = structlog.get_logger()
 
@@ -89,12 +89,13 @@ async def handle_select_secretary(**context: Any) -> None:
 
         # 3. Assign secretary via REST
         try:
-            # Assuming set_user_secretary returns the updated user or confirms assignment
-            # Вызов user_service
+            # Назначаем секретаря через сервис
             await user_service.set_user_secretary(rest, user_id, secretary_id)
 
             # 4. Get assistant details to check for startup_message
-            assistant_details = await rest.get_assistant_by_id(assistant_id=secretary_id) # Предполагаем, что secretary_id это assistant_id
+            assistant_details = await rest.get_assistant_by_id(
+                assistant_id=secretary_id
+            )  # Предполагаем, что secretary_id это assistant_id
 
             if assistant_details and assistant_details.startup_message:
                 logger.info(
@@ -107,7 +108,7 @@ async def handle_select_secretary(**context: Any) -> None:
                     user_id=user_id,
                     assistant_id=secretary_id,
                     role="user",
-                    content="привет", # Standard greeting to initiate conversation flow
+                    content="привет",  # Standard greeting to initiate conversation flow
                     content_type="text",
                     status="processed",
                 )
@@ -148,7 +149,7 @@ async def handle_select_secretary(**context: Any) -> None:
                 confirmation_text = "Отлично! Секретарь назначен."
                 await telegram.send_message(chat_id, confirmation_text)
                 logger.info(
-                    "Secretary assigned successfully (no startup message), standard confirmation sent",
+                    "Secretary assigned without startup message",
                     user_id=user_id,
                     secretary_id=secretary_id,
                 )

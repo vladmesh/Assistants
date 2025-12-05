@@ -1,12 +1,13 @@
 """Base classes for tools"""
 
 import logging
-from typing import Any, Dict, Optional, Type
+from typing import Any
+
+from langchain_core.tools import BaseTool as LangBaseTool
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from assistants.base_assistant import BaseAssistant
 from config.settings import Settings
-from langchain_core.tools import BaseTool as LangBaseTool
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from utils.error_handler import InvalidInputError, ToolError, ToolExecutionError
 
 logger = logging.getLogger(__name__)
@@ -24,13 +25,13 @@ class BaseTool(LangBaseTool):
     """Custom base class for tools with settings and user context."""
 
     # Add common fields expected by our framework
-    settings: Optional[Settings] = None
-    user_id: Optional[str] = None
-    assistant_id: Optional[str] = None
-    tool_id: Optional[str] = None
+    settings: Settings | None = None
+    user_id: str | None = None
+    assistant_id: str | None = None
+    tool_id: str | None = None
 
     # Allow arbitrary types for flexibility, though specific tools might constrain this
-    args_schema: Optional[Type[BaseModel]] = None
+    args_schema: type[BaseModel] | None = None
 
     model_config = ConfigDict(
         # Allow arbitrary types to be stored on the model
@@ -41,10 +42,10 @@ class BaseTool(LangBaseTool):
         self,
         name: str,
         description: str,
-        settings: Optional[Settings] = None,
-        user_id: Optional[str] = None,
-        assistant_id: Optional[str] = None,
-        tool_id: Optional[str] = None,
+        settings: Settings | None = None,
+        user_id: str | None = None,
+        assistant_id: str | None = None,
+        tool_id: str | None = None,
         **kwargs,  # Catch any other args passed by ToolFactory
     ):
         """Initialize the tool
@@ -77,7 +78,8 @@ class BaseTool(LangBaseTool):
                 or getattr(self.__class__, "args_schema", None) is None
             ):
                 logger.warning(
-                    f"Tool class '{self.__class__.__name__}' (name='{name}') is defined without an args_schema class attribute."
+                    f"Tool class '{self.__class__.__name__}' (name='{name}') "
+                    "is defined without args_schema."
                 )
 
         except Exception as e:
@@ -87,7 +89,7 @@ class BaseTool(LangBaseTool):
             raise ToolError(f"Failed to initialize tool: {str(e)}", name) from e
 
     @property
-    def openai_schema(self) -> Dict[str, Any]:
+    def openai_schema(self) -> dict[str, Any]:
         """Get OpenAI function schema for the tool"""
         schema = self.args_schema.model_json_schema() if self.args_schema else {}
 
@@ -110,9 +112,11 @@ class BaseTool(LangBaseTool):
             result = await self._execute(*args, **kwargs)
             return result
         except ValidationError as e:
-            raise InvalidInputError(f"Invalid input: {str(e)}")
+            raise InvalidInputError(f"Invalid input: {str(e)}") from e
         except Exception as e:
-            raise ToolExecutionError(f"Tool execution failed: {str(e)}", self.name)
+            raise ToolExecutionError(
+                f"Tool execution failed: {str(e)}", self.name
+            ) from e
 
     async def _execute(self, *args: Any, **kwargs: Any) -> Any:
         """Actual tool execution logic to be implemented by subclasses"""
@@ -142,14 +146,18 @@ class ToolAssistant(BaseTool):
                 name=name, description=description, assistant=assistant, **kwargs
             )
         except Exception as e:
-            raise ToolError(f"Failed to initialize tool assistant: {str(e)}", name)
+            raise ToolError(
+                f"Failed to initialize tool assistant: {str(e)}", name
+            ) from e
 
     async def _execute(self, message: str, user_id=None):
         """Process message through the wrapped assistant"""
         try:
             return await self.assistant.process_message(message)
         except Exception as e:
-            raise ToolExecutionError(f"Assistant execution failed: {str(e)}", self.name)
+            raise ToolExecutionError(
+                f"Assistant execution failed: {str(e)}", self.name
+            ) from e
 
 
 class SubAssistantSchema(BaseModel):

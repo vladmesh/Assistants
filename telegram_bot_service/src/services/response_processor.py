@@ -2,13 +2,13 @@ import asyncio
 import json
 
 import structlog
+from pydantic import ValidationError
+from redis import asyncio as aioredis
+from shared_models.queue import AssistantResponseMessage
+
 from clients.rest import RestClient
 from clients.telegram import TelegramClient
 from config.settings import settings
-from pydantic import ValidationError
-from redis import asyncio as aioredis
-
-from shared_models.queue import AssistantResponseMessage
 
 logger = structlog.get_logger()
 
@@ -44,7 +44,7 @@ async def handle_assistant_responses(
                         )
                     except ValidationError as e:
                         logger.error(
-                            "Failed to validate incoming assistant response message from queue",
+                            "Failed to validate assistant response from queue",
                             raw_data=data.decode("utf-8", errors="ignore"),
                             errors=e.errors(),
                             exc_info=True,
@@ -91,7 +91,7 @@ async def handle_assistant_responses(
                             await telegram.send_message(
                                 chat_id=chat_id,
                                 text=response_text,
-                                #parse_mode="Markdown",
+                                # parse_mode="Markdown",
                             )
 
                             logger.info(
@@ -114,7 +114,8 @@ async def handle_assistant_responses(
                 )
             except KeyError as e:  # Should be caught by ValidationError now
                 logger.error(
-                    "Missing required field in response (should be caught by validation)",
+                    "Missing required field in response "
+                    "(should be caught by validation)",
                     error=str(e),
                 )
             except Exception as e:

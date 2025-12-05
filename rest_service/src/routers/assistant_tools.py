@@ -1,23 +1,24 @@
-from typing import List
+from typing import Annotated
 from uuid import UUID
 
-import crud.assistant_tool as assistant_tool_crud
 import structlog
-from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.assistant import AssistantToolLink, Tool  # Keep Tool for response_model
+from shared_models.api_schemas import AssistantToolLinkCreate, ToolRead
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import AssistantToolLinkCreate, ToolRead
+import crud.assistant_tool as assistant_tool_crud
+from database import get_session
+from models.assistant import AssistantToolLink, Tool  # Keep Tool for response_model
 
 logger = structlog.get_logger()
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter()
 
 
-@router.get("/assistants/{assistant_id}/tools", response_model=List[ToolRead])
+@router.get("/assistants/{assistant_id}/tools", response_model=list[ToolRead])
 async def list_assistant_tools_route(
-    assistant_id: UUID, session: AsyncSession = Depends(get_session)
-) -> List[Tool]:
+    assistant_id: UUID, session: SessionDep
+) -> list[Tool]:
     """Get all tools linked to a specific assistant."""
     logger.info("Listing tools for assistant", assistant_id=str(assistant_id))
     try:
@@ -28,16 +29,16 @@ async def list_assistant_tools_route(
             f"Found {len(tools)} tools for assistant", assistant_id=str(assistant_id)
         )
         return tools
-    except ValueError as e:
+    except ValueError as exc:
         logger.error(
             "Failed to list assistant tools: Assistant not found",
             assistant_id=str(assistant_id),
-            error=str(e),
+            error=str(exc),
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found"
-        )
-    except Exception:
+        ) from exc
+    except Exception as exc:
         logger.exception(
             "Failed to list assistant tools due to unexpected error",
             assistant_id=str(assistant_id),
@@ -45,7 +46,7 @@ async def list_assistant_tools_route(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from exc
 
 
 @router.post(
@@ -54,7 +55,7 @@ async def list_assistant_tools_route(
     status_code=status.HTTP_201_CREATED,
 )
 async def add_tool_to_assistant_route(
-    assistant_id: UUID, tool_id: UUID, session: AsyncSession = Depends(get_session)
+    assistant_id: UUID, tool_id: UUID, session: SessionDep
 ) -> AssistantToolLink:
     """Link a tool to an assistant."""
     logger.info(
@@ -73,21 +74,21 @@ async def add_tool_to_assistant_route(
             tool_id=str(tool_id),
         )
         return link  # Return the created link object (or just the IDs)
-    except ValueError as e:
+    except ValueError as exc:
         logger.error(
             "Failed to link tool: Invalid input",
             assistant_id=str(assistant_id),
             tool_id=str(tool_id),
-            error=str(e),
+            error=str(exc),
         )
-        detail = str(e)
+        detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST
         if "not found" in detail:
             status_code = status.HTTP_404_NOT_FOUND
         elif "already linked" in detail:
             status_code = status.HTTP_409_CONFLICT
-        raise HTTPException(status_code=status_code, detail=detail)
-    except Exception:
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
         logger.exception(
             "Failed to link tool due to unexpected error",
             assistant_id=str(assistant_id),
@@ -96,14 +97,14 @@ async def add_tool_to_assistant_route(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from exc
 
 
 @router.delete(
     "/assistants/{assistant_id}/tools/{tool_id}", status_code=status.HTTP_204_NO_CONTENT
 )
 async def remove_tool_from_assistant_route(
-    assistant_id: UUID, tool_id: UUID, session: AsyncSession = Depends(get_session)
+    assistant_id: UUID, tool_id: UUID, session: SessionDep
 ) -> None:
     """Unlink a tool from an assistant."""
     logger.info(
@@ -120,7 +121,7 @@ async def remove_tool_from_assistant_route(
             assistant_id=str(assistant_id),
             tool_id=str(tool_id),
         )
-        # It's common to return 404 if the link doesn't exist, though 204 is also acceptable
+        # It's common to return 404 if the link doesn't exist.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Tool link not found"
         )

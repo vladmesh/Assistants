@@ -1,6 +1,3 @@
-from typing import List, Optional
-
-
 class PromptContextCache:
     """
     Holds the cached summary and facts, along with refresh flags,
@@ -8,17 +5,17 @@ class PromptContextCache:
     """
 
     def __init__(self):
-        self.summary: Optional[str] = None
-        self.facts: Optional[List[str]] = None
+        self.summary: str | None = None
+        self.facts: list[str] | None = None
         self.needs_summary_refresh: bool = True
         self.needs_fact_refresh: bool = True
 
-    def update_summary(self, summary: Optional[str]):
+    def update_summary(self, summary: str | None):
         """Updates the summary and resets the refresh flag."""
         self.summary = summary
         self.needs_summary_refresh = False
 
-    def update_facts(self, facts: Optional[List[str]]):
+    def update_facts(self, facts: list[str] | None):
         """Updates the facts and resets the refresh flag."""
         self.facts = facts
         self.needs_fact_refresh = False

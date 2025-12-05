@@ -6,7 +6,6 @@ from httpx import AsyncClient
 
 # Assuming your schemas are importable like this
 from shared_models.api_schemas.user_summary import (
-    UserSummaryCreateUpdate,
     UserSummaryRead,
 )
 
@@ -111,7 +110,7 @@ async def test_get_latest_user_summary_not_found(
     client: AsyncClient, test_user_id: int, test_secretary_id: UUID
 ):
     """Test retrieving the latest summary when none exist."""
-    # Use existing user/secretary but ensure no summaries are present (fixtures handle cleanup)
+    # Ensure no summaries exist for this user/secretary before request.
     response = await client.get(
         "/api/user-summaries/latest/",
         params={"user_id": test_user_id, "assistant_id": str(test_secretary_id)},

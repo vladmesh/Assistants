@@ -1,17 +1,16 @@
 import logging
-from typing import List, Optional
-
-from models.user import TelegramUser
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 # from schemas import TelegramUserCreate, TelegramUserUpdate
 from shared_models.api_schemas import TelegramUserCreate, TelegramUserUpdate
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from models.user import TelegramUser
 
 logger = logging.getLogger(__name__)
 
 
-async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[TelegramUser]:
+async def get_user_by_id(db: AsyncSession, user_id: int) -> TelegramUser | None:
     """Get a user by their internal database ID."""
     user = await db.get(TelegramUser, user_id)
     return user
@@ -19,7 +18,7 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[TelegramUse
 
 async def get_user_by_telegram_id(
     db: AsyncSession, telegram_id: int
-) -> Optional[TelegramUser]:
+) -> TelegramUser | None:
     """Get a user by their Telegram ID."""
     query = select(TelegramUser).where(TelegramUser.telegram_id == telegram_id)
     result = await db.execute(query)
@@ -28,7 +27,7 @@ async def get_user_by_telegram_id(
 
 async def get_users(
     db: AsyncSession, skip: int = 0, limit: int = 100
-) -> List[TelegramUser]:
+) -> list[TelegramUser]:
     """Get a list of users with pagination."""
     query = select(TelegramUser).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -62,7 +61,7 @@ async def create_user(db: AsyncSession, user_in: TelegramUserCreate) -> Telegram
 
 async def update_user(
     db: AsyncSession, user_id: int, user_in: TelegramUserUpdate
-) -> Optional[TelegramUser]:
+) -> TelegramUser | None:
     """Update an existing user by their internal database ID."""
     db_user = await get_user_by_id(db, user_id)
     if not db_user:

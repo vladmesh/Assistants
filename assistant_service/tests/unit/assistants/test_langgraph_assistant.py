@@ -2,15 +2,11 @@
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
-from typing import Any, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-# Adjust imports based on new structure
-from assistants.langgraph.langgraph_assistant import LangGraphAssistant
-from config.settings import Settings
 from langchain_core.callbacks import (
     AsyncCallbackManagerForLLMRun,
     CallbackManagerForLLMRun,
@@ -23,12 +19,15 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import (  # Keep using MemorySaver for unit tests
     MemorySaver,
 )
+from shared_models.api_schemas import ToolRead
+
+# Adjust imports based on new structure
+from assistants.langgraph.langgraph_assistant import LangGraphAssistant
+from config.settings import Settings
 
 # Assuming RestServiceClient mock is in unit/conftest.py
 # from services.rest_service import RestServiceClient
 from tools.factory import ToolFactory
-
-from shared_models.api_schemas import ToolRead
 
 # from tools.time_tool import TimeToolWrapper # Example tool
 
@@ -38,9 +37,9 @@ class MockChatLLM(BaseChatModel):
     # Keep the existing MockChatOpenAI implementation but rename for clarity
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         last_message = messages[-1]
@@ -51,9 +50,9 @@ class MockChatLLM(BaseChatModel):
 
     async def _agenerate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: AsyncCallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         last_message = messages[-1]
@@ -77,7 +76,7 @@ class MockChatLLM(BaseChatModel):
 
 @pytest.fixture
 def assistant_user_id() -> str:
-    return f"123"
+    return "123"
 
 
 @pytest.fixture
@@ -88,7 +87,7 @@ def assistant_id() -> str:
 @pytest.fixture
 def time_tool_def() -> dict:
     """Provides a sample tool definition dictionary compatible with ToolRead."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # Ensure timestamps are properly formatted ISO strings
     created_at_iso = now.isoformat()
     updated_at_iso = now.isoformat()
@@ -224,8 +223,10 @@ async def test_process_message_simple_response(assistant_instance: LangGraphAssi
     assert "Async mock reply to: Hello there!" in final_response_content
 
 
-async def test_process_message_stateful_memory(assistant_instance: LangGraphAssistant):
-    """Test if the assistant remembers context across messages using the checkpointer."""
+async def test_process_message_stateful_memory(
+    assistant_instance: LangGraphAssistant,
+):
+    """Assistant remembers context across messages using the checkpointer."""
     instance = await assistant_instance
     user_id = instance.user_id
 
@@ -233,7 +234,7 @@ async def test_process_message_stateful_memory(assistant_instance: LangGraphAssi
     first_message = HumanMessage(content="My favorite color is blue.")
 
     # Act: Process first message
-    response1 = await instance.process_message(first_message, user_id=user_id)
+    await instance.process_message(first_message, user_id=user_id)
 
     # Arrange: Second message
     second_message = HumanMessage(content="What is my favorite color?")

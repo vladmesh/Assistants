@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -10,18 +10,18 @@ class RagData(BaseModel):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     text: str = Field(..., description="Текстовое содержимое")
-    embedding: List[float] = Field(..., description="Векторное представление текста")
+    embedding: list[float] = Field(..., description="Векторное представление текста")
     data_type: str = Field(
         ...,
         description=(
             "Тип данных (например, 'shared_rule', 'user_history', 'assistant_note')"
         ),
     )
-    user_id: Optional[int] = Field(
+    user_id: int | None = Field(
         None,
         description="ID пользователя, если данные специфичны для пользователя",
     )
-    assistant_id: Optional[UUID] = Field(
+    assistant_id: UUID | None = Field(
         None,
         description="ID ассистента, если данные специфичны для ассистента",
     )
@@ -31,12 +31,12 @@ class RagData(BaseModel):
 class SearchQuery(BaseModel):
     """Модель для поисковых запросов к RAG сервису."""
 
-    query_embedding: List[float] = Field(
+    query_embedding: list[float] = Field(
         ..., description="Векторное представление запроса"
     )
     data_type: str = Field(..., description="Тип данных для поиска")
-    user_id: Optional[int] = Field(None, description="Фильтр по ID пользователя")
-    assistant_id: Optional[UUID] = Field(None, description="Фильтр по ID ассистента")
+    user_id: int | None = Field(None, description="Фильтр по ID пользователя")
+    assistant_id: UUID | None = Field(None, description="Фильтр по ID ассистента")
     top_k: int = Field(default=5, description="Количество результатов для возврата")
 
 
@@ -46,4 +46,4 @@ class SearchResult(BaseModel):
     id: UUID
     text: str
     distance: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]

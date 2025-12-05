@@ -1,12 +1,11 @@
 """Assistants page of the admin panel"""
 
-
 import pandas as pd
 import streamlit as st
+from shared_models.api_schemas import AssistantCreate, AssistantUpdate
+
 from rest_client import RestServiceClient
 from utils.async_utils import run_async
-
-from shared_models.api_schemas import AssistantCreate, AssistantUpdate
 
 
 def show_assistants_page(rest_client: RestServiceClient):
@@ -54,9 +53,7 @@ def show_assistants_page(rest_client: RestServiceClient):
             for assistant in assistants:
                 col_edit, col_delete, col_tools = st.columns(3)
                 with col_edit:
-                    if st.button(
-                        "✏️", key=f"edit_{assistant.id}", help="Редактировать"
-                    ):
+                    if st.button("✏️", key=f"edit_{assistant.id}", help="Редактировать"):
                         st.session_state["editing_assistant"] = assistant
                         st.rerun()
                 with col_delete:
@@ -150,7 +147,10 @@ def show_assistants_page(rest_client: RestServiceClient):
 
             if submit_button:
                 if not name or not model or not instructions:
-                    st.error("Пожалуйста, заполните все обязательные поля: Имя, Модель, Инструкции")
+                    st.error(
+                        "Пожалуйста, заполните все обязательные поля: "
+                        "Имя, Модель, Инструкции"
+                    )
                 else:
                     with st.spinner("Создаем ассистента..."):
                         new_assistant = AssistantCreate(
@@ -190,7 +190,8 @@ def show_assistants_page(rest_client: RestServiceClient):
             )
             new_is_active = st.checkbox("Активен", value=assistant.is_active)
             new_startup_message = st.text_area(
-                "Стартовое сообщение", value=getattr(assistant, "startup_message", None) or ""
+                "Стартовое сообщение",
+                value=getattr(assistant, "startup_message", None) or "",
             )
 
             col1, col2 = st.columns(2)
@@ -201,7 +202,10 @@ def show_assistants_page(rest_client: RestServiceClient):
 
             if submit_button:
                 if not new_name or not new_model or not new_instructions:
-                    st.error("Пожалуйста, заполните все обязательные поля: Имя, Модель, Инструкции")
+                    st.error(
+                        "Пожалуйста, заполните все обязательные поля: "
+                        "Имя, Модель, Инструкции"
+                    )
                 else:
                     with st.spinner("Обновляем ассистента..."):
                         updated_assistant = AssistantUpdate(
@@ -233,7 +237,8 @@ def show_assistants_page(rest_client: RestServiceClient):
         st.subheader(f"Удалить ассистента: {assistant.name}")
 
         st.warning(
-            f"Вы уверены, что хотите удалить ассистента '{assistant.name}'? Это действие нельзя отменить."
+            f"Вы уверены, что хотите удалить ассистента '{assistant.name}'? "
+            "Это действие нельзя отменить."
         )
 
         col1, col2 = st.columns(2)

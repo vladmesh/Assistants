@@ -1,17 +1,8 @@
 # assistant_service/src/assistants/langgraph/langgraph_assistant.py
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
-
-# Project specific imports
-from assistants.base_assistant import BaseAssistant  # Absolute import from src
-from assistants.langgraph.graph_builder import build_full_graph
-from assistants.langgraph.prompt_context_cache import PromptContextCache
-from assistants.langgraph.state import AssistantState
-from assistants.langgraph.utils.logging_utils import log_messages_to_file
-from assistants.langgraph.utils.token_counter import count_tokens
-from config.settings import settings  # To get API keys if not in assistant config
 
 # Base classes and core types
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
@@ -21,13 +12,20 @@ from langchain_openai import ChatOpenAI
 # LangGraph components
 from langgraph.graph.state import CompiledGraph
 from langgraph.prebuilt import create_react_agent  # Import create_react_agent
-from services.rest_service import RestServiceClient  # Import RestServiceClient
-from utils.error_handler import AssistantError, MessageProcessingError
-
-from shared_models.api_schemas.message import MessageCreate, MessageRead
 
 # Import the specific schema needed
 from shared_models.api_schemas.user_fact import UserFactRead
+
+# Project specific imports
+from assistants.base_assistant import BaseAssistant  # Absolute import from src
+from assistants.langgraph.graph_builder import build_full_graph
+from assistants.langgraph.prompt_context_cache import PromptContextCache
+from assistants.langgraph.state import AssistantState
+from assistants.langgraph.utils.logging_utils import log_messages_to_file
+from assistants.langgraph.utils.token_counter import count_tokens
+from config.settings import settings  # To get API keys if not in assistant config
+from services.rest_service import RestServiceClient  # Import RestServiceClient
+from utils.error_handler import AssistantError, MessageProcessingError
 
 from .constants import FACT_SAVE_SUCCESS_MESSAGE, FACT_SAVE_TOOL_NAME
 
@@ -43,7 +41,7 @@ class LangGraphAssistant(BaseAssistant):
 
     compiled_graph: CompiledGraph
     agent_runnable: Any
-    tools: List[Tool]
+    tools: list[Tool]
     rest_client: RestServiceClient
     llm: ChatOpenAI
 
@@ -56,8 +54,8 @@ class LangGraphAssistant(BaseAssistant):
         self,
         assistant_id: str,
         name: str,
-        config: Dict,
-        tools: List[Tool],  # Receive initialized tools
+        config: dict,
+        tools: list[Tool],  # Receive initialized tools
         user_id: str,  # Receive user_id
         rest_client: RestServiceClient,  # Add rest_client parameter
         summarization_prompt: str,
@@ -122,10 +120,12 @@ class LangGraphAssistant(BaseAssistant):
             # 4. Build and compile the full graph
             self.compiled_graph = build_full_graph(
                 tools=self.tools,
-                summary_llm=self.llm,  # Summary LLM still needed for summary node logic
-                rest_client=self.rest_client,  # REST client needed for summary node SAVE logic
-                prompt_context_cache=self.prompt_context_cache,  # Pass cache object
-                system_prompt_template=self.system_prompt_template,  # Pass template
+                # Summary LLM needed for summary node logic
+                summary_llm=self.llm,
+                # REST client needed for summary node SAVE logic
+                rest_client=self.rest_client,
+                prompt_context_cache=self.prompt_context_cache,
+                system_prompt_template=self.system_prompt_template,
                 agent_runnable=self.agent_runnable,
                 timeout=self.timeout,
                 summarization_prompt=self.summarization_prompt,
@@ -140,8 +140,12 @@ class LangGraphAssistant(BaseAssistant):
                     "user_id": self.user_id,
                     "tools_count": len(self.tools),
                     "timeout": self.timeout,
-                    "initial_needs_fact_refresh": self.prompt_context_cache.needs_fact_refresh,
-                    "initial_needs_summary_refresh": self.prompt_context_cache.needs_summary_refresh,
+                    "initial_needs_fact_refresh": (
+                        self.prompt_context_cache.needs_fact_refresh
+                    ),
+                    "initial_needs_summary_refresh": (
+                        self.prompt_context_cache.needs_summary_refresh
+                    ),
                 },
             )
 
@@ -236,7 +240,7 @@ class LangGraphAssistant(BaseAssistant):
 
         # Process Facts Result
         facts_result = results[1]
-        loaded_fact_texts: Optional[List[str]] = None
+        loaded_fact_texts: list[str] | None = None
         if isinstance(facts_result, Exception):
             logger.error(
                 f"Failed to load initial facts: {facts_result}",
@@ -261,7 +265,8 @@ class LangGraphAssistant(BaseAssistant):
                     exc_info=True,
                     extra=log_extra,
                 )
-                self.prompt_context_cache.require_fact_refresh()  # Ensure retry on processing error
+                # Ensure retry on processing error
+                self.prompt_context_cache.require_fact_refresh()
         else:
             logger.info("No initial facts found or unexpected format.", extra=log_extra)
         # Update cache (even if None, resets flag)
@@ -270,8 +275,8 @@ class LangGraphAssistant(BaseAssistant):
     # --- MODIFIED: Prompt Modifier ---
     async def _add_system_prompt_modifier(
         self,
-        state: AssistantState,  # state still contains filtered messages thanks to reducer
-    ) -> List[BaseMessage]:
+        state: AssistantState,
+    ) -> list[BaseMessage]:
         """
         Dynamically creates the SystemMessage using the shared cache,
         refreshing data via REST if flags indicate necessity.
@@ -281,7 +286,8 @@ class LangGraphAssistant(BaseAssistant):
             user_id_int = int(self.user_id)
         except ValueError:
             logger.error(
-                f"Invalid user_id format in modifier: {self.user_id}. Cannot refresh data."
+                "Invalid user_id format in modifier: "
+                f"{self.user_id}. Cannot refresh data."
             )
             user_id_int = None
 
@@ -303,7 +309,8 @@ class LangGraphAssistant(BaseAssistant):
                     "Fact save tool used, triggering fact refresh via cache flag.",
                     extra=log_extra,
                 )
-                self.prompt_context_cache.require_fact_refresh()  # Set flag on shared cache
+                # Set flag on shared cache
+                self.prompt_context_cache.require_fact_refresh()
 
         if self.prompt_context_cache.needs_summary_refresh and user_id_int is not None:
             logger.info("Scheduling summary refresh for cache...", extra=log_extra)
@@ -352,7 +359,7 @@ class LangGraphAssistant(BaseAssistant):
             # Process Facts Result (MODIFIED to handle UserFactRead)
             if refresh_tasks[1] is not None:
                 facts_result = results[result_idx]
-                refreshed_fact_texts: Optional[List[str]] = None
+                refreshed_fact_texts: list[str] | None = None
                 if isinstance(facts_result, Exception):
                     logger.error(
                         f"Failed to refresh facts: {facts_result}",
@@ -368,7 +375,8 @@ class LangGraphAssistant(BaseAssistant):
                             fact.fact for fact in facts_result if hasattr(fact, "fact")
                         ]
                         logger.info(
-                            f"Fact cache refreshed. Cached {len(refreshed_fact_texts)} facts.",
+                            "Fact cache refreshed. "
+                            f"Cached {len(refreshed_fact_texts)} facts.",
                             extra=log_extra,
                         )
                     except Exception as e:
@@ -412,7 +420,7 @@ class LangGraphAssistant(BaseAssistant):
         system_message = SystemMessage(content=formatted_prompt)
 
         # --- Combine with filtered history --- #
-        final_messages: List[BaseMessage] = [system_message] + list(current_messages)
+        final_messages: list[BaseMessage] = [system_message] + list(current_messages)
 
         try:
             total_tokens = count_tokens(final_messages)
@@ -434,8 +442,8 @@ class LangGraphAssistant(BaseAssistant):
         self,
         message: BaseMessage,
         user_id: str,
-        log_extra: Optional[Dict[str, Any]] = None,
-    ) -> Optional[str]:
+        log_extra: dict[str, Any] | None = None,
+    ) -> str | None:
         """Processes a single message using the compiled LangGraph graph.
 
         Args:
@@ -448,7 +456,8 @@ class LangGraphAssistant(BaseAssistant):
         """
         if self.user_id != user_id:
             logger.error(
-                f"Mismatch user_id: assistant instance for {self.user_id} received message for {user_id}"
+                "Mismatch user_id: assistant instance for "
+                f"{self.user_id} received message for {user_id}"
             )
             raise ValueError("User ID mismatch")
 
@@ -468,9 +477,9 @@ class LangGraphAssistant(BaseAssistant):
                 user_id=user_id,
                 assistant_id=self.assistant_id,
                 llm_context_size=self.context_window_size,
-                triggered_event=None,  # Если это обычное сообщение, а не триггер
+                triggered_event=None,  # Обычное сообщение, а не триггер
                 log_extra=combined_log_extra,
-                initial_message_id=None,  # ID сообщения будет установлен узлом save_input_message_node
+                initial_message_id=None,  # ID ставит узел save_input_message_node
                 current_summary_content=None,  # Будет загружено графом
                 newly_summarized_message_ids=None,
                 user_facts=None,  # Будет загружено графом
@@ -485,7 +494,8 @@ class LangGraphAssistant(BaseAssistant):
 
                 if not final_state or "messages" not in final_state:
                     raise MessageProcessingError(
-                        "Graph execution finished but final state is missing or invalid.",
+                        "Graph execution finished but final state "
+                        "is missing or invalid.",
                         self.name,
                     )
 
@@ -499,12 +509,15 @@ class LangGraphAssistant(BaseAssistant):
                     if isinstance(last_message, AIMessage):
                         ai_response = last_message.content
                         logger.info(
-                            f"Successfully processed message. Response: {ai_response[:100]}...",
+                            "Successfully processed message. "
+                            f"Response: {ai_response[:100]}...",
                             extra=combined_log_extra,
                         )
                     elif isinstance(last_message, ToolMessage):
                         logger.info(
-                            "Processing finished with a ToolMessage (likely from fact save/reminder trigger processing). No response sent to user.",
+                            "Processing finished with a ToolMessage "
+                            "(likely from fact save/reminder trigger "
+                            "processing). No response sent to user.",
                             extra=combined_log_extra,
                         )
 
@@ -520,7 +533,8 @@ class LangGraphAssistant(BaseAssistant):
                         )
                     except Exception as update_error:
                         logger.error(
-                            f"Failed to update message status after error: {update_error}",
+                            "Failed to update message status after error: "
+                            f"{update_error}",
                             exc_info=True,
                             extra=combined_log_extra,
                         )

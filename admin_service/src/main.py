@@ -7,13 +7,14 @@ import streamlit as st
 import streamlit_authenticator as stauth
 import structlog
 import yaml
+from yaml.loader import SafeLoader
+
 from config.settings import settings
 from pages.assistants.assistants import show_assistants_page
 from pages.system_settings.global_settings import show_global_settings_page
 from pages.tools.tools import show_tools_page
 from pages.users.users import show_users_page
 from rest_client import RestServiceClient
-from yaml.loader import SafeLoader
 
 # Configure page FIRST
 st.set_page_config(
@@ -71,7 +72,8 @@ try:
     # Log a warning if the default cookie key is used
     if cookie_config.get("key") == "default_secret_key":
         logger.warning(
-            "Using default cookie secret key. Please generate and set a secure key in credentials.yaml."
+            "Using default cookie secret key. "
+            "Please set a secure key in credentials.yaml."
         )
 
 except KeyError as e:

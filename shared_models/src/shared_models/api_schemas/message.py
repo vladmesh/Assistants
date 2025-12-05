@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import Field
@@ -12,19 +12,21 @@ class MessageBase(BaseSchema):
     assistant_id: UUID
     role: str = Field(
         ...,
-        description="Role of the message sender (e.g., 'user', 'assistant', 'system', 'tool_request', 'tool_response')",
+        description=(
+            "Role of the sender: user/assistant/system/tool_request/tool_response"
+        ),
     )
     content: str
     content_type: str = Field(
         default="text", description="Content type of the message (e.g., 'text', 'json')"
     )
-    tool_call_id: Optional[str] = None
+    tool_call_id: str | None = None
     status: str = Field(
         default="active",
-        description="Status of the message (e.g., 'active', 'summarized', 'archived', 'error')",
+        description="Message status: active/summarized/archived/error",
     )
-    summary_id: Optional[int] = None
-    meta_data: Optional[Dict[str, Any]] = None
+    summary_id: int | None = None
+    meta_data: dict[str, Any] | None = None
 
 
 class MessageCreate(MessageBase):
@@ -34,11 +36,11 @@ class MessageCreate(MessageBase):
 class MessageRead(MessageBase):
     id: int
     timestamp: datetime
-    # orm_mode is handled by model_config = ConfigDict(from_attributes=True) in BaseSchema
+    # orm_mode handled via model_config=ConfigDict(from_attributes=True) in BaseSchema
 
 
 class MessageUpdate(BaseSchema):
-    status: Optional[str] = None
-    meta_data: Optional[Dict[str, Any]] = None
-    summary_id: Optional[int] = None
-    # Other fields (role, content, content_type, tool_call_id) are not updatable via this schema as per plan.
+    status: str | None = None
+    meta_data: dict[str, Any] | None = None
+    summary_id: int | None = None
+    # role/content/content_type/tool_call_id are not updatable via this schema

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
+
 from main import app
 from services.calendar import GoogleCalendarService
 from services.redis_service import RedisService

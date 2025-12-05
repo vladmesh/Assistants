@@ -1,18 +1,17 @@
 import logging
-from typing import List
 from uuid import UUID
-
-from models.assistant import Assistant, AssistantToolLink, Tool
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 # from schemas import AssistantToolLinkCreate
 from shared_models.api_schemas import AssistantToolLinkCreate
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from models.assistant import Assistant, AssistantToolLink, Tool
 
 logger = logging.getLogger(__name__)
 
 
-async def get_assistant_tools(db: AsyncSession, assistant_id: UUID) -> List[Tool]:
+async def get_assistant_tools(db: AsyncSession, assistant_id: UUID) -> list[Tool]:
     """Get all tools linked to a specific assistant."""
     # First, check if the assistant exists
     assistant = await db.get(Assistant, assistant_id)

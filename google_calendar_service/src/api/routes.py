@@ -1,16 +1,16 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any
 
 import structlog
-from config.settings import Settings
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+from shared_models import TriggerType
+
+from config.settings import Settings
 from schemas.calendar import CreateEventRequest
 from services.calendar import GoogleCalendarService
 from services.redis_service import RedisService
 from services.rest_service import RestService
-
-from shared_models import TriggerType
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -23,21 +23,21 @@ class EventBase(BaseModel):
     """Base model for event fields"""
 
     summary: str = Field(..., description="Event title")
-    description: Optional[str] = Field(None, description="Event description")
-    location: Optional[str] = Field(None, description="Event location")
+    description: str | None = Field(None, description="Event description")
+    location: str | None = Field(None, description="Event location")
 
 
 class EventCreate(EventBase):
     """Model for event creation"""
 
-    start: Dict[str, str] = Field(
+    start: dict[str, str] = Field(
         ..., description="Event start time with dateTime and timeZone"
     )
-    end: Dict[str, str] = Field(
+    end: dict[str, str] = Field(
         ..., description="Event end time with dateTime and timeZone"
     )
 
-    def to_google_format(self) -> Dict[str, Any]:
+    def to_google_format(self) -> dict[str, Any]:
         """Convert event data to Google Calendar API format"""
         event = {"summary": self.summary, "start": self.start, "end": self.end}
 
@@ -53,9 +53,9 @@ class EventResponse(EventBase):
     """Model for event response"""
 
     id: str
-    start: Dict[str, str]
-    end: Dict[str, str]
-    htmlLink: Optional[str] = None
+    start: dict[str, str]
+    end: dict[str, str]
+    htmlLink: str | None = None
     status: str
 
 
@@ -78,9 +78,9 @@ async def get_redis_service(request: Request) -> RedisService:
 async def get_auth_url(
     user_id: str,
     request: Request,
-    rest_service: RestService = Depends(get_rest_service),
-    calendar_service: GoogleCalendarService = Depends(get_calendar_service),
-) -> Dict[str, str]:
+    rest_service: Annotated[RestService, Depends(get_rest_service)],
+    calendar_service: Annotated[GoogleCalendarService, Depends(get_calendar_service)],
+) -> dict[str, str]:
     """Get Google OAuth URL for user authorization"""
     try:
         # Check if user exists
@@ -92,9 +92,11 @@ async def get_auth_url(
         # credentials = await rest_service.get_calendar_token(user_id)
         # if credentials:
         #     # Allow generating URL even if token exists (for re-authentication)
-        #     # raise HTTPException(status_code=400, detail=\"User already authorized\")
-        #     pass # Log maybe?
-        #     logger.info(\"User already has credentials, but proceeding to generate auth URL for potential re-auth.\", user_id=user_id)
+        #     # raise HTTPException(status_code=400, detail="User already authorized")
+        #     # logger.info(
+        #     #     "User already has credentials; generating auth URL for re-auth",
+        #     #     user_id=user_id,
+        #     # )
 
         # Get auth URL with state
         logger.info(f"Generating auth URL for user {user_id}")
@@ -103,12 +105,12 @@ async def get_auth_url(
         return {"auth_url": auth_url}
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to get auth URL", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/auth/callback")
@@ -116,9 +118,9 @@ async def handle_callback(
     code: str,
     state: str,
     request: Request,
-    rest_service: RestService = Depends(get_rest_service),
-    calendar_service: GoogleCalendarService = Depends(get_calendar_service),
-    redis_service: RedisService = Depends(get_redis_service),
+    rest_service: Annotated[RestService, Depends(get_rest_service)],
+    calendar_service: Annotated[GoogleCalendarService, Depends(get_calendar_service)],
+    redis_service: Annotated[RedisService, Depends(get_redis_service)],
 ) -> Response:
     """Handle OAuth callback"""
     try:
@@ -154,17 +156,17 @@ async def handle_callback(
 
     except Exception as e:
         logger.error("Failed to handle callback", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/events/{user_id}")
 async def get_events(
     user_id: str,
-    time_min: Optional[datetime] = None,
-    time_max: Optional[datetime] = None,
-    rest_service: RestService = Depends(get_rest_service),
-    calendar_service: GoogleCalendarService = Depends(get_calendar_service),
-) -> List[Dict[str, Any]]:
+    rest_service: Annotated[RestService, Depends(get_rest_service)],
+    calendar_service: Annotated[GoogleCalendarService, Depends(get_calendar_service)],
+    time_min: datetime | None = None,
+    time_max: datetime | None = None,
+) -> list[dict[str, Any]]:
     """Get user's calendar events"""
     try:
         # Get credentials from REST service
@@ -180,19 +182,19 @@ async def get_events(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         logger.error("Failed to get events", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/events/{user_id}", response_model=Dict[str, Any])
+@router.post("/events/{user_id}", response_model=dict[str, Any])
 async def create_event(
     user_id: str,
-    event: CreateEventRequest = Body(..., description="Event details"),
-    rest_service: RestService = Depends(get_rest_service),
-    calendar_service: GoogleCalendarService = Depends(get_calendar_service),
-) -> Dict[str, Any]:
+    event: Annotated[CreateEventRequest, Body(..., description="Event details")],
+    rest_service: Annotated[RestService, Depends(get_rest_service)],
+    calendar_service: Annotated[GoogleCalendarService, Depends(get_calendar_service)],
+) -> dict[str, Any]:
     """Create new calendar event using simplified data model"""
     try:
         # Get credentials from REST service
@@ -216,7 +218,7 @@ async def create_event(
 
     except ValueError as e:
         logger.error("Authorization error", error=str(e))
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         logger.error("Failed to create event", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

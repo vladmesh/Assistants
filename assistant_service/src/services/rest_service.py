@@ -1,25 +1,16 @@
 """REST service client for interacting with the REST API"""
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 import httpx
-from config.logger import get_logger
-from config.settings import settings
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 # Import Pydantic models used for response parsing
 # Use schemas from shared_models.api_schemas instead of old models
 from shared_models.api_schemas import (
     AssistantRead,
-    GlobalSettingsRead,
-    GlobalSettingsUpdate,
+    GlobalSettingsBase,
     ReminderCreate,
     ReminderRead,
     TelegramUserRead,
@@ -32,6 +23,15 @@ from shared_models.api_schemas import (
 # Import new message models
 from shared_models.api_schemas.message import MessageCreate, MessageRead, MessageUpdate
 from shared_models.api_schemas.user_fact import UserFactRead
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+from config.logger import get_logger
+from config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -43,7 +43,7 @@ class RestServiceError(Exception):
 class RestServiceClient:
     """Client for interacting with the REST service"""
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: str | None = None):
         """Initialize the client
 
         Args:
@@ -56,7 +56,7 @@ class RestServiceClient:
             settings.HTTP_CLIENT_TIMEOUT, connect=5.0
         )  # Use configured timeout, add connect timeout
         self._client = httpx.AsyncClient(timeout=timeout)
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         logger.info(f"RestServiceClient initialized with base URL: {self.base_url}")
 
     async def close(self):
@@ -64,7 +64,7 @@ class RestServiceClient:
         await self._client.aclose()
         logger.info("RestServiceClient closed.")
 
-    async def get_assistant_tools(self, assistant_id: str) -> List[ToolRead]:
+    async def get_assistant_tools(self, assistant_id: str) -> list[ToolRead]:
         """Get tools associated with a specific assistant."""
         # Wrap the core logic in try...except to handle errors from _request
         try:
@@ -76,7 +76,7 @@ class RestServiceClient:
                 return [ToolRead(**item) for item in data]
             else:
                 logger.error(
-                    f"Received unexpected data format for assistant tools: {type(data)}",
+                    "Unexpected data format for assistant tools",
                     assistant_id=assistant_id,
                     data_received=data,
                 )
@@ -90,7 +90,7 @@ class RestServiceClient:
             if "404" in str(e):  # Simple check, might need refinement
                 logger.warning(f"Assistant or tools not found for ID: {assistant_id}")
                 return []  # Return empty list if assistant not found
-            # For other errors, returning empty list might mask issues, consider re-raising
+            # For other errors returning empty list might mask issues
             # raise e # Option to re-raise other errors
             return []  # Defaulting to empty list for now
         except Exception:
@@ -127,17 +127,20 @@ class RestServiceClient:
                 httpx.TimeoutException,
                 httpx.ConnectError,
                 httpx.NetworkError,
-                httpx.HTTPStatusError,  # Add HTTPStatusError to potentially retry on 5xx
+                httpx.HTTPStatusError,  # Retry on HTTPStatusError (e.g. 5xx)
             )
         ),
         reraise=True,  # Re-raise the exception after retries are exhausted
         before_sleep=lambda retry_state: logger.warning(
-            f"Retrying request {retry_state.args[1]} {retry_state.args[2]} due to {retry_state.outcome.exception()}, attempt {retry_state.attempt_number}"
+            "Retrying request "
+            f"{retry_state.args[1]} {retry_state.args[2]} due to "
+            f"{retry_state.outcome.exception()}, attempt "
+            f"{retry_state.attempt_number}"
         ),  # Log before sleep
     )
     async def _request(
         self, method: str, endpoint: str, **kwargs: Any
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Helper method to make requests and handle common errors with retries."""
         full_url = f"{self.base_url}{endpoint}"  # Construct full URL
         try:
@@ -147,15 +150,15 @@ class RestServiceClient:
             # Check for specific 5xx errors to retry, raise others immediately
             if 500 <= response.status_code < 600:
                 logger.warning(
-                    f"Received server error {response.status_code} for {method} {full_url}"
+                    f"Server error {response.status_code} for {method} {full_url}"
                 )
-                response.raise_for_status()  # Will be caught by tenacity if it's HTTPStatusError
+                response.raise_for_status()  # Caught by tenacity HTTPStatusError
             elif response.status_code >= 400:
                 # Don't retry client errors (4xx), raise immediately
                 logger.error(
-                    f"Client error {response.status_code} for {method} {full_url}. Not retrying."
+                    f"Client error {response.status_code} for {method} {full_url}."
                 )
-                response.raise_for_status()  # Raise HTTPStatusError for non-retryable 4xx
+                response.raise_for_status()  # Raise HTTPStatusError for 4xx
 
             # Handle potential empty response for non-GET requests or 204
             if response.status_code == 204:
@@ -182,7 +185,7 @@ class RestServiceClient:
                 error_detail = e.response.text  # Use raw text if not JSON
 
             raise RestServiceError(
-                f"HTTP {e.response.status_code} error for {method} {full_url}: {error_detail}"  # Use full_url
+                f"HTTP {e.response.status_code} for {method} {full_url}: {error_detail}"
             ) from e
         except httpx.RequestError as e:
             logger.error(
@@ -194,7 +197,8 @@ class RestServiceClient:
             # Check for specific error types like UnsupportedProtocol
             if isinstance(e, httpx.UnsupportedProtocol):
                 logger.error(
-                    f"UnsupportedProtocol error likely due to missing schema in base URL or endpoint: {full_url}",
+                    "UnsupportedProtocol error, check schema in URL "
+                    f"or endpoint: {full_url}",
                     method=method,
                 )
                 raise RestServiceError(
@@ -214,12 +218,12 @@ class RestServiceClient:
                 response_text=response.text if "response" in locals() else "N/A",
             )
             raise RestServiceError(
-                f"Failed to decode JSON response for {method} {full_url}"  # Use full_url
+                f"Failed to decode JSON response for {method} {full_url}"
             ) from e
 
     async def get_user_by_telegram_id(
         self, telegram_id: str
-    ) -> Optional[TelegramUserRead]:
+    ) -> TelegramUserRead | None:
         """Get user by Telegram ID."""
         try:
             data = await self._request("GET", f"/api/users/by_telegram/{telegram_id}")
@@ -231,7 +235,7 @@ class RestServiceClient:
                 return None
             raise  # Re-raise other errors
 
-    async def get_user_secretary(self, user_id: int) -> Optional[AssistantRead]:
+    async def get_user_secretary(self, user_id: int) -> AssistantRead | None:
         """Get the secretary assistant associated with a user."""
         try:
             data = await self._request("GET", f"/api/users/{user_id}/secretary")
@@ -242,7 +246,7 @@ class RestServiceClient:
                 return None
             raise
 
-    async def get_assistant(self, assistant_id: str) -> Optional[AssistantRead]:
+    async def get_assistant(self, assistant_id: str) -> AssistantRead | None:
         """Get assistant details by ID."""
         try:
             data = await self._request("GET", f"/api/assistants/{assistant_id}")
@@ -253,7 +257,7 @@ class RestServiceClient:
                 return None
             raise
 
-    async def get_assistants(self) -> List[AssistantRead]:
+    async def get_assistants(self) -> list[AssistantRead]:
         """Get a list of all assistants."""
         try:
             data = await self._request("GET", "/api/assistants/")
@@ -272,7 +276,7 @@ class RestServiceClient:
             logger.exception("Unexpected error getting assistants list", exc_info=True)
             return []  # Return empty list on unexpected errors
 
-    async def get_tools(self) -> List[ToolRead]:
+    async def get_tools(self) -> list[ToolRead]:
         """Get list of all tools."""
         try:
             data = await self._request("GET", "/api/tools/")
@@ -290,7 +294,7 @@ class RestServiceClient:
             logger.exception("Unexpected error getting tools list", exc_info=True)
             return []
 
-    async def get_tool(self, tool_id: str) -> Optional[ToolRead]:
+    async def get_tool(self, tool_id: str) -> ToolRead | None:
         """Get tool by ID."""
         try:
             data = await self._request("GET", f"/api/tools/{tool_id}")
@@ -306,7 +310,7 @@ class RestServiceClient:
 
     async def create_reminder(
         self, reminder_data: ReminderCreate
-    ) -> Optional[ReminderRead]:
+    ) -> ReminderRead | None:
         """Create a new reminder.
 
         Args:
@@ -335,7 +339,7 @@ class RestServiceClient:
             )
             return None
 
-    async def get_user_active_reminders(self, user_id: int) -> List[ReminderRead]:
+    async def get_user_active_reminders(self, user_id: int) -> list[ReminderRead]:
         """Get a list of active reminders for a specific user.
 
         Args:
@@ -352,7 +356,7 @@ class RestServiceClient:
             if isinstance(response_data, list):
                 return [ReminderRead(**item) for item in response_data]
             logger.error(
-                f"Received unexpected data format for user active reminders: {type(response_data)}",
+                "Unexpected format for user active reminders",
                 user_id=user_id,
                 data_received=response_data,
             )
@@ -387,8 +391,7 @@ class RestServiceClient:
         except RestServiceError as e:
             # Log specific error, but return False as per method contract for failure
             logger.error(f"Failed to delete reminder {reminder_id}: {e}", exc_info=True)
-            # Distinguish 404 (not found, arguably a "successful" deletion if goal is absence)
-            # from other errors. For now, any RestServiceError means False.
+            # Distinguish 404 vs other errors; any RestServiceError means False.
             # if "404" in str(e):
             #     logger.warning(f"Reminder {reminder_id} not found for deletion.")
             #     return True # Or False, depending on desired semantics for "not found"
@@ -401,7 +404,7 @@ class RestServiceClient:
 
     async def list_active_user_secretary_assignments(
         self,
-    ) -> List[UserSecretaryLinkRead]:
+    ) -> list[UserSecretaryLinkRead]:
         """Fetch the list of active user-secretary assignments."""
         # Add the /api prefix to the URL
         response_data = await self._request("GET", "/api/user-secretaries/assignments")
@@ -411,11 +414,12 @@ class RestServiceClient:
             return [UserSecretaryLinkRead(**assignment) for assignment in response_data]
         else:
             logger.error(
-                f"Expected list from /api/user-secretaries/assignments, got {type(response_data)}"
+                "Expected list from /api/user-secretaries/assignments, "
+                f"got {type(response_data)}"
             )
             return []  # Return empty list on unexpected type
 
-    async def get_user_secretary_assignment(self, user_id: int) -> Optional[dict]:
+    async def get_user_secretary_assignment(self, user_id: int) -> dict | None:
         """Fetch the active secretary assignment for a specific user."""
         endpoint = f"/api/users/{user_id}/secretary"
         try:
@@ -426,9 +430,7 @@ class RestServiceClient:
                     user_id=user_id,
                     secretary_id=response_data.get("id"),
                 )
-                # We might need to return the link object containing the update time later for caching
-                # For now, just returning the secretary data itself.
-                # The endpoint /users/{user_id}/secretary returns the Assistant object directly.
+                # Return secretary data directly; endpoint already returns Assistant
                 return response_data
             else:
                 # Handle case where _request returns None (e.g., 404)
@@ -444,11 +446,11 @@ class RestServiceClient:
             )
             return None
 
-    async def get_active_assignments(self) -> List[dict]:
+    async def get_active_assignments(self) -> list[dict]:
         """Fetch all active user-secretary assignments."""
         f"{self.base_url}/api/user-secretaries/assignments"
 
-    async def get_user_facts(self, user_id: int) -> List[UserFactRead]:
+    async def get_user_facts(self, user_id: int) -> list[UserFactRead]:
         """Get facts for a specific user.
 
         Args:
@@ -467,8 +469,8 @@ class RestServiceClient:
             # Ensure data is a list before processing
             if isinstance(data, list):
                 # Parse each item using UserFactRead and extract the 'fact' string
-                facts_list: List[UserFactRead] = [UserFactRead(**item) for item in data]
-                fact_strings: List[str] = [fact_obj.fact for fact_obj in facts_list]
+                facts_list: list[UserFactRead] = [UserFactRead(**item) for item in data]
+                fact_strings: list[str] = [fact_obj.fact for fact_obj in facts_list]
                 logger.debug(
                     f"Successfully parsed {len(fact_strings)} facts for user {user_id}."
                 )
@@ -505,7 +507,7 @@ class RestServiceClient:
 
     async def get_user_summary(
         self, user_id: int, secretary_id: UUID
-    ) -> Optional[UserSummaryRead]:
+    ) -> UserSummaryRead | None:
         """Gets the latest summary for a user-secretary pair from the API.
 
         Args:
@@ -525,7 +527,7 @@ class RestServiceClient:
         try:
             data = await self._request(
                 "GET",
-                f"/api/user-summaries/latest/",
+                "/api/user-summaries/latest/",
                 params={"user_id": user_id, "assistant_id": secretary_id_str},
             )
             # Check if data is empty
@@ -543,7 +545,7 @@ class RestServiceClient:
 
     async def create_user_summary(
         self, summary_data: UserSummaryCreateUpdate
-    ) -> Optional[UserSummaryRead]:
+    ) -> UserSummaryRead | None:
         """Creates a new user summary.
 
         Args:
@@ -568,9 +570,7 @@ class RestServiceClient:
 
     # New methods for message handling
 
-    async def create_message(
-        self, message_data: MessageCreate
-    ) -> Optional[MessageRead]:
+    async def create_message(self, message_data: MessageCreate) -> MessageRead | None:
         """Creates a new message in the database.
 
         Args:
@@ -593,7 +593,7 @@ class RestServiceClient:
             logger.error(f"Error creating message: {e}")
             return None
 
-    async def get_message(self, message_id: int) -> Optional[MessageRead]:
+    async def get_message(self, message_id: int) -> MessageRead | None:
         """Gets a message by ID.
 
         Args:
@@ -614,18 +614,18 @@ class RestServiceClient:
 
     async def get_messages(
         self,
-        user_id: Optional[int] = None,
-        assistant_id: Optional[str] = None,
-        id_gt: Optional[int] = None,
-        id_lt: Optional[int] = None,
-        role: Optional[str] = None,
-        status: Optional[str] = None,
-        summary_id: Optional[int] = None,
+        user_id: int | None = None,
+        assistant_id: str | None = None,
+        id_gt: int | None = None,
+        id_lt: int | None = None,
+        role: str | None = None,
+        status: str | None = None,
+        summary_id: int | None = None,
         limit: int = 100,
         offset: int = 0,
         sort_by: str = "id",
         sort_order: str = "desc",
-    ) -> List[MessageRead]:
+    ) -> list[MessageRead]:
         """Gets messages with filtering, sorting, and pagination.
 
         Args:
@@ -683,7 +683,7 @@ class RestServiceClient:
 
     async def update_message(
         self, message_id: int, update_data: MessageUpdate
-    ) -> Optional[MessageRead]:
+    ) -> MessageRead | None:
         """Updates a message by ID.
 
         Args:
@@ -709,26 +709,17 @@ class RestServiceClient:
 
     # --- Global Settings --- #
 
-    async def get_global_settings(self) -> "GlobalSettingsBase":
-        """Get global settings from REST service.
-
-        Returns:
-            GlobalSettingsBase: Object with global settings like context_window_size and summarization_prompt
-        """
+    async def get_global_settings(self) -> GlobalSettingsBase:
+        """Get global settings from REST service."""
         try:
             response = await self._request("GET", "/api/global-settings/")
-            # Ответ уже десериализован, так как _request возвращает словарь, а не Response объект
             if response:
-                from shared_models.api_schemas.global_settings import GlobalSettingsBase
-
                 return GlobalSettingsBase(**response)
             else:
                 logger.error("Failed to get global settings: empty response")
-                # Не возвращаем значения по умолчанию - пусть падает
                 raise ValueError("Failed to retrieve global settings: empty response")
         except Exception as e:
             logger.error(f"Error getting global settings: {e}", exc_info=True)
-            # Не маскируем ошибку возвращением дефолтных значений, проксируем исключение дальше
             raise ValueError(f"Failed to retrieve global settings: {e}") from e
 
     # async def update_global_settings(

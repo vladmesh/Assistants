@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from langchain_core.messages import HumanMessage
+
 from orchestrator import AssistantOrchestrator
 
 # Mark all tests in this file as asyncio
@@ -166,7 +167,13 @@ async def test_dispatch_reminder_trigger(
     # Verify content structure created by _dispatch_event
     expected_timestamp = reminder_trigger_event.timestamp
     expected_payload_json = json.dumps(reminder_trigger_event.payload)
-    expected_content = f"System Trigger Activated:\nTimestamp UTC: {expected_timestamp.isoformat()}\nType: {reminder_trigger_event.trigger_type.value}\nSource: {reminder_trigger_event.source.value}\nPayload: {expected_payload_json}"
+    expected_content = (
+        "System Trigger Activated:\n"
+        f"Timestamp UTC: {expected_timestamp.isoformat()}\n"
+        f"Type: {reminder_trigger_event.trigger_type.value}\n"
+        f"Source: {reminder_trigger_event.source.value}\n"
+        f"Payload: {expected_payload_json}"
+    )
     assert passed_message.content == expected_content
 
     # Verify metadata

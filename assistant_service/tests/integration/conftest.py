@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Any, List, Optional
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -11,7 +11,6 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
-
 from shared_models.api_schemas.assistant import AssistantRead
 
 # Fixtures for integration tests requiring real external services
@@ -62,9 +61,9 @@ class MockChatLLMIntegration(BaseChatModel):
 
     async def _agenerate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: AsyncCallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """Generate a mock async response."""
@@ -90,13 +89,11 @@ class MockChatLLMIntegration(BaseChatModel):
 class MockRestServiceIntegration:
     """Mock REST service for integration tests."""
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: str | None = None):
         self.base_url = base_url
         self.user_id = 123
 
-    async def get_user_secretary_assignment(
-        self, user_id: int
-    ) -> Optional[AssistantRead]:
+    async def get_user_secretary_assignment(self, user_id: int) -> AssistantRead | None:
         """Mock get_user_secretary functionality."""
         return AssistantRead(id=123, name="Mock Secretary")
 
@@ -110,7 +107,8 @@ class MockRestServiceIntegration:
         # In many integration tests focusing on flow, complex tool binding isn't needed.
         # This basic implementation allows the code calling bind_tools to proceed.
         print(
-            f"MockChatLLMIntegration: bind_tools called with {len(tools)} tools (kwargs: {kwargs}). Returning self."
+            "MockChatLLMIntegration: bind_tools called with "
+            f"{len(tools)} tools (kwargs: {kwargs}). Returning self."
         )
         return self  # Return self allows potential chaining like .bind(stop=...)
 

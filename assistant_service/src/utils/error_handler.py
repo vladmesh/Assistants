@@ -1,6 +1,6 @@
 """Error handling utilities for assistants"""
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from config.logger import get_logger
 
@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 class AssistantError(Exception):
     """Base exception for all assistant-related errors"""
 
-    def __init__(self, message: str, assistant_name: Optional[str] = None):
+    def __init__(self, message: str, assistant_name: str | None = None):
         self.assistant_name = assistant_name
         super().__init__(f"[{assistant_name or 'Unknown'}] {message}")
 
@@ -21,9 +21,9 @@ class ToolError(Exception):
     def __init__(
         self,
         message: str,
-        tool_name: Optional[str] = None,
-        error_code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        tool_name: str | None = None,
+        error_code: str | None = None,
+        details: dict[str, Any] | None = None,
     ):
         self.tool_name = tool_name
         self.error_code = error_code
@@ -59,9 +59,7 @@ class RateLimitError(AssistantError):
     """Error raised when rate limits are exceeded"""
 
 
-def handle_assistant_error(
-    error: Exception, assistant_name: Optional[str] = None
-) -> str:
+def handle_assistant_error(error: Exception, assistant_name: str | None = None) -> str:
     """Handle assistant errors and return user-friendly message
 
     Args:
@@ -79,7 +77,7 @@ def handle_assistant_error(
         return "Произошла внутренняя ошибка. Пожалуйста, попробуйте позже."
 
 
-def handle_error(error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
+def handle_error(error: Exception, context: dict[str, Any]) -> dict[str, Any]:
     """Handle errors and return structured response"""
     error_message = handle_assistant_error(error, context.get("assistant_name"))
     return {"status": "error", "response": None, "error": error_message}

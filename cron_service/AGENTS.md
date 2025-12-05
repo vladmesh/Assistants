@@ -1,7 +1,7 @@
 # Cron Service Detailed Overview (Updated for Reminder Service)
 
 ## 1. Overview
-- **Purpose:** Executes scheduled reminders managed via `rest_service`. This service replaces the previous cron functionality for simple notifications.
+- **Purpose:** Executes scheduled reminders managed via `rest_service`. 
 - **Functions:** 
   - Periodically fetches active reminder configurations from the `/api/reminders/scheduled` endpoint of `rest_service`.
   - Schedules one-time (`DateTrigger`) and recurring (`CronTrigger`) reminders using APScheduler.

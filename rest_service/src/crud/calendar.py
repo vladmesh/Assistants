@@ -1,20 +1,17 @@
 import logging
 from datetime import datetime
-from typing import Optional
 
-from models.calendar import CalendarCredentials
-from models.user import TelegramUser  # Needed to check user existence
+from shared_models.api_schemas import CalendarCredentialsCreate  # Use Create for input
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import CalendarCredentialsCreate  # Use Create for input
+from models.calendar import CalendarCredentials
+from models.user import TelegramUser  # Needed to check user existence
 
 logger = logging.getLogger(__name__)
 
 
-async def get_credentials(
-    db: AsyncSession, user_id: int
-) -> Optional[CalendarCredentials]:
+async def get_credentials(db: AsyncSession, user_id: int) -> CalendarCredentials | None:
     """Get calendar credentials for a user."""
     result = await db.execute(
         select(CalendarCredentials).where(CalendarCredentials.user_id == user_id)

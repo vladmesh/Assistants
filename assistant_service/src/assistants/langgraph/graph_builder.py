@@ -2,7 +2,16 @@
 
 import functools
 import logging
-from typing import List, Literal
+from typing import Literal
+
+from langchain_core.language_models.chat_models import BaseChatModel  # For summary_llm
+from langchain_core.runnables import Runnable
+
+# Langchain core and specific components
+from langchain_core.tools import BaseTool
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.graph import CompiledGraph
+from langgraph.prebuilt import ToolNode, tools_condition
 
 # Import existing nodes
 from assistants.langgraph.nodes.finalize_processing import finalize_processing_node
@@ -22,14 +31,6 @@ from assistants.langgraph.prompt_context_cache import PromptContextCache
 
 # Project specific imports
 from assistants.langgraph.state import AssistantState
-from langchain_core.language_models.chat_models import BaseChatModel  # For summary_llm
-from langchain_core.runnables import Runnable
-
-# Langchain core and specific components
-from langchain_core.tools import BaseTool
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import ToolNode, tools_condition
 from services.rest_service import RestServiceClient
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ def route_after_assistant(state: AssistantState) -> Literal["tools", "save_respo
 
 
 def build_full_graph(
-    tools: List[BaseTool],
+    tools: list[BaseTool],
     summary_llm: BaseChatModel,
     rest_client: RestServiceClient,
     prompt_context_cache: PromptContextCache,
@@ -121,7 +122,8 @@ def build_full_graph(
     )
     builder.add_node("save_response", bound_save_response_node)
 
-    # 7. finalize_processing: Node to finalize processing (update message statuses, etc.)
+    # 7. finalize_processing: Node to finalize processing
+    #    (update message statuses, etc.)
     bound_finalize_node = functools.partial(
         finalize_processing_node,
         rest_client=rest_client,

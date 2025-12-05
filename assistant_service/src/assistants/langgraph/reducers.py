@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 from langgraph.graph.message import add_messages as original_add_messages
@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 def _filter_all_system_messages(
     messages: Sequence[BaseMessage],
-) -> List[BaseMessage]:
+) -> list[BaseMessage]:
     """Filters out ALL system messages, logging their details before discarding."""
-    potentially_valid_messages: List[BaseMessage] = []
+    potentially_valid_messages: list[BaseMessage] = []
     for msg in messages:
         if isinstance(msg, SystemMessage):
             msg_name = getattr(msg, "name", "None")
@@ -34,8 +34,8 @@ def _is_ai_message_calling_tool(ai_message: BaseMessage, tool_call_id: str) -> b
     return False
 
 
-def _log_critical_last_orphan_tool_message(messages: List[BaseMessage]) -> bool:
-    """Checks and logs if the last message is an orphaned ToolMessage. Returns True if logged."""
+def _log_critical_last_orphan_tool_message(messages: list[BaseMessage]) -> bool:
+    """Checks if the last message is an orphaned ToolMessage."""
     if not messages:
         return False
 
@@ -47,7 +47,8 @@ def _log_critical_last_orphan_tool_message(messages: List[BaseMessage]) -> bool:
     if not tool_call_id_last:
         # ToolMessage without tool_call_id is invalid anyway, treat as orphan
         logger.error(
-            f"CRITICAL: Last message is ToolMessage (id={getattr(last_msg, 'id', 'N/A')}) but has no tool_call_id."
+            "CRITICAL: Last message is ToolMessage "
+            f"(id={getattr(last_msg, 'id', 'N/A')}) with no tool_call_id."
         )
         return True
 
@@ -59,8 +60,10 @@ def _log_critical_last_orphan_tool_message(messages: List[BaseMessage]) -> bool:
 
     if is_last_orphan:
         logger.error(
-            f"CRITICAL: Last message is orphaned ToolMessage (id={getattr(last_msg, 'id', 'N/A')}, "
-            f"tool_call_id={tool_call_id_last}). Expected tool result may be missing."
+            "CRITICAL: Last message is orphaned ToolMessage "
+            f"(id={getattr(last_msg, 'id', 'N/A')}, "
+            f"tool_call_id={tool_call_id_last}). "
+            "Expected tool result may be missing."
         )
         return True
 
@@ -68,10 +71,10 @@ def _log_critical_last_orphan_tool_message(messages: List[BaseMessage]) -> bool:
 
 
 def _validate_and_filter_tool_message_pairs(
-    messages: List[BaseMessage], logged_last_orphan_error: bool
-) -> List[BaseMessage]:
+    messages: list[BaseMessage], logged_last_orphan_error: bool
+) -> list[BaseMessage]:
     """Validates AIMessage->ToolMessage pairs and filters orphans."""
-    final_validated_messages: List[BaseMessage] = []
+    final_validated_messages: list[BaseMessage] = []
     for i, current_msg in enumerate(messages):
         if isinstance(current_msg, ToolMessage):
             tool_call_id = getattr(current_msg, "tool_call_id", None)
@@ -84,12 +87,13 @@ def _validate_and_filter_tool_message_pairs(
             if is_valid_pair:
                 final_validated_messages.append(current_msg)
             else:
-                # Log warning only if it wasn't the last message already logged as critical error
+                # Log warning only if it wasn't last message logged as critical error
                 is_last_message = i == len(messages) - 1
                 if not (is_last_message and logged_last_orphan_error):
                     logger.warning(
-                        f"Discarding orphaned ToolMessage (id={getattr(current_msg, 'id', 'N/A')}, "
-                        f"tool_call_id={tool_call_id}) due to missing/incorrect preceding AIMessage."
+                        "Discarding orphaned ToolMessage "
+                        f"(id={getattr(current_msg, 'id', 'N/A')}, "
+                        f"tool_call_id={tool_call_id}) due to missing/incorrect AI."
                     )
                 # Do not append the orphan/invalid message
         else:
@@ -99,9 +103,9 @@ def _validate_and_filter_tool_message_pairs(
 
 
 def custom_message_reducer(
-    current_state_messages: Optional[Sequence[BaseMessage]],
-    new_messages: Optional[Sequence[BaseMessage]],
-) -> List[BaseMessage]:
+    current_state_messages: Sequence[BaseMessage] | None,
+    new_messages: Sequence[BaseMessage] | None,
+) -> list[BaseMessage]:
     """
     Custom reducer for the 'messages' field in AssistantState.
 

@@ -88,25 +88,35 @@ docker compose up -d
 All development is done in Docker containers to ensure consistency across environments. The project uses Docker Compose for service orchestration and development.
 
 ### Code Quality
-Run formatters:
+- Форматирование и линт: ruff (format + check) в контейнерах через Makefile.
+- Перед коммитом: `pre-commit install` (ruff --fix и ruff-format).
+- Запуск для конкретного сервиса (пример rest_service):
 ```bash
-./run_formatters.sh
+make format SERVICE=rest_service    # ruff format (правит код через bind mount)
+make lint SERVICE=rest_service      # ruff check
+make test SERVICE=rest_service      # docker compose -f rest_service/docker-compose.test.yml run test
+```
+- Все сервисы сразу:
+```bash
+make format
+make lint
+make test
 ```
 
 ### Testing
-Run all tests:
-```bash
-./run_tests.sh
-```
+### CI/CD
+- `ci.yml` — ruff format --check, ruff check, pytest для всех сервисов на PR и push в main.
+- `docker-publish.yml` — сборка и пуш образов в GHCR на push в main, теги `sha` и `latest`.
+- `deploy-prod.yml` — ручной запуск или по тегу `v*`: проверка наличия секретов, ssh на прод, `docker compose pull && up -d` с переменными `IMAGE_TAG`/`REGISTRY`.
 
-Run tests for specific services:
+### Миграции (rest_service)
 ```bash
-./run_tests.sh rest_service
-./run_tests.sh google_calendar_service
-./run_tests.sh cron_service
-./run_tests.sh assistant_service
-./run_tests.sh telegram_bot_service
-./run_tests.sh rag_service
+# создать миграцию (MESSAGE="..."):
+make migrate MESSAGE="add new table"
+# применить все:
+make upgrade
+# история:
+make history
 ```
 
 ### Project Structure

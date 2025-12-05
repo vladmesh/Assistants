@@ -1,30 +1,29 @@
 import logging
-from typing import List, Optional
 from uuid import UUID
 
-from models.assistant import Tool, ToolType
+from shared_models.api_schemas import ToolCreate, ToolUpdate
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import ToolCreate, ToolUpdate
+from models.assistant import Tool, ToolType
 
 logger = logging.getLogger(__name__)
 
 
-async def get_tool(db: AsyncSession, tool_id: UUID) -> Optional[Tool]:
+async def get_tool(db: AsyncSession, tool_id: UUID) -> Tool | None:
     """Get a tool by its ID."""
     tool = await db.get(Tool, tool_id)
     return tool
 
 
-async def get_tools(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Tool]:
+async def get_tools(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Tool]:
     """Get a list of tools with pagination."""
     query = select(Tool).offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 
 
-async def get_tool_by_name(db: AsyncSession, name: str) -> Optional[Tool]:
+async def get_tool_by_name(db: AsyncSession, name: str) -> Tool | None:
     """Get a tool by its unique name."""
     query = select(Tool).where(Tool.name == name)
     result = await db.execute(query)
@@ -42,9 +41,9 @@ async def create_tool(db: AsyncSession, tool_in: ToolCreate) -> Tool:
     # Validate ToolType enum
     try:
         tool_type_enum = ToolType(tool_in.tool_type)
-    except ValueError:
+    except ValueError as exc:
         logger.error(f"Invalid tool_type value: {tool_in.tool_type}")
-        raise ValueError(f"Invalid tool type: {tool_in.tool_type}")
+        raise ValueError(f"Invalid tool type: {tool_in.tool_type}") from exc
 
     tool_data = tool_in.model_dump()
     tool_data["tool_type"] = tool_type_enum  # Use the enum member
@@ -59,7 +58,7 @@ async def create_tool(db: AsyncSession, tool_in: ToolCreate) -> Tool:
 
 async def update_tool(
     db: AsyncSession, tool_id: UUID, tool_in: ToolUpdate
-) -> Optional[Tool]:
+) -> Tool | None:
     """Update an existing tool."""
     db_tool = await get_tool(db, tool_id)
     if not db_tool:
@@ -81,11 +80,12 @@ async def update_tool(
     if "tool_type" in update_data and update_data["tool_type"] is not None:
         try:
             update_data["tool_type"] = ToolType(update_data["tool_type"])
-        except ValueError:
+        except ValueError as exc:
             logger.error(
-                f"Invalid tool_type value during update: {update_data['tool_type']}"
+                "Invalid tool_type value during update: %s",
+                update_data["tool_type"],
             )
-            raise ValueError(f"Invalid tool type: {update_data['tool_type']}")
+            raise ValueError(f"Invalid tool type: {update_data['tool_type']}") from exc
 
     # Update model fields
     for key, value in update_data.items():

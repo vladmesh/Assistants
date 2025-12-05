@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
 
 # Import BaseMessage for type hinting
 from langchain_core.messages import BaseMessage
@@ -12,8 +11,8 @@ class BaseAssistant(ABC):
         self,
         assistant_id: str,
         name: str,
-        config: Dict,
-        tool_definitions: List[Dict],
+        config: dict,
+        tool_definitions: list[dict],
         **kwargs,
     ):
         """Initializes the assistant with basic info and raw configurations.
@@ -40,9 +39,9 @@ class BaseAssistant(ABC):
         self,
         message: BaseMessage,
         user_id: str,
-        log_extra: Optional[Dict[str, any]] = None,
-    ) -> Optional[str]:
-        """Processes an incoming message or a triggered event and returns the assistant's response string.
+        log_extra: dict[str, any] | None = None,
+    ) -> str | None:
+        """Handle a message/event and return the assistant response string.
 
         Args:
             message: The input message (standard Langchain BaseMessage).

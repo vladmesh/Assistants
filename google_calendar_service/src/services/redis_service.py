@@ -1,12 +1,13 @@
-from typing import Any, Dict, Optional
+from typing import Any
 
 import redis.asyncio as redis
 import structlog
-from config.settings import Settings
 
 # Import new models and remove old ones
 # from shared_models import HumanQueueMessage, QueueMessageSource, ToolQueueMessage
 from shared_models import QueueMessageSource, QueueTrigger, TriggerType
+
+from config.settings import Settings
 
 logger = structlog.get_logger()
 
@@ -27,7 +28,7 @@ class RedisService:
         self,
         user_id: int,
         trigger_type: TriggerType,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
         source: QueueMessageSource = QueueMessageSource.CALENDAR,  # Keep default source
     ) -> bool:
         """Send a system trigger event to the assistant input queue."""

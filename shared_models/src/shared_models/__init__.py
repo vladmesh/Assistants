@@ -1,7 +1,7 @@
 # Import models/schemas that should be accessible directly from shared_models
 
-# Import the single remaining model from api_models
-# from .api_models import UserSecretaryAssignment # This line should be removed or commented out
+# Legacy api_models import kept commented for now
+# from .api_models import UserSecretaryAssignment
 
 # Import the entire api_schemas module
 from . import api_schemas
@@ -12,18 +12,26 @@ from .enums import AssistantType, ReminderStatus, ReminderType, ToolType
 # Import remaining queue models
 from .queue import (
     AssistantResponseMessage,
+    HumanQueueMessage,
     QueueMessage,
+    QueueMessageContent,
     QueueMessageSource,
+    QueueMessageType,
     QueueTrigger,
+    ToolQueueMessage,
     TriggerType,
 )
 
 __all__ = [
     # Queue models
     "AssistantResponseMessage",
+    "HumanQueueMessage",
     "QueueMessage",
+    "QueueMessageContent",
     "QueueMessageSource",
+    "QueueMessageType",
     "QueueTrigger",
+    "ToolQueueMessage",
     "TriggerType",
     # Other API models (UserSecretaryAssignment removed)
     # "UserSecretaryAssignment",

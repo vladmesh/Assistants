@@ -3,9 +3,6 @@ from uuid import uuid4
 import pytest
 from fastapi import status
 from httpx import AsyncClient
-from models import UserFact  # Assuming models are accessible
-
-from shared_models.api_schemas import UserFactRead  # Assuming schemas are accessible
 
 # Fixtures for test user and client are assumed to be in conftest.py
 # e.g., test_user_id, client

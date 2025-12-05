@@ -1,5 +1,6 @@
 import asyncio
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from config.logger import get_logger
 
@@ -26,7 +27,7 @@ async def with_retry(
     delay: float = 1.0,
     backoff: float = 2.0,
     exceptions: tuple = (Exception,),
-    context: Optional[dict] = None,
+    context: dict | None = None,
     **kwargs,
 ) -> T:
     """
@@ -76,4 +77,4 @@ async def with_retry(
                     last_error=str(e),
                     **(context or {}),
                 )
-                raise RetryError(last_error, max_attempts)
+                raise RetryError(last_error, max_attempts) from e

@@ -1,20 +1,19 @@
 import json  # Import json
 import logging
-from datetime import timezone
-from typing import List, Optional
+from datetime import UTC
 from uuid import UUID
 
-from models.reminder import Reminder, ReminderStatus, ReminderType
-from models.user import TelegramUser  # To check user existence
+from shared_models.api_schemas import ReminderCreate
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from shared_models.api_schemas import ReminderCreate
+from models.reminder import Reminder, ReminderStatus, ReminderType
+from models.user import TelegramUser  # To check user existence
 
 logger = logging.getLogger(__name__)
 
 
-async def get_reminder(db: AsyncSession, reminder_id: UUID) -> Optional[Reminder]:
+async def get_reminder(db: AsyncSession, reminder_id: UUID) -> Reminder | None:
     """Get a reminder by its ID."""
     reminder = await db.get(Reminder, reminder_id)
     return reminder
@@ -22,7 +21,7 @@ async def get_reminder(db: AsyncSession, reminder_id: UUID) -> Optional[Reminder
 
 async def get_reminders(
     db: AsyncSession, skip: int = 0, limit: int = 100
-) -> List[Reminder]:
+) -> list[Reminder]:
     """Get a list of all reminders with pagination."""
     query = select(Reminder).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -31,7 +30,7 @@ async def get_reminders(
 
 async def get_scheduled_reminders(
     db: AsyncSession, skip: int = 0, limit: int = 100
-) -> List[Reminder]:
+) -> list[Reminder]:
     """Get a list of active reminders for the scheduler."""
     query = (
         select(Reminder)
@@ -46,11 +45,11 @@ async def get_scheduled_reminders(
 async def get_user_reminders(
     db: AsyncSession,
     user_id: int,
-    status: Optional[ReminderStatus] = None,
-    type: Optional[ReminderType] = None,
+    status: ReminderStatus | None = None,
+    type: ReminderType | None = None,
     skip: int = 0,
     limit: int = 100,
-) -> List[Reminder]:
+) -> list[Reminder]:
     """Get a list of reminders for a specific user with optional filters."""
     # Check if user exists first
     user = await db.get(TelegramUser, user_id)
@@ -82,9 +81,9 @@ async def create_reminder(db: AsyncSession, reminder_in: ReminderCreate) -> Remi
     trigger_at_naive_utc = None
     if reminder_in.trigger_at:
         if reminder_in.trigger_at.tzinfo is not None:
-            trigger_at_naive_utc = reminder_in.trigger_at.astimezone(
-                timezone.utc
-            ).replace(tzinfo=None)
+            trigger_at_naive_utc = reminder_in.trigger_at.astimezone(UTC).replace(
+                tzinfo=None
+            )
         else:
             # Assume naive datetime is already in UTC (or adjust logic if needed)
             trigger_at_naive_utc = reminder_in.trigger_at
@@ -93,9 +92,9 @@ async def create_reminder(db: AsyncSession, reminder_in: ReminderCreate) -> Remi
     try:
         reminder_type = ReminderType(reminder_in.type)
         reminder_status = ReminderStatus(reminder_in.status)
-    except ValueError as e:
-        logger.error(f"Invalid enum value provided for reminder: {e}")
-        raise ValueError(f"Invalid reminder type or status: {e}")
+    except ValueError as exc:
+        logger.error(f"Invalid enum value provided for reminder: {exc}")
+        raise ValueError(f"Invalid reminder type or status: {exc}") from exc
 
     # Convert payload dict to JSON string before creating model
     payload_str = json.dumps(reminder_in.payload, ensure_ascii=False)
@@ -122,7 +121,7 @@ async def create_reminder(db: AsyncSession, reminder_in: ReminderCreate) -> Remi
 
 async def update_reminder_status(
     db: AsyncSession, reminder_id: UUID, status: ReminderStatus
-) -> Optional[Reminder]:
+) -> Reminder | None:
     """Update the status of a specific reminder."""
     db_reminder = await get_reminder(db, reminder_id)
     if not db_reminder:

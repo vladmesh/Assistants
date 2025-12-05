@@ -1,15 +1,16 @@
 import base64
 import binascii  # For catching base64 errors
-from typing import Any
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from shared_models.api_schemas import CheckpointCreate, CheckpointRead
+from sqlmodel.ext.asyncio.session import AsyncSession  # Use AsyncSession
 
 # Use absolute imports from src/
 from crud import checkpoint as checkpoint_crud  # Import specific module
 from database import get_session  # Import directly
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel.ext.asyncio.session import AsyncSession  # Use AsyncSession
 
-from shared_models.api_schemas import CheckpointCreate, CheckpointRead
-
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter(prefix="/checkpoints", tags=["checkpoints"])
 
 
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/checkpoints", tags=["checkpoints"])
 async def save_checkpoint(
     thread_id: str,
     checkpoint_in: CheckpointCreate,
-    db: AsyncSession = Depends(get_session),
+    db: SessionDep,
 ) -> Any:
     if thread_id != checkpoint_in.thread_id:
         raise HTTPException(
@@ -28,11 +29,11 @@ async def save_checkpoint(
         )
     try:
         checkpoint_data = base64.b64decode(checkpoint_in.checkpoint_data_base64)
-    except (TypeError, binascii.Error):
+    except (TypeError, binascii.Error) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid base64 encoding for checkpoint data.",
-        )
+        ) from exc
 
     # Simple approach: always create a new checkpoint
     db_checkpoint = await checkpoint_crud.create_checkpoint(
@@ -57,9 +58,7 @@ async def save_checkpoint(
 
 
 @router.get("/{thread_id}", response_model=CheckpointRead)
-async def read_latest_checkpoint(
-    thread_id: str, db: AsyncSession = Depends(get_session)
-) -> Any:
+async def read_latest_checkpoint(thread_id: str, db: SessionDep) -> Any:
     db_checkpoint = await checkpoint_crud.get_latest_checkpoint(
         db=db, thread_id=thread_id
     )

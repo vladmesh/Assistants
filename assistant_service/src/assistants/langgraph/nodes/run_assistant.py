@@ -1,10 +1,11 @@
 import asyncio
 import time
-from typing import Any, Dict
+from typing import Any
+
+from langchain_core.runnables import Runnable
 
 from assistants.langgraph.state import AssistantState
 from config.logger import get_logger
-from langchain_core.runnables import Runnable
 from utils.error_handler import MessageProcessingError
 
 logger = get_logger(__name__)
@@ -12,7 +13,7 @@ logger = get_logger(__name__)
 
 async def run_assistant_node(
     state: AssistantState, agent_runnable: Runnable, timeout: int = 30
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Executes the core agent logic using the pre-configured agent_runnable."""
 
     # The self.agent_runnable implicitly calls _add_system_prompt_modifier
@@ -38,7 +39,7 @@ async def run_assistant_node(
                 logger.warning(f"Agent runnable invocation timed out after {timeout}s.")
                 raise MessageProcessingError(
                     f"Assistant processing timed out after {timeout}s."
-                )
+                ) from None
             except Exception as e:
                 # Log unexpected errors during cancellation
                 logger.warning(

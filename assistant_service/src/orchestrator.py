@@ -1,18 +1,17 @@
 import asyncio
 import json
 import time
-from typing import Optional, Union
 
 import redis.asyncio as redis
+from langchain_core.messages import HumanMessage
+from pydantic import ValidationError
+from shared_models import AssistantResponseMessage, QueueMessage, QueueTrigger
+
 from assistants.base_assistant import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
-from langchain_core.messages import HumanMessage
-from pydantic import ValidationError
 from services.rest_service import RestServiceClient
-
-from shared_models import AssistantResponseMessage, QueueMessage, QueueTrigger
 
 logger = get_logger(__name__)
 
@@ -36,10 +35,8 @@ class AssistantOrchestrator:
             "Assistant service initialized",
         )
 
-    async def _dispatch_event(
-        self, event: Union[QueueMessage, QueueTrigger]
-    ) -> Optional[dict]:
-        """Handles incoming messages or triggers, converts to Langchain message, and dispatches to secretary."""
+    async def _dispatch_event(self, event: QueueMessage | QueueTrigger) -> dict | None:
+        """Handle incoming events and dispatch to secretary."""
         user_id = None
         start_time = time.perf_counter()
         get_secretary_start_time = None
@@ -101,7 +98,13 @@ class AssistantOrchestrator:
                 except TypeError:
                     payload_json = str(event.payload)  # Fallback
 
-                human_content = f"System Trigger Activated:\nTimestamp UTC: {timestamp_iso}\nType: {trigger_type_val}\nSource: {source_val}\nPayload: {payload_json}"
+                human_content = (
+                    "System Trigger Activated:\n"
+                    f"Timestamp UTC: {timestamp_iso}\n"
+                    f"Type: {trigger_type_val}\n"
+                    f"Source: {source_val}\n"
+                    f"Payload: {payload_json}"
+                )
 
                 # Create HumanMessage instead of ToolMessage
                 lc_message = HumanMessage(
@@ -190,7 +193,8 @@ class AssistantOrchestrator:
                 "source": log_extra.get("source", "unknown"),
             }
             logger.warning(
-                f"Error processing event due to invalid data/structure: {type(e).__name__}",
+                "Invalid event data/structure",
+                error_type=type(e).__name__,
                 error=str(e),
                 **log_extra,
             )
@@ -207,7 +211,10 @@ class AssistantOrchestrator:
                 if isinstance(event, QueueMessage)
                 else f"Trigger: {log_extra['event_type']}",
                 "status": "error",
-                "response": f"Event processing failed due to an internal error: {type(e).__name__}",
+                "response": (
+                    "Event processing failed due to an internal error: "
+                    f"{type(e).__name__}"
+                ),
                 "error": str(e),
                 "source": log_extra["source"],
                 "type": "error",
@@ -244,7 +251,10 @@ class AssistantOrchestrator:
                 if isinstance(event, QueueMessage)
                 else f"Trigger: {log_extra['event_type']}",
                 "status": "error",
-                "response": f"Event processing failed due to an internal error: {type(e).__name__}",
+                "response": (
+                    "Event processing failed due to an internal error: "
+                    f"{type(e).__name__}"
+                ),
                 "error": str(e),
                 "source": log_extra["source"],
                 "type": "error",
@@ -252,7 +262,7 @@ class AssistantOrchestrator:
             }
 
     async def listen_for_messages(self):
-        """Listen for incoming messages/triggers from Redis queue and dispatch processing."""
+        """Listen for messages/triggers from Redis and dispatch."""
         logger.info(
             "Starting message listener",
             input_queue=self.settings.INPUT_QUEUE,
@@ -261,9 +271,9 @@ class AssistantOrchestrator:
         while True:
             raw_message_bytes = None
             response_payload = None  # Initialize response_payload here
-            event_object: Optional[
-                Union[QueueMessage, QueueTrigger]
-            ] = None  # To hold parsed object
+            event_object: QueueMessage | QueueTrigger | None = (
+                None  # To hold parsed object
+            )
 
             try:
                 message_data = await self.redis.blpop(
@@ -292,7 +302,9 @@ class AssistantOrchestrator:
                     try:
                         event_object = QueueTrigger(**message_dict)
                         logger.info(
-                            f"QueueTrigger received for user {event_object.user_id}, type: {event_object.trigger_type.value}"
+                            "QueueTrigger received for user "
+                            f"{event_object.user_id}, type: "
+                            f"{event_object.trigger_type.value}"
                         )
                     except ValidationError as trigger_exc:
                         logger.error(
@@ -329,7 +341,7 @@ class AssistantOrchestrator:
                 else:
                     # Handle case where it's neither a valid trigger nor a message
                     logger.error(
-                        "Received message is neither a valid QueueTrigger nor QueueMessage.",
+                        "Message is neither QueueTrigger nor QueueMessage.",
                         keys=list(message_dict.keys()),
                         raw_message=raw_message_json,
                     )
@@ -343,15 +355,15 @@ class AssistantOrchestrator:
                 else:
                     # Parsing failed or structure was invalid
                     logger.error(
-                        "Failed to parse incoming message or trigger.",  # Updated log message
+                        "Failed to parse incoming message or trigger.",
                         raw_message=raw_message_json,
                     )
                     # Create generic error response payload
                     response_payload = {
                         "user_id": message_dict.get("user_id", "unknown"),
                         "status": "error",
-                        "response": "Failed to parse incoming data.",  # Updated response
-                        "error": "Invalid data structure or parsing error.",  # Updated error message
+                        "response": "Failed to parse incoming data.",
+                        "error": "Invalid data structure or parsing error.",
                         "source": message_dict.get(
                             "source", "unknown"
                         ),  # Try to get source if available

@@ -1,24 +1,25 @@
 import logging
 from contextlib import asynccontextmanager
 
-from database import init_db
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from database import init_db
+
 # Import routers from correct locations
 # from api.endpoints import checkpoints # Import checkpoints separately
-from routers import assistant_tools  # Assuming this is also in routers
-from routers import checkpoints  # Import checkpoints from routers
-from routers import secretaries  # Assuming this is also in routers
-from routers import user_facts  # Add user_facts
 from routers import (  # user_secretary_links, # Removed non-existent router
+    assistant_tools,  # Assuming this is also in routers
     assistants,
     calendar,
+    checkpoints,  # Import checkpoints from routers
     global_settings,
     messages,  # Добавлен импорт messages
     reminders,
+    secretaries,  # Assuming this is also in routers
     tools,
+    user_facts,  # Add user_facts
     user_summaries,
     users,
 )
@@ -82,7 +83,9 @@ app.include_router(
     user_facts.router, prefix="/api", tags=["User Facts"]
 )  # Add user_facts router
 app.include_router(user_summaries.router, prefix="/api", tags=["User Summaries"])
-app.include_router(messages.router, prefix="/api", tags=["Messages"])  # Добавлен префикс "/api"
+app.include_router(
+    messages.router, prefix="/api", tags=["Messages"]
+)  # Добавлен префикс "/api"
 app.include_router(global_settings.router, prefix="/api", tags=["Global Settings"])
 app.include_router(checkpoints.router, prefix="/api")
 
