@@ -638,12 +638,12 @@ class BatchJob(BaseModel, table=True):
 - [x] Удалить/обновить связанные тесты
 - [x] Убрать user_facts из графа (суммаризация оставлена для управления контекстом)
 
-### Фаза 2: GlobalSettings & Provider Abstraction (1 день)
-- [ ] Расширить существующую модель GlobalSettings новыми полями (см. 3.1)
-- [ ] Обновить схемы в shared_models
-- [ ] Создать Alembic миграцию для новых полей
-- [ ] Создать LLMProvider protocol и реализации (OpenAI, Google, Anthropic)
-- [ ] Обновить UI в админке для новых настроек
+### Фаза 2: GlobalSettings & Provider Abstraction (1 день) ✅ DONE
+- [x] Расширить существующую модель GlobalSettings новыми полями (см. 3.1)
+- [x] Обновить схемы в shared_models
+- [x] Создать Alembic миграцию для новых полей
+- [x] Создать LLMProvider protocol и реализации (OpenAI)
+- [ ] Обновить UI в админке для новых настроек (отложено)
 
 ### Фаза 3: Memory Retrieve (1 день)
 - [ ] Создать узел `retrieve_memories`
