@@ -18,7 +18,6 @@ from shared_models.api_schemas.assistant import AssistantRead
 
 
 @pytest.fixture(scope="session")
-@pytest.mark.external_api
 def real_llm():
     """Real LangChain ChatOpenAI model (requires API key and network)."""
     # Consider adding error handling if key is missing
@@ -26,7 +25,6 @@ def real_llm():
 
 
 @pytest.fixture(scope="session")
-@pytest.mark.external_api
 def real_openai_client():
     """Real OpenAI client (requires API key and network)."""
     return OpenAI()
