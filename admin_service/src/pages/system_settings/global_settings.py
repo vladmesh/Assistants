@@ -70,7 +70,7 @@ def show_global_settings_page(rest_client: RestServiceClient):
                 value=settings.summarization_prompt,
                 height=200,
                 help="Промпт, используемый для суммирования истории диалога.",
-                key="global_prompt_input",  # Add key for state management
+                key="global_prompt_input",
             )
 
         with col2:
@@ -78,10 +78,137 @@ def show_global_settings_page(rest_client: RestServiceClient):
                 "Размер контекстного окна (токены):",
                 value=settings.context_window_size,
                 min_value=1,
-                step=100,  # Larger step for easier adjustment
+                step=100,
                 help="Максимальный размер контекстного окна для LLM.",
-                key="global_context_input",  # Add key for state management
+                key="global_context_input",
             )
+
+        st.divider()
+
+        # --- Memory V2 Settings ---
+        st.subheader("Настройки Memory V2")
+
+        mem_col1, mem_col2 = st.columns(2)
+
+        with mem_col1:
+            memory_retrieve_limit = st.number_input(
+                "Количество memories для извлечения:",
+                value=settings.memory_retrieve_limit,
+                min_value=1,
+                max_value=50,
+                step=1,
+                help="Количество релевантных воспоминаний для контекста.",
+                key="memory_retrieve_limit",
+            )
+            memory_retrieve_threshold = st.slider(
+                "Порог similarity для извлечения:",
+                min_value=0.0,
+                max_value=1.0,
+                value=settings.memory_retrieve_threshold,
+                step=0.05,
+                help="Минимальный порог схожести для извлечения memories.",
+                key="memory_retrieve_threshold",
+            )
+
+        with mem_col2:
+            memory_dedup_threshold = st.slider(
+                "Порог дедупликации:",
+                min_value=0.0,
+                max_value=1.0,
+                value=settings.memory_dedup_threshold,
+                step=0.05,
+                help="Порог схожести для дедупликации фактов.",
+                key="memory_dedup_threshold",
+            )
+            memory_update_threshold = st.slider(
+                "Порог обновления:",
+                min_value=0.0,
+                max_value=1.0,
+                value=settings.memory_update_threshold,
+                step=0.05,
+                help="Порог для обновления существующего факта.",
+                key="memory_update_threshold",
+            )
+
+        st.divider()
+
+        # --- Batch Extraction Settings ---
+        st.subheader("Batch Extraction (Memory V2)")
+
+        batch_col1, batch_col2 = st.columns(2)
+
+        with batch_col1:
+            memory_extraction_enabled = st.checkbox(
+                "Включить автоматическое извлечение",
+                value=settings.memory_extraction_enabled,
+                help="Включить фоновое извлечение фактов из диалогов.",
+                key="memory_extraction_enabled",
+            )
+            memory_extraction_interval = st.number_input(
+                "Интервал извлечения (часы):",
+                value=settings.memory_extraction_interval_hours,
+                min_value=1,
+                max_value=168,
+                step=1,
+                help="Как часто запускать batch extraction.",
+                key="memory_extraction_interval",
+            )
+
+        with batch_col2:
+            memory_extraction_model = st.text_input(
+                "Модель для извлечения:",
+                value=settings.memory_extraction_model,
+                help="LLM модель для извлечения фактов (например, gpt-4o-mini).",
+                key="memory_extraction_model",
+            )
+            memory_extraction_provider = st.selectbox(
+                "Провайдер:",
+                options=["openai", "google", "anthropic"],
+                index=["openai", "google", "anthropic"].index(
+                    settings.memory_extraction_provider
+                ),
+                help="Провайдер LLM для извлечения.",
+                key="memory_extraction_provider",
+            )
+
+        st.divider()
+
+        # --- Embedding Settings ---
+        st.subheader("Настройки Embeddings")
+
+        emb_col1, emb_col2 = st.columns(2)
+
+        with emb_col1:
+            embedding_model = st.text_input(
+                "Модель embeddings:",
+                value=settings.embedding_model,
+                help="Модель для генерации embeddings.",
+                key="embedding_model",
+            )
+
+        with emb_col2:
+            embedding_provider = st.selectbox(
+                "Провайдер embeddings:",
+                options=["openai", "google", "anthropic"],
+                index=["openai", "google", "anthropic"].index(
+                    settings.embedding_provider
+                ),
+                help="Провайдер для embeddings.",
+                key="embedding_provider",
+            )
+
+        st.divider()
+
+        # --- Limits ---
+        max_memories = st.number_input(
+            "Максимум memories на пользователя:",
+            value=settings.max_memories_per_user,
+            min_value=1,
+            max_value=10000,
+            step=100,
+            help="Максимальное количество memories для одного пользователя.",
+            key="max_memories_per_user",
+        )
 
         st.divider()
 
@@ -90,6 +217,21 @@ def show_global_settings_page(rest_client: RestServiceClient):
             update_data = GlobalSettingsUpdate(
                 summarization_prompt=prompt_value,
                 context_window_size=context_value,
+                # Memory V2
+                memory_retrieve_limit=memory_retrieve_limit,
+                memory_retrieve_threshold=memory_retrieve_threshold,
+                memory_dedup_threshold=memory_dedup_threshold,
+                memory_update_threshold=memory_update_threshold,
+                # Batch Extraction
+                memory_extraction_enabled=memory_extraction_enabled,
+                memory_extraction_interval_hours=memory_extraction_interval,
+                memory_extraction_model=memory_extraction_model,
+                memory_extraction_provider=memory_extraction_provider,
+                # Embeddings
+                embedding_model=embedding_model,
+                embedding_provider=embedding_provider,
+                # Limits
+                max_memories_per_user=max_memories,
             )
             try:
                 with st.spinner("Сохранение..."):

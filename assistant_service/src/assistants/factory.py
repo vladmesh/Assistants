@@ -315,9 +315,12 @@ class AssistantFactory:
                     tools=created_tools,
                     user_id=user_id,
                     rest_client=self.rest_client,
-                    # ---> Передаем новые глобальные настройки <---
+                    # ---> Передаем глобальные настройки <---
                     summarization_prompt=global_settings.summarization_prompt,
                     context_window_size=global_settings.context_window_size,
+                    # ---> Memory V2 settings <---
+                    memory_retrieve_limit=global_settings.memory_retrieve_limit,
+                    memory_retrieve_threshold=global_settings.memory_retrieve_threshold,
                     # -------------------------------------------
                 )
                 # Load initial data after creating instance
