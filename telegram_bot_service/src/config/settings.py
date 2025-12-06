@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     assistant_output_queue: str = os.getenv(
         "REDIS_QUEUE_TO_TELEGRAM", "queue:to_telegram"
     )
+    input_stream_group: str = os.getenv("REDIS_INPUT_STREAM_GROUP", "assistant_input")
+    output_stream_group: str = os.getenv(
+        "REDIS_OUTPUT_STREAM_GROUP", "assistant_output"
+    )
+    stream_consumer: str = os.getenv(
+        "REDIS_STREAM_CONSUMER", os.getenv("HOSTNAME", "telegram_consumer")
+    )
     user_messages_prefix: str = "user_messages:"
 
     # REST service settings
@@ -33,7 +40,7 @@ class Settings(BaseSettings):
     # Redis connection settings
     redis_settings: dict = {
         "encoding": "utf-8",
-        "decode_responses": True,
+        "decode_responses": False,
         "retry_on_timeout": True,
         "socket_keepalive": True,
     }

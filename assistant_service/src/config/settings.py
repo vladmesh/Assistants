@@ -38,9 +38,15 @@ class Settings(BaseSettings):
         return f"http://{self.RAG_SERVICE_HOST}:{self.RAG_SERVICE_PORT}"
 
     # Queue names
-
     INPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_SECRETARY")
     OUTPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM")
+    INPUT_STREAM_GROUP: str = os.getenv("REDIS_INPUT_STREAM_GROUP", "assistant_input")
+    OUTPUT_STREAM_GROUP: str = os.getenv(
+        "REDIS_OUTPUT_STREAM_GROUP", "assistant_output"
+    )
+    STREAM_CONSUMER: str = os.getenv(
+        "REDIS_STREAM_CONSUMER", os.getenv("HOSTNAME", "assistant_consumer")
+    )
 
     # Google Calendar settings
     GOOGLE_CALENDAR_CREDENTIALS: str | None = None

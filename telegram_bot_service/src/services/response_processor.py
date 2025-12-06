@@ -4,6 +4,7 @@ import json
 import structlog
 from pydantic import ValidationError
 from redis import asyncio as aioredis
+from redis.exceptions import ResponseError
 from shared_models.queue import AssistantResponseMessage
 
 from clients.rest import RestClient
@@ -25,87 +26,82 @@ async def handle_assistant_responses(
     """
     logger.info("Started assistant response handler")
 
+    await _ensure_output_group(redis)
+
     async with RestClient() as rest:
         while True:
             try:
-                # Get response from assistant queue
-                response = await redis.brpop(settings.assistant_output_queue, timeout=1)
+                message_id, data = await _read_next_response(redis)
+                if not message_id:
+                    await asyncio.sleep(0.1)
+                    continue
 
-                if response:
-                    _, data = response
-                    try:
-                        # Validate and parse incoming message using Pydantic model
-                        response_message = AssistantResponseMessage.model_validate_json(
-                            data
-                        )
-                        logger.debug(
-                            "Successfully validated AssistantResponseMessage",
-                            user_id=response_message.user_id,
-                        )
-                    except ValidationError as e:
-                        logger.error(
-                            "Failed to validate assistant response from queue",
-                            raw_data=data.decode("utf-8", errors="ignore"),
-                            errors=e.errors(),
-                            exc_info=True,
-                        )
-                        continue  # Skip processing this invalid message
+                try:
+                    response_message = AssistantResponseMessage.model_validate_json(
+                        data
+                    )
+                    logger.debug(
+                        "Successfully validated AssistantResponseMessage",
+                        user_id=response_message.user_id,
+                    )
+                except ValidationError as e:
+                    logger.error(
+                        "Failed to validate assistant response from stream",
+                        raw_data=data.decode("utf-8", errors="ignore"),
+                        errors=e.errors(),
+                        exc_info=True,
+                    )
+                    await _ack_response(redis, message_id)
+                    continue
 
-                    # Get user data from REST service using validated user_id
-                    user_id = response_message.user_id
-                    # RestClient returns TelegramUserRead or None
-                    user = await rest.get_user_by_id(user_id)  # user_id is already int
-                    if not user:
-                        logger.error("User not found", user_id=user_id)
-                        continue
+                # Get user data from REST service using validated user_id
+                user_id = response_message.user_id
+                user = await rest.get_user_by_id(user_id)
+                if not user:
+                    logger.error("User not found", user_id=user_id)
+                    await _ack_response(redis, message_id)
+                    continue
 
-                    # Use attribute access for the Pydantic model
-                    chat_id = user.telegram_id
-                    if not chat_id:
-                        # This should not happen if user object is valid, but keep check
-                        logger.error(
-                            "No telegram_id in user data object", user_id=user_id
-                        )
-                        continue
+                chat_id = user.telegram_id
+                if not chat_id:
+                    logger.error("No telegram_id in user data object", user_id=user_id)
+                    await _ack_response(redis, message_id)
+                    continue
 
-                    # Check response status using model attribute
-                    if response_message.status == "error":
-                        error_message = (
-                            response_message.error or "Произошла неизвестная ошибка"
+                if response_message.status == "error":
+                    error_message = (
+                        response_message.error or "Произошла неизвестная ошибка"
+                    )
+                    logger.error(
+                        "Error received in assistant response",
+                        error=error_message,
+                        user_id=user_id,
+                        source=response_message.source,
+                    )
+                    await telegram.send_message(
+                        chat_id=chat_id,
+                        text=f"Извините, произошла ошибка: {error_message}",
+                    )
+                else:
+                    response_text = response_message.response
+                    if response_text:
+                        await telegram.send_message(
+                            chat_id=chat_id,
+                            text=response_text,
                         )
-                        logger.error(
-                            "Error received in assistant response",
-                            error=error_message,
+                        logger.info(
+                            "Sent successful response to user",
+                            user_id=user_id,
+                            message_preview=response_text[:100],
+                            source=response_message.source,
+                        )
+                    else:
+                        logger.warning(
+                            "Empty successful response from assistant",
                             user_id=user_id,
                             source=response_message.source,
                         )
-                        # Send error message to user
-                        await telegram.send_message(
-                            chat_id=chat_id,
-                            text=f"Извините, произошла ошибка: {error_message}",
-                        )
-                    else:
-                        # Send successful response to user using model attribute
-                        response_text = response_message.response
-                        if response_text:
-                            await telegram.send_message(
-                                chat_id=chat_id,
-                                text=response_text,
-                                # parse_mode="Markdown",
-                            )
-
-                            logger.info(
-                                "Sent successful response to user",
-                                user_id=user_id,
-                                message_preview=response_text[:100],
-                                source=response_message.source,
-                            )
-                        else:
-                            logger.warning(
-                                "Empty successful response from assistant",
-                                user_id=user_id,
-                                source=response_message.source,
-                            )
+                await _ack_response(redis, message_id)
 
             except json.JSONDecodeError as e:  # Should be caught by ValidationError now
                 logger.error(
@@ -123,3 +119,76 @@ async def handle_assistant_responses(
 
             # Small delay to prevent tight loop
             await asyncio.sleep(0.1)
+
+
+async def _ensure_output_group(redis: aioredis.Redis) -> None:
+    try:
+        await redis.xgroup_create(
+            name=settings.assistant_output_queue,
+            groupname=settings.output_stream_group,
+            id="0",
+            mkstream=True,
+        )
+        logger.info(
+            "Created consumer group for assistant responses",
+            stream=settings.assistant_output_queue,
+            group=settings.output_stream_group,
+        )
+    except ResponseError as exc:
+        if "BUSYGROUP" not in str(exc):
+            raise
+
+
+async def _read_next_response(
+    redis: aioredis.Redis,
+) -> tuple[str | None, bytes | None]:
+    entries = await redis.xreadgroup(
+        groupname=settings.output_stream_group,
+        consumername=settings.stream_consumer,
+        streams={settings.assistant_output_queue: ">"},
+        count=1,
+        block=1000,
+    )
+    if entries:
+        _, messages = entries[0]
+        if messages:
+            message_id, fields = messages[0]
+            payload = fields.get("payload")
+            if payload:
+                return message_id, payload if isinstance(payload, bytes) else str(
+                    payload
+                ).encode()
+
+    # Reclaim stale pending
+    _start, claimed, _ = await redis.xautoclaim(
+        name=settings.assistant_output_queue,
+        groupname=settings.output_stream_group,
+        consumername=settings.stream_consumer,
+        min_idle_time=60_000,
+        start_id="0-0",
+        count=1,
+    )
+    if claimed:
+        message_id, fields = claimed[0]
+        payload = fields.get("payload")
+        if payload:
+            return message_id, payload if isinstance(payload, bytes) else str(
+                payload
+            ).encode()
+    return None, None
+
+
+async def _ack_response(redis: aioredis.Redis, message_id: str) -> None:
+    try:
+        await redis.xack(
+            settings.assistant_output_queue,
+            settings.output_stream_group,
+            message_id,
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to ACK response message",
+            error=str(exc),
+            message_id=message_id,
+            stream=settings.assistant_output_queue,
+        )

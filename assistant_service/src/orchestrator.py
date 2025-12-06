@@ -11,6 +11,7 @@ from assistants.base_assistant import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.logger import get_logger
 from config.settings import Settings
+from services.redis_stream import RedisStreamClient
 from services.rest_service import RestServiceClient
 
 logger = get_logger(__name__)
@@ -30,6 +31,18 @@ class AssistantOrchestrator:
         self.settings = settings
         self.rest_client = RestServiceClient()
         self.factory = AssistantFactory(settings)
+        self.input_stream = RedisStreamClient(
+            client=self.redis,
+            stream=settings.INPUT_QUEUE,
+            group=settings.INPUT_STREAM_GROUP,
+            consumer=settings.STREAM_CONSUMER,
+        )
+        self.output_stream = RedisStreamClient(
+            client=self.redis,
+            stream=settings.OUTPUT_QUEUE,
+            group=settings.OUTPUT_STREAM_GROUP,
+            consumer=settings.STREAM_CONSUMER,
+        )
 
         logger.info(
             "Assistant service initialized",
@@ -263,6 +276,8 @@ class AssistantOrchestrator:
 
     async def listen_for_messages(self):
         """Listen for messages/triggers from Redis and dispatch."""
+        await self.input_stream.ensure_group()
+        await self.output_stream.ensure_group()
         logger.info(
             "Starting message listener",
             input_queue=self.settings.INPUT_QUEUE,
@@ -270,24 +285,32 @@ class AssistantOrchestrator:
         )
         while True:
             raw_message_bytes = None
-            response_payload = None  # Initialize response_payload here
-            event_object: QueueMessage | QueueTrigger | None = (
-                None  # To hold parsed object
-            )
+            response_payload = None
+            event_object: QueueMessage | QueueTrigger | None = None
+            stream_message_id: str | None = None
 
             try:
-                message_data = await self.redis.blpop(
-                    [self.settings.INPUT_QUEUE], timeout=5
-                )
-
-                if not message_data:
+                stream_entry = await self.input_stream.read()
+                if not stream_entry:
                     continue
 
-                _, raw_message_bytes = message_data
-                raw_message_json = raw_message_bytes.decode("utf-8")
-                logger.debug(
-                    "Raw message received (JSON string)",
-                    extra={"message_json_preview": raw_message_json[:200]},
+                stream_message_id, message_fields = stream_entry
+                raw_message_bytes = message_fields.get("payload")
+                if raw_message_bytes is None:
+                    logger.error(
+                        "Stream message missing payload",
+                        extra={
+                            "stream": self.settings.INPUT_QUEUE,
+                            "message_id": stream_message_id,
+                        },
+                    )
+                    await self.input_stream.ack(stream_message_id)
+                    continue
+
+                raw_message_json = (
+                    raw_message_bytes.decode("utf-8")
+                    if isinstance(raw_message_bytes, (bytes, bytearray))
+                    else str(raw_message_bytes)
                 )
 
                 message_dict = json.loads(raw_message_json)
@@ -394,9 +417,7 @@ class AssistantOrchestrator:
                             queue=self.settings.OUTPUT_QUEUE,
                             payload_preview=response_json[:200],
                         )
-                        await self.redis.rpush(
-                            self.settings.OUTPUT_QUEUE, response_json
-                        )
+                        await self.output_stream.add(response_json)
                         logger.info(
                             "Response sent to output queue",
                             user_id=response_payload.get("user_id"),
@@ -427,6 +448,19 @@ class AssistantOrchestrator:
                 )
                 # Avoid tight loop on persistent errors
                 await asyncio.sleep(1)
+            finally:
+                if stream_message_id:
+                    try:
+                        await self.input_stream.ack(stream_message_id)
+                    except Exception as ack_exc:
+                        logger.error(
+                            "Failed to ACK message",
+                            extra={
+                                "stream": self.settings.INPUT_QUEUE,
+                                "message_id": stream_message_id,
+                                "error": str(ack_exc),
+                            },
+                        )
 
     async def close(self):
         """Close Redis connection."""

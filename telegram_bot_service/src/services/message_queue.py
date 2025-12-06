@@ -53,7 +53,10 @@ async def send_message_to_assistant(
         # Consider using a shared Redis client instance if performance becomes an issue
         # For now, create/close connection per message for simplicity
         redis_client = aioredis.from_url(settings.redis_url, **settings.redis_settings)
-        await redis_client.lpush(settings.input_queue, message_json)
+        await redis_client.xadd(
+            settings.input_queue,
+            {"payload": message_json.encode("utf-8")},
+        )
         logger.info(
             "Message successfully sent to assistant queue",
             user_id=user_id,

@@ -60,8 +60,9 @@ class RedisService:
             )
 
             # Push the JSON string (as bytes) to Redis
-            await self.redis.rpush(  # type: ignore[attr-defined]
-                self.settings.REDIS_QUEUE_TO_SECRETARY, message_json
+            await self.redis.xadd(
+                name=self.settings.REDIS_QUEUE_TO_SECRETARY,
+                fields={"payload": message_json.encode("utf-8")},
             )
 
             logger.info("QueueTrigger sent successfully")

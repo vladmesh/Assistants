@@ -110,7 +110,10 @@ def send_reminder_trigger(reminder_data: dict[str, Any]) -> None:
             f"--> ID of redis_client in send_reminder_trigger: {id(redis_client)}"
         )
 
-        redis_client.rpush(OUTPUT_QUEUE, message_json)
+        redis_client.xadd(
+            name=OUTPUT_QUEUE,
+            fields={"payload": message_json.encode("utf-8")},
+        )
 
         logger.info(
             "Reminder trigger event (as QueueTrigger) for %s sent to %s.",
