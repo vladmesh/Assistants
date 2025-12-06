@@ -157,8 +157,8 @@ async def assistant_instance(
 ) -> LangGraphAssistant:
     """Fixture to create an instance of LangGraphAssistant with mocks."""
 
-    # Await the async fixture for the tool factory
-    tool_factory_instance = await mock_tool_factory
+    # mock_tool_factory is already resolved by pytest-asyncio
+    tool_factory_instance = mock_tool_factory
 
     # Create tools using the mocked factory instance
     tool_definitions = [
@@ -193,7 +193,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_initialization(assistant_instance: LangGraphAssistant):
     """Test if the LangGraphAssistant initializes correctly."""
-    instance = await assistant_instance
+    instance = assistant_instance
     assert isinstance(instance, LangGraphAssistant)
     assert instance.llm is not None
     assert isinstance(instance.llm, MockChatLLM)
@@ -208,7 +208,7 @@ async def test_initialization(assistant_instance: LangGraphAssistant):
 
 async def test_process_message_simple_response(assistant_instance: LangGraphAssistant):
     """Test processing a simple message expecting a direct LLM response."""
-    instance = await assistant_instance
+    instance = assistant_instance
     user_id = instance.user_id
 
     # Arrange: Input message
@@ -227,7 +227,7 @@ async def test_process_message_stateful_memory(
     assistant_instance: LangGraphAssistant,
 ):
     """Assistant remembers context across messages using the checkpointer."""
-    instance = await assistant_instance
+    instance = assistant_instance
     user_id = instance.user_id
 
     # Arrange: First message

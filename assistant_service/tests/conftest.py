@@ -1,3 +1,6 @@
+# tests/conftest.py
+"""Root pytest configuration."""
+
 from pathlib import Path
 
 import pytest

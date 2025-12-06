@@ -1,3 +1,6 @@
+# tests/unit/conftest.py
+"""Pytest configuration for unit tests."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -10,6 +13,7 @@ def mock_settings():
     mock.redis_url = "redis://mock-redis:6379"
     mock.rest_service_url = "http://mock-rest-service:8000"
     mock.tavily_api_key = "mock_tavily_key"
+    mock.RAG_SERVICE_URL = "http://mock-rag-service:8002"
     # Add other necessary settings attributes here
     return mock
 

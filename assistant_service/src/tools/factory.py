@@ -10,6 +10,9 @@ from config.settings import Settings
 # Import shared models
 from tools.calendar_tool import CalendarCreateTool, CalendarListTool
 
+# Memory V2 tools
+from tools.memory_tool import MemorySaveTool, MemorySearchTool
+
 # Updated import for reminder tools
 from tools.reminder_tool import ReminderCreateTool, ReminderDeleteTool, ReminderListTool
 from tools.sub_assistant_tool import SubAssistantTool  # Import SubAssistantTool
@@ -87,6 +90,10 @@ class ToolFactory:
                     tool_class = WebSearchTool
                 elif tool_type == "user_fact":  # Add handling for the new tool type
                     tool_class = UserFactTool
+                elif tool_type == "memory_save":  # Memory V2 - save memories
+                    tool_class = MemorySaveTool
+                elif tool_type == "memory_search":  # Memory V2 - search memories
+                    tool_class = MemorySearchTool
                 elif tool_type == "sub_assistant":
                     if not self.assistant_factory:
                         raise ValueError(
