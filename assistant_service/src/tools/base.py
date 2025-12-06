@@ -1,14 +1,18 @@
 """Base classes for tools"""
 
+from __future__ import annotations
+
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.tools import BaseTool as LangBaseTool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from assistants.base_assistant import BaseAssistant
 from config.settings import Settings
 from utils.error_handler import InvalidInputError, ToolError, ToolExecutionError
+
+if TYPE_CHECKING:
+    from assistants.base_assistant import BaseAssistant
 
 logger = logging.getLogger(__name__)
 

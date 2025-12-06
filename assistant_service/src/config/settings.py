@@ -29,7 +29,16 @@ class Settings(BaseSettings):
     def REST_SERVICE_URL(self) -> str:
         return f"http://{self.REST_SERVICE_HOST}:{self.REST_SERVICE_PORT}"
 
+    # RAG service settings (for Memory V2)
+    RAG_SERVICE_HOST: str = "rag_service"  # Docker service name
+    RAG_SERVICE_PORT: int = 8002
+
+    @property
+    def RAG_SERVICE_URL(self) -> str:
+        return f"http://{self.RAG_SERVICE_HOST}:{self.RAG_SERVICE_PORT}"
+
     # Queue names
+
     INPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_SECRETARY")
     OUTPUT_QUEUE: str = os.getenv("REDIS_QUEUE_TO_TELEGRAM")
 
