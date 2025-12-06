@@ -78,6 +78,7 @@ build-test-base:
 
 test-unit:
 ifeq ($(SERVICE),all)
+	@docker image inspect assistants-test-base:latest >/dev/null 2>&1 || $(MAKE) build-test-base
 	@echo "Running unit tests for all services..."
 	@for s in $(SERVICES); do \
 		echo ""; \
@@ -85,6 +86,7 @@ ifeq ($(SERVICE),all)
 		SERVICE=$$s docker compose -f docker-compose.unit-test.yml run --rm unit-test || exit 1; \
 	done
 else
+	@docker image inspect assistants-test-base:latest >/dev/null 2>&1 || $(MAKE) build-test-base
 	@echo "=== Unit tests: $(SERVICE) ==="
 	@SERVICE=$(SERVICE) docker compose -f docker-compose.unit-test.yml run --rm unit-test
 endif
