@@ -65,7 +65,8 @@ test-%:
 
 # Migrations for rest_service (manage.py removed; adjust when new command available)
 migrate:
-	@echo "manage.py removed; add migration command implementation"
+	@if [ -z "$(MESSAGE)" ]; then echo "MESSAGE is required. Usage: make migrate MESSAGE='your message'"; exit 1; fi
+	@docker compose exec --user $$(id -u):$$(id -g) rest_service alembic revision --autogenerate -m "$(MESSAGE)"
 
 upgrade:
 	@echo "manage.py removed; add upgrade command implementation"

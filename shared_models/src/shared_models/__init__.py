@@ -4,9 +4,20 @@
 # from .api_models import UserSecretaryAssignment
 
 # Import the entire api_schemas module
-from . import api_schemas
+# from . import api_schemas # This line is replaced by specific imports below
 
 # Import all enums
+# Import specific API schemas
+from .api_schemas import (
+    AssistantCreate,
+    AssistantRead,
+    AssistantUpdate,
+    ToolCreate,
+    ToolRead,
+)
+
+# Import Memory schemas
+from .api_schemas.memory import MemoryCreate, MemoryRead, MemoryUpdate
 from .enums import AssistantType, ReminderStatus, ReminderType, ToolType
 
 # Import remaining queue models

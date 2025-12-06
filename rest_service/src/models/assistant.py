@@ -64,10 +64,11 @@ class Assistant(BaseModel, table=True):
     )
     user_summaries: list["UserSummary"] = Relationship(back_populates="assistant")
     reminders: list["Reminder"] = Relationship(
+        back_populates="assistant",
         sa_relationship_kwargs={
             "foreign_keys": "[Reminder.assistant_id]",
             "cascade": "all, delete-orphan",
-        }
+        },
     )
     messages: list["Message"] = Relationship(back_populates="assistant")
 

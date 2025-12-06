@@ -15,6 +15,7 @@ from routers import (  # user_secretary_links, # Removed non-existent router
     calendar,
     checkpoints,  # Import checkpoints from routers
     global_settings,
+    memory,
     messages,  # Добавлен импорт messages
     reminders,
     secretaries,  # Assuming this is also in routers
@@ -88,6 +89,7 @@ app.include_router(
 )  # Добавлен префикс "/api"
 app.include_router(global_settings.router, prefix="/api", tags=["Global Settings"])
 app.include_router(checkpoints.router, prefix="/api")
+app.include_router(memory.router, prefix="/api")
 
 
 @app.get("/health")

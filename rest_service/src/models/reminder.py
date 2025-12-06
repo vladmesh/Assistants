@@ -35,6 +35,7 @@ class Reminder(BaseModel, table=True):
     # Relationships
     user: "TelegramUser" = Relationship(back_populates="reminders")  # noqa: F821
     assistant: "Assistant" = Relationship(
+        back_populates="reminders",
         sa_relationship_kwargs={"foreign_keys": "Reminder.assistant_id"},
     )  # noqa: F821
 
