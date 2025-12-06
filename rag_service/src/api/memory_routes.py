@@ -4,11 +4,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.models.memory_models import (
+from models.memory_models import (
     MemoryCreateRequest,
     MemorySearchQuery,
 )
-from src.services.memory_service import MemoryService
+from services.memory_service import MemoryService
 
 router = APIRouter(prefix="/memories", tags=["memories"])
 

@@ -6,7 +6,7 @@ import httpx
 import structlog
 from openai import OpenAI
 
-from src.config.settings import settings
+from config.settings import settings
 
 logger = structlog.get_logger()
 

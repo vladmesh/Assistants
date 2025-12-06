@@ -1,32 +1,12 @@
 services:
-  rag_service_test:
+  test:
     build:
       context: ..
       dockerfile: rag_service/Dockerfile.test
-    volumes:
-      - .:/app
     environment:
-      - ENVIRONMENT=test
-      - LOG_LEVEL=DEBUG
-      - API_PORT=8002
-      - QDRANT_HOST=qdrant_test
-      - QDRANT_PORT=6333
-      - QDRANT_COLLECTION=rag_data_test
-    depends_on:
-      - qdrant_test
-    networks:
-      - test_network
-
-  qdrant_test:
-    image: qdrant/qdrant:latest
-    volumes:
-      - qdrant_test_data:/qdrant/storage
-    networks:
-      - test_network
-
-volumes:
-  qdrant_test_data:
-
-networks:
-  test_network:
-    driver: bridge
+      - TESTING=1
+      - PYTHONPATH=/src
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    env_file:
+      - ./tests/.env.test

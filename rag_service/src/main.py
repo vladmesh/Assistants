@@ -1,9 +1,9 @@
 import structlog
 from fastapi import FastAPI
 
-from src.api.memory_routes import router as memory_router
-from src.api.routes import router
-from src.config.settings import settings
+from api.memory_routes import router as memory_router
+from api.routes import router
+from config.settings import settings
 
 logger = structlog.get_logger()
 
