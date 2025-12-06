@@ -4,11 +4,12 @@ FROM python:3.11-slim as builder
 WORKDIR /
 
 # Install poetry
-RUN pip install poetry
+RUN pip install --no-cache-dir poetry==1.8.3
 
 # Copy dependency files
 COPY assistant_service/pyproject.toml assistant_service/poetry.lock* ./assistant_service/
-COPY shared_models ./shared_models
+COPY shared_models/pyproject.toml shared_models/poetry.lock* ./shared_models/
+COPY shared_models/src/ ./shared_models/src/
 
 # Configure poetry and install dependencies
 RUN poetry config virtualenvs.create false && \
@@ -35,6 +36,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code
+COPY shared_models/ ./shared_models/
 COPY assistant_service/src/ /src/
 
 CMD ["python", "src/main.py"]

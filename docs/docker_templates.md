@@ -10,11 +10,12 @@ FROM python:3.11-slim as builder
 WORKDIR /
 
 # Install poetry
-RUN pip install poetry
+RUN pip install --no-cache-dir poetry==1.8.3
 
 # Copy dependency files
 COPY service_name/pyproject.toml service_name/poetry.lock* ./service_name/
-COPY shared_models ./shared_models
+COPY shared_models/pyproject.toml shared_models/poetry.lock* ./shared_models/
+COPY shared_models/src/ ./shared_models/src/
 
 # Configure poetry and install dependencies
 RUN poetry config virtualenvs.create false && \
@@ -41,6 +42,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code
+COPY shared_models/ ./shared_models/
 COPY service_name/src/ /src/
 
 # Копирование дополнительных файлов (если есть)
@@ -59,11 +61,12 @@ FROM python:3.11-slim as builder
 WORKDIR /
 
 # Install poetry
-RUN pip install poetry
+RUN pip install --no-cache-dir poetry==1.8.3
 
 # Copy dependency files
 COPY service_name/pyproject.toml service_name/poetry.lock* ./service_name/
-COPY shared_models ./shared_models
+COPY shared_models/pyproject.toml shared_models/poetry.lock* ./shared_models/
+COPY shared_models/src/ ./shared_models/src/
 
 # Configure poetry and install dependencies
 RUN poetry config virtualenvs.create false && \
@@ -91,6 +94,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code and tests
+COPY shared_models/ ./shared_models/
 COPY service_name/src/ /src/
 COPY service_name/tests/ /tests/
 
@@ -177,6 +181,9 @@ volumes:
 ```
 
 ## Чек-лист проверки сервисов
+### Общие
+- [x] В корне есть актуальный `.dockerignore` для всех сборок
+- [x] В Dockerfile порядок: pyproject/lock → shared_models (pyproject+src) → install → код/тесты
 
 ### assistant_service
 - [x] Dockerfile соответствует шаблону
