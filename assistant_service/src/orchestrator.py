@@ -288,6 +288,7 @@ class AssistantOrchestrator:
             response_payload = None
             event_object: QueueMessage | QueueTrigger | None = None
             stream_message_id: str | None = None
+            acked: bool = False
 
             try:
                 stream_entry = await self.input_stream.read()
@@ -305,6 +306,7 @@ class AssistantOrchestrator:
                         },
                     )
                     await self.input_stream.ack(stream_message_id)
+                    acked = True
                     continue
 
                 raw_message_json = (
@@ -449,9 +451,10 @@ class AssistantOrchestrator:
                 # Avoid tight loop on persistent errors
                 await asyncio.sleep(1)
             finally:
-                if stream_message_id:
+                if stream_message_id and not acked:
                     try:
                         await self.input_stream.ack(stream_message_id)
+                        acked = True
                     except Exception as ack_exc:
                         logger.error(
                             "Failed to ACK message",
