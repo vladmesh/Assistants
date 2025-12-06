@@ -32,12 +32,12 @@
 ## Этап 1: Инфраструктура и База Данных
 
 ### 1.1 Обновление Docker Compose
-- [ ] Заменить образ `db` в `docker-compose.yml` на `pgvector/pgvector:pg16`.
-- [ ] Убедиться, что данные не потеряются (volume `postgres_data`).
+- [x] Заменить образ `db` в `docker-compose.yml` на `pgvector/pgvector:pg16`.
+- [x] Убедиться, что данные не потеряются (volume `postgres_data`).
 
 ### 1.2 Обновление зависимостей `rest_service`
-- [ ] Добавить `pgvector` в `pyproject.toml`.
-- [ ] Обновить `alembic` и `sqlalchemy` если нужно.
+- [x] Добавить `pgvector` в `pyproject.toml`.
+- [x] Обновить `alembic` и `sqlalchemy` если нужно.
 
 ### 1.3 Модель `Memory`
 Создать новую модель в `shared_models` (и таблицу в `rest_service`):
@@ -80,7 +80,7 @@ class Memory(BaseModel, table=True):
 ```
 
 ### 1.4 Индексы
-- [ ] Добавить HNSW индекс для поля `embedding` в миграции Alembic:
+- [x] Добавить HNSW индекс для поля `embedding` в миграции Alembic:
   ```python
   op.create_index(
       'ix_memories_embedding',
@@ -97,15 +97,15 @@ class Memory(BaseModel, table=True):
 ## Этап 2: API в REST Service
 
 ### 2.1 CRUD Endpoints
-- [ ] `POST /memories` — создание (принимает text, делает embedding НЕ здесь, а принимает готовый или оставляет null?) 
+- [x] `POST /memories` — создание (принимает text, делает embedding НЕ здесь, а принимает готовый или оставляет null?) 
     *   *Уточнение:* REST сервис тупой. Он принимает `embedding` как список float. Эмбеддинг генерирует тот, кто вызывает (RAG или Assistant).
-- [ ] `GET /memories/{id}`
-- [ ] `PATCH /memories/{id}`
-- [ ] `DELETE /memories/{id}`
-- [ ] `GET /memories/user/{user_id}` — списочный метод с фильтрами.
+- [x] `GET /memories/{id}`
+- [x] `PATCH /memories/{id}`
+- [x] `DELETE /memories/{id}`
+- [x] `GET /memories/user/{user_id}` — списочный метод с фильтрами.
 
 ### 2.2 Search Endpoint
-- [ ] `POST /memories/search`
+- [x] `POST /memories/search`
     - Input: `{ "embedding": [0.1, ...], "limit": 10, "threshold": 0.7, "user_id": 123 }`
     - Logic: SQL query с оператором `<=>` (cosine distance).
     - Output: List of Memories with `score`.
@@ -115,10 +115,10 @@ class Memory(BaseModel, table=True):
 ## Этап 3: Интеграция в RAG Service
 
 ### 3.1 Клиент к REST Service
-- [ ] Обновить клиент в `rag_service` для работы с новыми эндпоинтами `memories`.
+- [x] Обновить клиент в `rag_service` для работы с новыми эндпоинтами `memories`.
 
 ### 3.2 Логика поиска
-- [ ] Реализовать метод `search_relevant_memories(query: str, user_id: int)`:
+- [x] Реализовать метод `search_relevant_memories(query: str, user_id: int)`:
     1. Получить embedding для `query` (OpenAI).
     2. Вызвать `rest_service.search_memories(embedding, user_id)`.
     3. Вернуть результат.
@@ -141,12 +141,12 @@ class Memory(BaseModel, table=True):
 ## Этап 5: Миграция и Зачистка
 
 ### 5.1 Удаление старого
-- [ ] Удалить модели `UserFact` и `UserSummary`.
-- [ ] Удалить соответствующие таблицы в БД.
+- [x] Удалить модели `UserFact` и `UserSummary`.
+- [x] Удалить соответствующие таблицы в БД.
 - **Важно:** Миграция данных не требуется (проект в разработке), просто дропаем старые таблицы.
 
 ### 5.2 Cleanup
-- [ ] Удалить старый код, связанный с Qdrant (если он полностью заменяется) или перенастроить `rag_service` на использование только Postgres.
+- [x] Удалить старый код, связанный с Qdrant (если он полностью заменяется) или перенастроить `rag_service` на использование только Postgres.
     *   *Уточнение:* Qdrant полностью выпиливаем из инфраструктуры.
 
 ---
@@ -168,6 +168,6 @@ class Memory(BaseModel, table=True):
 ---
 
 ## Метрики успеха
-- [ ] `docker-compose up` поднимает базу с pgvector без ошибок.
+- [x] `docker-compose up` поднимает базу с pgvector без ошибок.
 - [ ] Векторный поиск по 1000+ записям работает < 100ms.
 - [ ] Ассистент "помнит" факты, сказанные 50 сообщений назад.
