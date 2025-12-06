@@ -1,0 +1,63 @@
+# Coverage configuration for Smart Assistant project
+# https://coverage.readthedocs.io/en/latest/config.html
+
+[run]
+# Measure branch coverage
+branch = True
+
+# Files/directories to omit from coverage
+omit =
+    */tests/*
+    */test_*
+    */__pycache__/*
+    */migrations/*
+    */alembic/*
+    */.venv/*
+    */venv/*
+    */site-packages/*
+    */conftest.py
+    */setup.py
+
+# Source directories (will be set per-service)
+# source = src
+
+[report]
+# Exclude lines from coverage
+exclude_lines =
+    # Standard pragmas
+    pragma: no cover
+    
+    # Don't complain about missing debug-only code
+    def __repr__
+    def __str__
+    
+    # Don't complain if tests don't hit defensive assertions
+    raise AssertionError
+    raise NotImplementedError
+    
+    # Don't complain if non-runnable code isn't run
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    
+    # Don't complain about abstract methods
+    @abstractmethod
+    
+    # Don't complain about pass statements
+    pass
+
+# Don't fail on missing files
+ignore_errors = True
+
+# Show missing lines in terminal output
+show_missing = True
+
+# Minimum coverage percentage (informational, doesn't fail)
+# fail_under = 0
+
+[html]
+# Directory for HTML report
+directory = coverage_html_report
+
+[xml]
+# Output file for XML report (useful for CI)
+output = coverage.xml

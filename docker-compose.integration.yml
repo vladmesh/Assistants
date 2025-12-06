@@ -1,0 +1,82 @@
+# Integration test environment
+# Usage: 
+#   make test-integration                    # Run all integration tests
+#   make test-integration SERVICE=rest_service  # Run specific service integration tests
+#
+# Provides shared infrastructure: PostgreSQL, Redis
+
+services:
+  # Shared PostgreSQL for services that need it
+  test-db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${TEST_DB_USER:-test_user}
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-testpass123}
+      POSTGRES_DB: ${TEST_DB_NAME:-test_db}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_DB_USER:-test_user} -d ${TEST_DB_NAME:-test_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  # Shared Redis for services that need it
+  test-redis:
+    image: redis:7.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Integration test runner - uses base test image
+  integration-test:
+    image: assistants-test-base:latest
+    volumes:
+      - ./${SERVICE:-rest_service}:/svc
+      - ./shared_models:/shared_models:ro
+      - ./.coveragerc:/svc/.coveragerc:ro
+      - poetry-cache:/root/.cache/pypoetry
+      - test-tmp:/tmp
+    working_dir: /svc
+    environment:
+      - PYTHONPATH=/svc/src:/shared_models/src
+      - TESTING=1
+      - COVERAGE_FILE=/tmp/.coverage
+      # Database
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://${TEST_DB_USER:-test_user}:${TEST_DB_PASSWORD:-testpass123}@test-db:5432/${TEST_DB_NAME:-test_db}
+      - DATABASE_URL=postgresql://${TEST_DB_USER:-test_user}:${TEST_DB_PASSWORD:-testpass123}@test-db:5432/${TEST_DB_NAME:-test_db}
+      # Redis
+      - REDIS_HOST=test-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://test-redis:6379
+      - TEST_REDIS_URL=redis://test-redis:6379
+      - REDIS_DB=0
+      # Queues
+      - INPUT_QUEUE=test_input_queue
+      - OUTPUT_QUEUE=test_output_queue
+      - REDIS_QUEUE_TO_TELEGRAM=queue:to_telegram
+      - REDIS_QUEUE_TO_SECRETARY=queue:to_secretary
+      # Services
+      - REST_SERVICE_URL=http://localhost:8000
+      # Test keys (mocked in tests, use env vars or defaults)
+      - OPENAI_API_KEY=${TEST_OPENAI_KEY:-test-openai-key-placeholder}
+      - TELEGRAM_BOT_TOKEN=${TEST_TELEGRAM_TOKEN:-test-telegram-token}
+      - TELEGRAM_TOKEN=${TEST_TELEGRAM_TOKEN:-test-telegram-token}
+    depends_on:
+      test-db:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    command: >
+      bash -c "
+        poetry config virtualenvs.create false &&
+        poetry install --only main,test --no-interaction --no-ansi 2>/dev/null || true;
+        pytest tests/integration/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing 2>/dev/null ||
+        pytest tests/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing
+      "
+
+volumes:
+  poetry-cache:
+  test-tmp:
