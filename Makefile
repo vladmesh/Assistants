@@ -98,13 +98,17 @@ ifeq ($(SERVICE),all)
 	@for s in $(INTEGRATION_SERVICES); do \
 		echo ""; \
 		echo "=== Integration tests: $$s ==="; \
-		SERVICE=$$s docker compose -f docker-compose.integration.yml run --rm integration-test || { docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true; exit 1; }; \
+		STATUS=0; \
+		SERVICE=$$s docker compose -f docker-compose.integration.yml run --rm integration-test || STATUS=$$?; \
 		docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true; \
+		if [ $$STATUS -ne 0 ]; then exit $$STATUS; fi; \
 	done
 else
 	@echo "=== Integration tests: $(SERVICE) ==="
-	@SERVICE=$(SERVICE) docker compose -f docker-compose.integration.yml run --rm integration-test || { docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true; exit 1; }
-	@docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true
+	@STATUS=0; \
+	SERVICE=$(SERVICE) docker compose -f docker-compose.integration.yml run --rm integration-test || STATUS=$$?; \
+	docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true; \
+	if [ $$STATUS -ne 0 ]; then exit $$STATUS; fi
 endif
 
 # Run all tests (unit + integration) with coverage summary
