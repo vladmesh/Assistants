@@ -9,6 +9,7 @@ from .base import BaseModel
 from .calendar import CalendarCredentials
 from .checkpoint import Checkpoint
 from .global_settings import GlobalSettings
+from .memory import Memory
 from .message import Message
 
 # from .cron import (
@@ -42,4 +43,5 @@ __all__ = [
     "UserFact",
     "GlobalSettings",
     "Message",
+    "Memory",
 ]

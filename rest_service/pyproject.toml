@@ -26,6 +26,7 @@ structlog = ">=24.1.0"
 pydantic = "^2.6.1"
 trio = "^0.24.0"
 alembic = "^1.13.1"
+pgvector = "^0.2.5"
 shared-models = {path = "../shared_models"}
 
 [tool.poetry.group.dev.dependencies]
