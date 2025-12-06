@@ -4,8 +4,8 @@ import structlog
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
-from src.config.settings import settings
-from src.models.rag_models import RagData, SearchResult
+from config.settings import settings
+from models.rag_models import RagData, SearchResult
 
 logger = structlog.get_logger()
 

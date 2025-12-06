@@ -36,9 +36,11 @@ RUN apt-get update && \
 COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
-# Copy application code and tests
+# Copy application code, tests, and pyproject.toml for pytest config
 COPY shared_models/ ./shared_models/
 COPY rag_service/src/ /src/
 COPY rag_service/tests/ /tests/
+COPY rag_service/pyproject.toml /pyproject.toml
 
-CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"]
+# Run pytest from root where pyproject.toml is
+CMD ["pytest", "-v", "--cache-clear", "--cov=/src", "--cov-report=term-missing", "/tests/"]

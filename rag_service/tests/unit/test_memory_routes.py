@@ -5,7 +5,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from src.main import app
+
+from main import app
 
 client = TestClient(app)
 
@@ -13,7 +14,7 @@ client = TestClient(app)
 @pytest.fixture
 def mock_memory_service():
     """Mock MemoryService for route tests."""
-    with patch("src.api.memory_routes.MemoryService") as mock:
+    with patch("api.memory_routes.MemoryService") as mock:
         mock_instance = AsyncMock()
         mock.return_value = mock_instance
         yield mock_instance

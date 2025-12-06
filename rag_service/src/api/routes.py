@@ -2,8 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.models.rag_models import RagData, SearchQuery, SearchResult
-from src.services.vector_db_service import VectorDBService
+from models.rag_models import RagData, SearchQuery, SearchResult
+from services.vector_db_service import VectorDBService
 
 router = APIRouter()
 

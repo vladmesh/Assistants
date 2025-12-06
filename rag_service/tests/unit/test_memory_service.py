@@ -5,13 +5,14 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from src.services.memory_service import MemoryService
+
+from services.memory_service import MemoryService
 
 
 @pytest.fixture
 def mock_openai_client():
     """Mock OpenAI client for embedding generation."""
-    with patch("src.services.memory_service.OpenAI") as mock:
+    with patch("services.memory_service.OpenAI") as mock:
         mock_instance = MagicMock()
         mock_embedding = MagicMock()
         mock_embedding.embedding = [0.1] * 1536
