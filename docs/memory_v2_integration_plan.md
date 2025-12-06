@@ -657,12 +657,14 @@ class BatchJob(BaseModel, table=True):
 - [ ] Проверить end-to-end flow
 - [ ] Тюнинг threshold и limit параметров
 
-### Фаза 5: Batch Extraction Infrastructure (отложено)
-- [ ] Добавить модель BatchJob
-- [ ] Создать MemoryExtractionJob в cron_service
-- [ ] Реализовать job для извлечения фактов
-- [ ] Реализовать job для обработки результатов
+### Фаза 5: Batch Extraction Infrastructure (частично)
+- [ ] Добавить модель BatchJob в rest_service
+- [x] Создать MemoryExtractionJob в cron_service (stub)
+- [ ] Реализовать REST endpoint для получения диалогов
+- [ ] Реализовать job для извлечения фактов (интеграция с LLMProvider)
+- [ ] Реализовать job для обработки результатов batch
 - [ ] Добавить семантическую дедупликацию
+- [ ] Интегрировать job в scheduler
 
 ---
 
