@@ -1,6 +1,7 @@
 import structlog
 from fastapi import FastAPI
 
+from src.api.memory_routes import router as memory_router
 from src.api.routes import router
 from src.config.settings import settings
 
@@ -13,6 +14,7 @@ app = FastAPI(
 )
 
 app.include_router(router, prefix="/api", tags=["RAG Data"])
+app.include_router(memory_router, prefix="/api", tags=["Memory"])
 
 
 @app.on_event("startup")
