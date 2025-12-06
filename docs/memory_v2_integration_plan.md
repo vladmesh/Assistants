@@ -643,35 +643,32 @@ class BatchJob(BaseModel, table=True):
 - [x] Обновить схемы в shared_models
 - [x] Создать Alembic миграцию для новых полей
 - [x] Создать LLMProvider protocol и реализации (OpenAI)
-- [ ] Обновить UI в админке для новых настроек (отложено)
 
-### Фаза 3: Memory Retrieve (1 день)
-- [ ] Создать узел `retrieve_memories`
-- [ ] Обновить AssistantState
-- [ ] Интегрировать в граф
-- [ ] Обновить system prompt template
-- [ ] Использовать настройки из GlobalSettings
+### Фаза 3: Memory Retrieve (1 день) ✅ DONE
+- [x] Создать узел `retrieve_memories`
+- [x] Обновить AssistantState (уже есть `relevant_memories`)
+- [x] Интегрировать в граф (после load_context, перед assistant)
+- [x] Обновить system prompt template (уже поддерживает `{memories}`)
+- [x] Использовать настройки из GlobalSettings (retrieve_limit, threshold)
+- [x] Обновить UI в админке для новых GlobalSettings полей
 
-### Фаза 4: Batch Extraction Infrastructure (2-3 дня)
+### Фаза 4: Testing & Polish (1 день)
+- [ ] Интеграционные тесты для retrieve_memories
+- [ ] Проверить end-to-end flow
+- [ ] Тюнинг threshold и limit параметров
+
+### Фаза 5: Batch Extraction Infrastructure (отложено)
 - [ ] Добавить модель BatchJob
 - [ ] Создать MemoryExtractionJob в cron_service
 - [ ] Реализовать job для извлечения фактов
 - [ ] Реализовать job для обработки результатов
 - [ ] Добавить семантическую дедупликацию
 
-### Фаза 5: Testing & Polish (1 день)
-- [ ] Интеграционные тесты
-- [ ] Нагрузочное тестирование векторного поиска
-- [ ] Тюнинг threshold и limit параметров
-
 ---
 
 ## Открытые вопросы
 
-1. **Retention policy**: Как долго хранить memories? Нужен ли decay?
-   - Вариант: `max_memories_per_user` в GlobalSettings + удаление старых по importance
-
-2. **Приватность**: Нужно ли шифрование memories?
+1. **Приватность**: Нужно ли шифрование memories?
 
 ---
 
@@ -680,3 +677,4 @@ class BatchJob(BaseModel, table=True):
 1. ~~**Batch API provider**~~: Provider-agnostic, настраивается в GlobalSettings
 2. ~~**Частота batch extraction**~~: Настраивается в GlobalSettings (`memory_extraction_interval_hours`)
 3. ~~**Конфликты фактов**~~: Семантический поиск близких + обновление существующих
+4. ~~**Retention policy**~~: Хранить memories вечно (без decay)

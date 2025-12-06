@@ -16,6 +16,7 @@ from assistants.langgraph.state import AssistantState
 from assistants.langgraph.utils.logging_utils import log_messages_to_file
 from assistants.langgraph.utils.token_counter import count_tokens
 from config.settings import settings
+from services.rag_service import RagServiceClient
 from services.rest_service import RestServiceClient
 from utils.error_handler import AssistantError, MessageProcessingError
 
@@ -33,6 +34,7 @@ class LangGraphAssistant(BaseAssistant):
     agent_runnable: Any
     tools: list[Tool]
     rest_client: RestServiceClient
+    rag_client: RagServiceClient
     llm: ChatOpenAI
 
     # --- NEW: Shared Cache Object and Template --- #
@@ -50,6 +52,9 @@ class LangGraphAssistant(BaseAssistant):
         rest_client: RestServiceClient,  # Add rest_client parameter
         summarization_prompt: str,
         context_window_size: int,
+        # Memory V2 settings
+        memory_retrieve_limit: int = 5,
+        memory_retrieve_threshold: float = 0.6,
         **kwargs,
     ):
         """
@@ -93,6 +98,12 @@ class LangGraphAssistant(BaseAssistant):
         self.context_window_size = context_window_size
         # --------------------------------- #
 
+        # --- Memory V2 Parameters --- #
+        self.memory_retrieve_limit = memory_retrieve_limit
+        self.memory_retrieve_threshold = memory_retrieve_threshold
+        self.rag_client = RagServiceClient(settings=settings)
+        # ----------------------------- #
+
         try:
             # 1. Initialize LLM
             self.llm = self._initialize_llm()
@@ -114,12 +125,17 @@ class LangGraphAssistant(BaseAssistant):
                 summary_llm=self.llm,
                 # REST client needed for summary node SAVE logic
                 rest_client=self.rest_client,
+                # RAG client for Memory V2 retrieval
+                rag_client=self.rag_client,
                 prompt_context_cache=self.prompt_context_cache,
                 system_prompt_template=self.system_prompt_template,
                 agent_runnable=self.agent_runnable,
                 timeout=self.timeout,
                 summarization_prompt=self.summarization_prompt,
                 context_window_size=self.context_window_size,
+                # Memory V2 settings
+                memory_retrieve_limit=self.memory_retrieve_limit,
+                memory_retrieve_threshold=self.memory_retrieve_threshold,
             )
 
             logger.info(
@@ -356,11 +372,16 @@ class LangGraphAssistant(BaseAssistant):
             ) from e
 
     async def close(self):
-        """Cleans up resources, like closing the REST client session."""
+        """Cleans up resources, like closing the REST and RAG client sessions."""
         if self.rest_client:
             await self.rest_client.close_session()
             logger.info(
                 "REST client session closed.", extra={"assistant_id": self.assistant_id}
+            )
+        if self.rag_client:
+            await self.rag_client.close()
+            logger.info(
+                "RAG client session closed.", extra={"assistant_id": self.assistant_id}
             )
 
     # Add __aenter__ and __aexit__ for async context management

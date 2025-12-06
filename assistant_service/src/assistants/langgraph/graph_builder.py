@@ -18,6 +18,7 @@ from assistants.langgraph.nodes.finalize_processing import finalize_processing_n
 
 # Import new nodes
 from assistants.langgraph.nodes.load_context import load_context_node
+from assistants.langgraph.nodes.retrieve_memories import retrieve_memories_node
 from assistants.langgraph.nodes.run_assistant import run_assistant_node
 from assistants.langgraph.nodes.save_message import save_input_message_node
 from assistants.langgraph.nodes.save_response import save_response_node
@@ -31,6 +32,7 @@ from assistants.langgraph.prompt_context_cache import PromptContextCache
 
 # Project specific imports
 from assistants.langgraph.state import AssistantState
+from services.rag_service import RagServiceClient
 from services.rest_service import RestServiceClient
 
 logger = logging.getLogger(__name__)
@@ -56,23 +58,27 @@ def build_full_graph(
     tools: list[BaseTool],
     summary_llm: BaseChatModel,
     rest_client: RestServiceClient,
+    rag_client: RagServiceClient,
     prompt_context_cache: PromptContextCache,
     system_prompt_template: str,
     agent_runnable: Runnable,
     summarization_prompt: str,
     context_window_size: int,
+    memory_retrieve_limit: int = 5,
+    memory_retrieve_threshold: float = 0.6,
     timeout: int = 30,
 ) -> CompiledGraph:
     """Builds the complete LangGraph state machine with database persistence.
 
     Flow:
     1. save_input - Save the incoming message to the database
-    2. load_context - Load existing context (history, summary, facts)
-    3. Conditional summarization if needed
-    4. Main agent execution
-    5. Tool execution if needed
-    6. Save response to database
-    7. Finalize processing (update message statuses, etc.)
+    2. load_context - Load existing context (history, summary)
+    3. retrieve_memories - Retrieve relevant memories from RAG (Memory V2)
+    4. Conditional summarization if needed
+    5. Main agent execution
+    6. Tool execution if needed
+    7. Save response to database
+    8. Finalize processing (update message statuses, etc.)
     """
     logger.debug(
         f"Building graph with: tools={len(tools)}, "
@@ -97,7 +103,16 @@ def build_full_graph(
     )
     builder.add_node("load_context", bound_load_context_node)
 
-    # 3. summarize: Node to summarize history and save via REST
+    # 3. retrieve_memories: Node to retrieve relevant memories from RAG service
+    bound_retrieve_memories_node = functools.partial(
+        retrieve_memories_node,
+        rag_client=rag_client,
+        limit=memory_retrieve_limit,
+        threshold=memory_retrieve_threshold,
+    )
+    builder.add_node("retrieve_memories", bound_retrieve_memories_node)
+
+    # 4. summarize: Node to summarize history and save via REST
     bound_summarize_node = functools.partial(
         summarize_history_node,
         summary_llm=summary_llm,
@@ -106,23 +121,23 @@ def build_full_graph(
     )
     builder.add_node("summarize", bound_summarize_node)
 
-    # 4. run_assistant: The core node running the agent logic (LLM call)
+    # 5. run_assistant: The core node running the agent logic (LLM call)
     bound_run_assistant_node = functools.partial(
         run_assistant_node, agent_runnable=agent_runnable, timeout=timeout
     )
     builder.add_node("assistant", bound_run_assistant_node)
 
-    # 5. tools: Node that executes tools chosen by the assistant
+    # 6. tools: Node that executes tools chosen by the assistant
     builder.add_node("tools", ToolNode(tools=tools))
 
-    # 6. save_response: Node to save the assistant's response to the database
+    # 7. save_response: Node to save the assistant's response to the database
     bound_save_response_node = functools.partial(
         save_response_node,
         rest_client=rest_client,
     )
     builder.add_node("save_response", bound_save_response_node)
 
-    # 7. finalize_processing: Node to finalize processing
+    # 8. finalize_processing: Node to finalize processing
     #    (update message statuses, etc.)
     bound_finalize_node = functools.partial(
         finalize_processing_node,
@@ -145,9 +160,12 @@ def build_full_graph(
     # Then load the context
     builder.add_edge("save_input", "load_context")
 
-    # After loading context, check if we need to summarize
+    # After loading context, retrieve relevant memories
+    builder.add_edge("load_context", "retrieve_memories")
+
+    # After retrieving memories, check if we need to summarize
     builder.add_conditional_edges(
-        "load_context",
+        "retrieve_memories",
         bound_should_summarize_condition,
         {
             "summarize": "summarize",
