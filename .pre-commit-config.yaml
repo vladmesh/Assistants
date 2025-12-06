@@ -7,9 +7,9 @@ repos:
         language: system
         stages: [commit]
         pass_filenames: false
-      - id: make-lint-test
-        name: make lint && make test
-        entry: bash -c "make lint && make test"
+      - id: make-lint-test-unit
+        name: make lint && make test-unit
+        entry: bash -c "make lint && make test-unit"
         language: system
         stages: [push]
         always_run: true

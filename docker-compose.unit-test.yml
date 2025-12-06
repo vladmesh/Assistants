@@ -1,0 +1,36 @@
+# Unit test runner - uses base image with pytest + shared_models
+# Usage: SERVICE=rest_service docker compose -f docker-compose.unit-test.yml run --rm unit-test
+#
+# The base image must be built first:
+#   docker build -f Dockerfile.test-base -t assistants-test-base .
+
+services:
+  unit-test:
+    image: assistants-test-base:latest
+    volumes:
+      - ./${SERVICE:-rest_service}:/svc
+      - ./.coveragerc:/svc/.coveragerc:ro
+      - poetry-cache:/root/.cache/pypoetry
+      - test-tmp:/tmp
+    working_dir: /svc
+    env_file:
+      - ./${SERVICE:-rest_service}/tests/.env.test
+    environment:
+      - PYTHONPATH=/svc/src:/shared_models/src
+      - TESTING=1
+      - COVERAGE_FILE=/tmp/.coverage
+      - INPUT_QUEUE=test_input_queue
+      - OUTPUT_QUEUE=test_output_queue
+      - REST_SERVICE_URL=http://localhost:8000
+      - REDIS_URL=redis://localhost:6379
+    command: >
+      bash -c "
+        poetry config virtualenvs.create false &&
+        poetry install --only main,test --no-interaction --no-ansi 2>/dev/null || true;
+        pytest tests/unit/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing 2>/dev/null ||
+        pytest tests/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing
+      "
+
+volumes:
+  poetry-cache:
+  test-tmp:

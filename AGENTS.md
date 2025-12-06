@@ -186,18 +186,36 @@ The project implements a comprehensive testing strategy with the following compo
 Tests are executed using Docker containers for isolation and consistency:
 
 ```bash
-# Run all tests
-make test
+# Build base test image (required once, or after shared_models changes)
+make build-test-base
 
-# Run tests for specific services
+# Run unit tests (fast, no DB/Redis required)
+make test-unit SERVICE=assistant_service
+make test-unit SERVICE=cron_service
+make test-unit SERVICE=shared_models
+make test-unit  # all services
+
+# Run integration tests (legacy, uses docker-compose.test.yml per service)
 make test SERVICE=rest_service
 make test SERVICE=assistant_service
+make test  # all services
 
 # Available services: rest_service, cron_service, telegram_bot_service,
-# assistant_service, google_calendar_service, rag_service, shared_models
+# assistant_service, google_calendar_service, rag_service, admin_service, shared_models
 ```
 
 ### Test Environment
+
+**Unit Tests (new approach):**
+
+Uses a single base image (`assistants-test-base`) with pytest and shared_models pre-installed. Service-specific dependencies are installed at runtime via poetry.
+
+- **Docker Configuration:**
+  - `Dockerfile.test-base` - Base test image with pytest + shared_models
+  - `docker-compose.unit-test.yml` - Unit test runner (mounts service code)
+  - No DB/Redis required for unit tests
+
+**Integration Tests (per service):**
 
 Each service has its own test environment:
 
