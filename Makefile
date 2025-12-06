@@ -98,12 +98,12 @@ ifeq ($(SERVICE),all)
 	@for s in $(INTEGRATION_SERVICES); do \
 		echo ""; \
 		echo "=== Integration tests: $$s ==="; \
-		SERVICE=$$s docker compose -f docker-compose.integration.yml run --rm integration-test; \
+		SERVICE=$$s docker compose -f docker-compose.integration.yml run --rm integration-test || { docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true; exit 1; }; \
 		docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true; \
 	done
 else
 	@echo "=== Integration tests: $(SERVICE) ==="
-	@SERVICE=$(SERVICE) docker compose -f docker-compose.integration.yml run --rm integration-test
+	@SERVICE=$(SERVICE) docker compose -f docker-compose.integration.yml run --rm integration-test || { docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true; exit 1; }
 	@docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true
 endif
 
