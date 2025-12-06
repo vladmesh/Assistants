@@ -5,9 +5,6 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-
-# Import Pydantic models used for response parsing
-# Use schemas from shared_models.api_schemas instead of old models
 from shared_models.api_schemas import (
     AssistantRead,
     GlobalSettingsBase,
@@ -16,13 +13,8 @@ from shared_models.api_schemas import (
     TelegramUserRead,
     ToolRead,
     UserSecretaryLinkRead,
-    UserSummaryCreateUpdate,
-    UserSummaryRead,
 )
-
-# Import new message models
 from shared_models.api_schemas.message import MessageCreate, MessageRead, MessageUpdate
-from shared_models.api_schemas.user_fact import UserFactRead
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -450,125 +442,7 @@ class RestServiceClient:
         """Fetch all active user-secretary assignments."""
         f"{self.base_url}/api/user-secretaries/assignments"
 
-    async def get_user_facts(self, user_id: int) -> list[UserFactRead]:
-        """Get facts for a specific user.
-
-        Args:
-            user_id: The ID of the user.
-
-        Returns:
-            A list of fact strings.
-
-        Raises:
-            RestServiceError: If the request fails or returns unexpected data.
-        """
-        try:
-            # Use the _request helper
-            data = await self._request("GET", f"/api/users/{user_id}/facts")
-
-            # Ensure data is a list before processing
-            if isinstance(data, list):
-                # Parse each item using UserFactRead and extract the 'fact' string
-                facts_list: list[UserFactRead] = [UserFactRead(**item) for item in data]
-                fact_strings: list[str] = [fact_obj.fact for fact_obj in facts_list]
-                logger.debug(
-                    f"Successfully parsed {len(fact_strings)} facts for user {user_id}."
-                )
-                return facts_list
-            else:
-                logger.error(
-                    f"Received unexpected data format for user facts: {type(data)}",
-                    user_id=user_id,
-                    data_received=data,
-                )
-                # Raise an error or return empty list? Raising for clarity.
-                raise RestServiceError(
-                    f"Unexpected data format received for user facts: {type(data)}"
-                )
-
-        except RestServiceError as e:
-            # Log the specific error for this operation
-            logger.error(f"Failed to get facts for user {user_id}: {e}", exc_info=True)
-            # Handle 404 specifically if needed (user not found or no facts)
-            if "404" in str(e):
-                logger.warning(f"User {user_id} not found or has no facts.")
-                return []  # Return empty list if user/facts not found
-            # For other errors, re-raise to indicate a problem
-            raise e
-        except Exception as e:
-            # Catch any other unexpected errors during processing/parsing
-            logger.exception(
-                f"Unexpected error getting facts for user {user_id}: {e}",
-                exc_info=True,
-            )
-            raise RestServiceError(
-                f"Unexpected error processing facts for user {user_id}"
-            ) from e
-
-    async def get_user_summary(
-        self, user_id: int, secretary_id: UUID
-    ) -> UserSummaryRead | None:
-        """Gets the latest summary for a user-secretary pair from the API.
-
-        Args:
-            user_id: The user ID
-            secretary_id: The secretary ID
-
-        Returns:
-            The summary if found, None otherwise
-        """
-        # Format the secretary_id if it's a UUID object
-        try:
-            secretary_id_str = str(secretary_id)
-        except Exception as e:
-            logger.error(f"Invalid secretary_id format: {e}")
-            return None
-
-        try:
-            data = await self._request(
-                "GET",
-                "/api/user-summaries/latest/",
-                params={"user_id": user_id, "assistant_id": secretary_id_str},
-            )
-            # Check if data is empty
-            if not data:
-                logger.info(
-                    f"No summary found for user {user_id}, secretary {secretary_id_str}"
-                )
-                return None
-            return UserSummaryRead(**data)  # Parse as Pydantic model
-        except RestServiceError as e:
-            logger.warning(
-                f"Error getting user summary for {user_id}, {secretary_id_str}: {e}"
-            )
-            return None
-
-    async def create_user_summary(
-        self, summary_data: UserSummaryCreateUpdate
-    ) -> UserSummaryRead | None:
-        """Creates a new user summary.
-
-        Args:
-            summary_data: The summary data to create
-
-        Returns:
-            The created summary if successful, None otherwise
-        """
-        try:
-            data = await self._request(
-                "POST",
-                "/api/user-summaries/",
-                json=summary_data.model_dump(exclude_unset=True, mode="json"),
-            )
-            if not data:
-                logger.warning("Empty response when creating user summary")
-                return None
-            return UserSummaryRead(**data)
-        except RestServiceError as e:
-            logger.error(f"Error creating user summary: {e}")
-            return None
-
-    # New methods for message handling
+    # Message handling methods
 
     async def create_message(self, message_data: MessageCreate) -> MessageRead | None:
         """Creates a new message in the database.

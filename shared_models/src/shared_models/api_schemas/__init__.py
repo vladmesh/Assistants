@@ -29,13 +29,11 @@ from .global_settings import (
 from .message import MessageBase, MessageCreate, MessageRead, MessageUpdate
 from .reminder import ReminderBase, ReminderCreate, ReminderRead, ReminderUpdate
 from .user import TelegramUserCreate, TelegramUserRead, TelegramUserUpdate
-from .user_fact import UserFactBase, UserFactCreate, UserFactRead
 from .user_secretary import (
     UserSecretaryLinkBase,
     UserSecretaryLinkCreate,
     UserSecretaryLinkRead,
 )
-from .user_summary import UserSummaryBase, UserSummaryCreateUpdate, UserSummaryRead
 
 __all__ = [
     # Base
@@ -75,14 +73,6 @@ __all__ = [
     "UserSecretaryLinkBase",
     "UserSecretaryLinkCreate",
     "UserSecretaryLinkRead",
-    # UserFact
-    "UserFactBase",
-    "UserFactCreate",
-    "UserFactRead",
-    # UserSummary
-    "UserSummaryBase",
-    "UserSummaryCreateUpdate",
-    "UserSummaryRead",
     # GlobalSettings
     "GlobalSettingsBase",
     "GlobalSettingsRead",

@@ -15,7 +15,8 @@ class ToolType(str, enum.Enum):
     SUB_ASSISTANT = "sub_assistant"
     WEATHER = "weather"
     WEB_SEARCH = "web_search"
-    USER_FACT = "user_fact"
+    MEMORY_SAVE = "memory_save"
+    MEMORY_SEARCH = "memory_search"
 
 
 # Reminder related enums

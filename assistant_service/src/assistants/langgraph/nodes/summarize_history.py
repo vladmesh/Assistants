@@ -8,7 +8,6 @@ from langchain_core.messages import (
     RemoveMessage,
     SystemMessage,
 )
-from shared_models.api_schemas.user_summary import UserSummaryCreateUpdate
 
 from assistants.langgraph.state import AssistantState
 from assistants.langgraph.utils.token_counter import count_tokens
@@ -49,13 +48,13 @@ def should_summarize(
 
     # --- Estimate Dynamic System Message Tokens ---
     # Use cached data directly, do not fetch here
-    cached_summary = state["current_summary_content"]
-    cached_facts = state["user_facts"]
+    cached_summary = state.get("current_summary_content")
+    cached_memories = state.get("relevant_memories", [])
 
-    facts_str = (
-        "\n".join(f"- {fact}" for fact in cached_facts)
-        if cached_facts
-        else "Нет известных фактов."
+    memories_str = (
+        "\n".join(f"- {m.get('text', '')}" for m in cached_memories)
+        if cached_memories
+        else "Нет сохраненной информации."
     )
     summary_str = (
         cached_summary
@@ -65,7 +64,7 @@ def should_summarize(
 
     try:
         formatted_prompt_content = system_prompt_template.format(
-            summary_previous=summary_str, user_facts=facts_str
+            summary_previous=summary_str, memories=memories_str
         )
         temp_system_message = SystemMessage(content=formatted_prompt_content)
         system_prompt_tokens = count_tokens([temp_system_message])
@@ -210,12 +209,11 @@ async def summarize_history_node(
         )
         return {"messages": []}
 
-    user_id_int: int | None = None
     try:
-        user_id_int = int(user_id_str)
+        int(user_id_str)  # Validate user_id format
     except ValueError:
         logger.error(
-            f"Invalid User ID format '{user_id_str}', cannot save summary.",
+            f"Invalid User ID format '{user_id_str}', cannot process summary.",
             extra=log_extra,
         )
         return {"messages": []}
@@ -256,37 +254,9 @@ async def summarize_history_node(
         logger.error("Failed to generate summary.", extra=log_extra)
         return {"messages": []}
 
-    # --- Save summary to database ---
-    # Find last message in the summarized set to track coverage
-    last_message_id = max(message_ids) if message_ids else None
-
-    token_count = count_tokens([SystemMessage(content=summary_text)])
-
-    # Преобразуем assistant_id в строку, чтобы избежать ошибки сериализации UUID
-    assistant_id_str_safe = str(assistant_id_str)
-
-    summary_data = UserSummaryCreateUpdate(
-        user_id=user_id_int,
-        assistant_id=assistant_id_str_safe,
-        summary_text=summary_text,
-        last_message_id_covered=last_message_id,
-        token_count=token_count,
-    )
-
-    try:
-        await rest_client.create_user_summary(summary_data)
-        logger.info(
-            (
-                "Successfully saved summary "
-                f"(last_message_id={last_message_id}, tokens={token_count})."
-            ),
-            extra=log_extra,
-        )
-    except Exception as e:
-        logger.error(f"Error saving summary: {e}", extra=log_extra)
-        # Continue since we still want to update the state even if save fails
-
     # --- Update state ---
+    # Note: Summary is kept in state only, not persisted to DB
+    # Memory V2 replaces the old UserSummary model
     remove_instructions = [RemoveMessage(msg_id) for msg_id in message_ids]
 
     logger.warning(
