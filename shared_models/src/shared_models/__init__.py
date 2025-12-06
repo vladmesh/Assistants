@@ -1,12 +1,5 @@
 # Import models/schemas that should be accessible directly from shared_models
 
-# Legacy api_models import kept commented for now
-# from .api_models import UserSecretaryAssignment
-
-# Import the entire api_schemas module
-# from . import api_schemas # This line is replaced by specific imports below
-
-# Import all enums
 # Import specific API schemas
 from .api_schemas import (
     AssistantCreate,
@@ -33,6 +26,9 @@ from .queue import (
     TriggerType,
 )
 
+# Note: LLM providers are available via shared_models.llm_providers
+# but not imported at top level to avoid requiring openai in all services
+
 __all__ = [
     # Queue models
     "AssistantResponseMessage",
@@ -44,16 +40,11 @@ __all__ = [
     "QueueTrigger",
     "ToolQueueMessage",
     "TriggerType",
-    # Other API models (UserSecretaryAssignment removed)
-    # "UserSecretaryAssignment",
     # Enums
     "AssistantType",
     "ToolType",
     "ReminderType",
     "ReminderStatus",
-    # All API Schemas (re-exported as a module)
+    # API Schemas
     "api_schemas",
 ]
-
-# If you prefer exporting individual schemas from api_schemas:
-# __all__.extend(api_schemas.__all__)
