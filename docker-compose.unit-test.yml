@@ -27,8 +27,7 @@ services:
       bash -c "
         poetry config virtualenvs.create false &&
         poetry install --only main,test --no-interaction --no-ansi 2>/dev/null || true;
-        pytest tests/unit/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing 2>/dev/null ||
-        pytest tests/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing
+        pytest tests/unit/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing --ignore=tests/integration
       "
 
 volumes:
