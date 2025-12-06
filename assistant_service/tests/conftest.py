@@ -46,13 +46,3 @@ def pytest_addoption(parser):
         default=False,
         help="run tests that use external APIs",
     )
-
-
-# Basic event loop fixture, often needed for async tests
-@pytest.fixture(scope="session")
-def event_loop():
-    import asyncio
-
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
