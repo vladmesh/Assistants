@@ -1,6 +1,6 @@
 # This file makes Python treat the 'crud' directory as a package.
 
-from . import message, user_fact, user_secretary, user_summary
+from . import message, user_secretary
 from .assistant import (  # noqa: F401
     create_assistant,
     delete_assistant,
@@ -37,13 +37,7 @@ from .tool import (  # noqa: F401
     update_tool,
 )
 from .user import get_user_by_id as get_user  # noqa: F401
-from .user_fact import (  # noqa: F401
-    create_user_fact,
-    delete_user_fact,
-    get_user_fact_by_id,
-    get_user_facts_by_user_id,
-)
-from .user_secretary import (  # noqa: F401; get_user_secretary_links, # Removed, does not exist; update_user_secretary_link, # Removed, does not exist; set_active_secretary_for_user, # Removed, does not exist (logic in assign); Renamed/Aliased
+from .user_secretary import (  # noqa: F401; Renamed/Aliased
     assign_secretary_to_user as create_user_secretary_link,
 )
 from .user_secretary import (
@@ -60,9 +54,7 @@ __all__ = [
     "reminder",
     "calendar",
     "checkpoint",
-    "user_fact",
     "user_secretary",
-    "user_summary",
     "global_settings",
     "message",
 ]

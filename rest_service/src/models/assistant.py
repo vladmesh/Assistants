@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID, uuid4
 
-# Import enums from shared_models
 from shared_models.enums import AssistantType, ToolType
 from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship
@@ -12,7 +11,6 @@ if TYPE_CHECKING:
     from .message import Message
     from .reminder import Reminder
     from .user_secretary import UserSecretaryLink
-    from .user_summary import UserSummary
 
 
 class AssistantToolLink(BaseModel, table=True):
@@ -62,7 +60,6 @@ class Assistant(BaseModel, table=True):
     user_links: list["UserSecretaryLink"] = Relationship(
         back_populates="secretary", sa_relationship_kwargs={"lazy": "selectin"}
     )
-    user_summaries: list["UserSummary"] = Relationship(back_populates="assistant")
     reminders: list["Reminder"] = Relationship(
         back_populates="assistant",
         sa_relationship_kwargs={

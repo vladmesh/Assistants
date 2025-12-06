@@ -17,8 +17,6 @@ from shared_models.api_schemas import (
     ToolCreate,
     ToolRead,
     ToolUpdate,
-    UserSummaryCreateUpdate,
-    UserSummaryRead,
 )
 
 from config.settings import settings
@@ -258,31 +256,6 @@ class RestServiceClient:
         response.raise_for_status()
         return GlobalSettingsRead(**response.json())
 
-    async def get_user_summaries(self, user_id: int) -> list[UserSummaryRead]:
-        """Get all summaries for a user."""
-        try:
-            response = await self._client.get(
-                f"{self.base_url}/api/user-summaries/", params={"user_id": user_id}
-            )
-            return [UserSummaryRead(**summary) for summary in response.json()]
-        except Exception as e:
-            logger.error(f"Error getting user summaries: {e}")
-            return []
-
-    async def update_user_summary(
-        self, summary_id: int, summary_data: UserSummaryCreateUpdate
-    ) -> UserSummaryRead | None:
-        """Update a user summary."""
-        try:
-            response = await self._client.put(
-                f"{self.base_url}/api/user-summaries/{summary_id}",
-                json=summary_data.model_dump(exclude_unset=True),
-            )
-            return UserSummaryRead(**response.json())
-        except Exception as e:
-            logger.error(f"Error updating user summary: {e}")
-            return None
-
     async def get_messages(
         self,
         user_id: int,
@@ -311,30 +284,3 @@ class RestServiceClient:
         except Exception as e:
             logger.error(f"Error getting messages: {e}")
             return []
-
-    async def create_user_summary(
-        self, summary_data: UserSummaryCreateUpdate
-    ) -> UserSummaryRead | None:
-        """Create a new user summary."""
-        try:
-            logger.info(f"Creating user summary with data: {summary_data.model_dump()}")
-            response = await self._client.post(
-                f"{self.base_url}/api/user-summaries/",
-                json=summary_data.model_dump(exclude_unset=True, mode="json"),
-            )
-            return UserSummaryRead(**response.json())
-        except Exception as e:
-            logger.error(f"Error creating user summary: {str(e)}")
-            logger.error(f"Summary data: {summary_data.model_dump()}")
-            return None
-
-    async def delete_user_summary(self, summary_id: int) -> bool:
-        """Delete a user summary."""
-        try:
-            await self._client.delete(
-                f"{self.base_url}/api/user-summaries/{summary_id}"
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Error deleting user summary: {e}")
-            return False

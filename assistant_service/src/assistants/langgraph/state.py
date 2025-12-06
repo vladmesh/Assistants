@@ -30,7 +30,7 @@ class AssistantState(TypedDict):
     newly_summarized_message_ids: (
         list[int] | None
     )  # IDs of messages included in new summary
-    user_facts: list[dict[str, Any]] | None  # User facts from DB/cache
+    relevant_memories: list[dict[str, Any]] | None  # Retrieved memories from Memory V2
 
 
 # --- End State Definition ---

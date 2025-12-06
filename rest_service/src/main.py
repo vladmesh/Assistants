@@ -8,20 +8,17 @@ from fastapi.responses import JSONResponse
 from database import init_db
 
 # Import routers from correct locations
-# from api.endpoints import checkpoints # Import checkpoints separately
-from routers import (  # user_secretary_links, # Removed non-existent router
-    assistant_tools,  # Assuming this is also in routers
+from routers import (
+    assistant_tools,
     assistants,
     calendar,
-    checkpoints,  # Import checkpoints from routers
+    checkpoints,
     global_settings,
     memory,
-    messages,  # Добавлен импорт messages
+    messages,
     reminders,
-    secretaries,  # Assuming this is also in routers
+    secretaries,
     tools,
-    user_facts,  # Add user_facts
-    user_summaries,
     users,
 )
 
@@ -80,13 +77,7 @@ app.include_router(tools.router, prefix="/api", tags=["Tools"])
 app.include_router(assistant_tools.router, prefix="/api", tags=["Assistant Tools"])
 app.include_router(secretaries.router, prefix="/api", tags=["Secretaries"])
 app.include_router(reminders.router, prefix="/api", tags=["Reminders"])
-app.include_router(
-    user_facts.router, prefix="/api", tags=["User Facts"]
-)  # Add user_facts router
-app.include_router(user_summaries.router, prefix="/api", tags=["User Summaries"])
-app.include_router(
-    messages.router, prefix="/api", tags=["Messages"]
-)  # Добавлен префикс "/api"
+app.include_router(messages.router, prefix="/api", tags=["Messages"])
 app.include_router(global_settings.router, prefix="/api", tags=["Global Settings"])
 app.include_router(checkpoints.router, prefix="/api")
 app.include_router(memory.router, prefix="/api")

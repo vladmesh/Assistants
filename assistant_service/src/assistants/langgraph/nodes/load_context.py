@@ -120,17 +120,7 @@ async def load_context_node(
             logger.error(f"Error loading recent messages: {str(e)}", extra=log_extra)
             print(f"Error loading recent messages: {e}")
 
-    # 3. Load user facts
-    user_facts = []
-    try:
-        facts_result = await rest_client.get_user_facts(user_id)
-        user_facts = facts_result if facts_result else []
-        logger.info(f"Loaded {len(user_facts)} user facts", extra=log_extra)
-    except Exception as e:
-        logger.error(f"Error loading user facts: {str(e)}", extra=log_extra)
-        print(f"Error loading user facts: {e}")
-
-    # 4. Prepare the updated state
+    # 3. Prepare the updated state
     # В полный контекст сначала идут исторические сообщения
     # (отсортированные в БД по id), затем входящее сообщение
 
@@ -152,7 +142,6 @@ async def load_context_node(
     return {
         "messages": full_context,
         "current_summary_content": summary.summary_text if summary else None,
-        "user_facts": user_facts,
     }
 
 

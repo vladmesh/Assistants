@@ -1,33 +1,23 @@
 # assistant_service/src/assistants/langgraph/langgraph_assistant.py
-import asyncio
 import logging
 from typing import Any
 from uuid import UUID
 
-# Base classes and core types
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
-
-# LangGraph components
 from langgraph.graph.state import CompiledGraph
-from langgraph.prebuilt import create_react_agent  # Import create_react_agent
+from langgraph.prebuilt import create_react_agent
 
-# Import the specific schema needed
-from shared_models.api_schemas.user_fact import UserFactRead
-
-# Project specific imports
-from assistants.base_assistant import BaseAssistant  # Absolute import from src
+from assistants.base_assistant import BaseAssistant
 from assistants.langgraph.graph_builder import build_full_graph
 from assistants.langgraph.prompt_context_cache import PromptContextCache
 from assistants.langgraph.state import AssistantState
 from assistants.langgraph.utils.logging_utils import log_messages_to_file
 from assistants.langgraph.utils.token_counter import count_tokens
-from config.settings import settings  # To get API keys if not in assistant config
-from services.rest_service import RestServiceClient  # Import RestServiceClient
+from config.settings import settings
+from services.rest_service import RestServiceClient
 from utils.error_handler import AssistantError, MessageProcessingError
-
-from .constants import FACT_SAVE_SUCCESS_MESSAGE, FACT_SAVE_TOOL_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -133,19 +123,13 @@ class LangGraphAssistant(BaseAssistant):
             )
 
             logger.info(
-                "LangGraphAssistant initialized (with PromptContextCache)",
+                "LangGraphAssistant initialized",
                 extra={
                     "assistant_id": self.assistant_id,
                     "assistant_name": self.name,
                     "user_id": self.user_id,
                     "tools_count": len(self.tools),
                     "timeout": self.timeout,
-                    "initial_needs_fact_refresh": (
-                        self.prompt_context_cache.needs_fact_refresh
-                    ),
-                    "initial_needs_summary_refresh": (
-                        self.prompt_context_cache.needs_summary_refresh
-                    ),
                 },
             )
 
@@ -194,232 +178,44 @@ class LangGraphAssistant(BaseAssistant):
                 f"Failed to create agent runnable: {str(e)}", self.name
             ) from e
 
-    # --- NEW: Method to load initial data ---
-    async def _load_initial_data(self):
-        """Fetches initial summary and facts and updates the shared cache."""
-        try:
-            user_id_int = int(self.user_id)
-        except ValueError:
-            logger.error(
-                f"Invalid user_id format: {self.user_id}. Cannot load initial data."
-            )
-            # Reset cache state on error
-            self.prompt_context_cache = PromptContextCache()
-            return
-
-        log_extra = {"assistant_id": self.assistant_id, "user_id": self.user_id}
-        logger.info("Loading initial summary and facts into cache...", extra=log_extra)
-
-        results = await asyncio.gather(
-            self.rest_client.get_user_summary(
-                user_id=user_id_int, secretary_id=self.assistant_id_uuid
-            ),
-            self.rest_client.get_user_facts(user_id=user_id_int),
-            return_exceptions=True,
-        )
-
-        # Process Summary Result
-        summary_result = results[0]
-        loaded_summary = None
-        if isinstance(summary_result, Exception):
-            logger.error(
-                f"Failed to load initial summary: {summary_result}",
-                exc_info=isinstance(summary_result, Exception),
-                extra=log_extra,
-            )
-            self.prompt_context_cache.require_summary_refresh()  # Ensure retry
-        elif summary_result and hasattr(summary_result, "summary_text"):
-            loaded_summary = summary_result.summary_text
-            logger.info("Successfully loaded initial summary.", extra=log_extra)
-        else:
-            logger.info(
-                "No initial summary found or unexpected format.", extra=log_extra
-            )
-        # Update cache (even if None, resets flag)
-        self.prompt_context_cache.update_summary(loaded_summary)
-
-        # Process Facts Result
-        facts_result = results[1]
-        loaded_fact_texts: list[str] | None = None
-        if isinstance(facts_result, Exception):
-            logger.error(
-                f"Failed to load initial facts: {facts_result}",
-                exc_info=isinstance(facts_result, Exception),
-                extra=log_extra,
-            )
-            self.prompt_context_cache.require_fact_refresh()  # Ensure retry
-        elif isinstance(facts_result, list) and all(
-            isinstance(f, UserFactRead) for f in facts_result
-        ):
-            try:
-                loaded_fact_texts = [
-                    fact.fact for fact in facts_result if hasattr(fact, "fact")
-                ]
-                logger.info(
-                    f"Successfully loaded {len(loaded_fact_texts)} initial facts.",
-                    extra=log_extra,
-                )
-            except Exception as e:
-                logger.error(
-                    f"Error processing loaded facts: {e}",
-                    exc_info=True,
-                    extra=log_extra,
-                )
-                # Ensure retry on processing error
-                self.prompt_context_cache.require_fact_refresh()
-        else:
-            logger.info("No initial facts found or unexpected format.", extra=log_extra)
-        # Update cache (even if None, resets flag)
-        self.prompt_context_cache.update_facts(loaded_fact_texts)
-
-    # --- MODIFIED: Prompt Modifier ---
+    # --- Prompt Modifier ---
     async def _add_system_prompt_modifier(
         self,
         state: AssistantState,
     ) -> list[BaseMessage]:
         """
-        Dynamically creates the SystemMessage using the shared cache,
-        refreshing data via REST if flags indicate necessity.
+        Dynamically creates the SystemMessage using state data.
+        Memory V2: Uses relevant_memories from state instead of cached facts.
         """
-
-        try:
-            user_id_int = int(self.user_id)
-        except ValueError:
-            logger.error(
-                "Invalid user_id format in modifier: "
-                f"{self.user_id}. Cannot refresh data."
-            )
-            user_id_int = None
-
         log_extra = {"assistant_id": self.assistant_id, "user_id": self.user_id}
-
-        refresh_tasks = []
-
-        # --- Check if Refresh Needed (using shared cache flags) --- #
         current_messages = state.get("messages", [])
 
-        if current_messages:
-            last_message = current_messages[-1]
-            if (
-                isinstance(last_message, ToolMessage)
-                and getattr(last_message, "name", None) == FACT_SAVE_TOOL_NAME
-                and last_message.content == FACT_SAVE_SUCCESS_MESSAGE
-            ):
-                logger.info(
-                    "Fact save tool used, triggering fact refresh via cache flag.",
-                    extra=log_extra,
-                )
-                # Set flag on shared cache
-                self.prompt_context_cache.require_fact_refresh()
+        # Get memories from state (populated by retrieve_memories node in future)
+        relevant_memories = state.get("relevant_memories", [])
+        current_summary = state.get("current_summary_content")
 
-        if self.prompt_context_cache.needs_summary_refresh and user_id_int is not None:
-            logger.info("Scheduling summary refresh for cache...", extra=log_extra)
-            refresh_tasks.append(
-                self.rest_client.get_user_summary(
-                    user_id=user_id_int, secretary_id=self.assistant_id_uuid
-                )
-            )
-        else:
-            refresh_tasks.append(None)  # Placeholder
-
-        if self.prompt_context_cache.needs_fact_refresh and user_id_int is not None:
-            logger.info("Scheduling fact refresh for cache...", extra=log_extra)
-            refresh_tasks.append(self.rest_client.get_user_facts(user_id=user_id_int))
-        else:
-            refresh_tasks.append(None)  # Placeholder
-
-        # --- Execute Refresh Tasks and Update Cache --- #
-        if any(task is not None for task in refresh_tasks):
-            results = await asyncio.gather(
-                *[task for task in refresh_tasks if task is not None],
-                return_exceptions=True,
-            )
-            result_idx = 0
-
-            # Process Summary Result (if refresh was scheduled)
-            if refresh_tasks[0] is not None:
-                summary_result = results[result_idx]
-                refreshed_summary = None
-                if isinstance(summary_result, Exception):
-                    logger.error(
-                        f"Failed to refresh summary: {summary_result}",
-                        exc_info=True,
-                        extra=log_extra,
-                    )
-                    self.prompt_context_cache.require_summary_refresh()  # Ensure retry
-                elif summary_result and hasattr(summary_result, "summary_text"):
-                    refreshed_summary = summary_result.summary_text
-                    logger.info("Summary cache refreshed.", extra=log_extra)
-                else:
-                    logger.info("No summary found during refresh.", extra=log_extra)
-                # Update cache (even if None, resets flag)
-                self.prompt_context_cache.update_summary(refreshed_summary)
-                result_idx += 1
-
-            # Process Facts Result (MODIFIED to handle UserFactRead)
-            if refresh_tasks[1] is not None:
-                facts_result = results[result_idx]
-                refreshed_fact_texts: list[str] | None = None
-                if isinstance(facts_result, Exception):
-                    logger.error(
-                        f"Failed to refresh facts: {facts_result}",
-                        exc_info=True,
-                        extra=log_extra,
-                    )
-                    self.prompt_context_cache.require_fact_refresh()  # Ensure retry
-                elif isinstance(facts_result, list) and all(
-                    isinstance(f, UserFactRead) for f in facts_result
-                ):
-                    try:
-                        refreshed_fact_texts = [
-                            fact.fact for fact in facts_result if hasattr(fact, "fact")
-                        ]
-                        logger.info(
-                            "Fact cache refreshed. "
-                            f"Cached {len(refreshed_fact_texts)} facts.",
-                            extra=log_extra,
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing refreshed facts: {e}",
-                            exc_info=True,
-                            extra=log_extra,
-                        )
-                        self.prompt_context_cache.require_fact_refresh()  # Ensure retry
-                else:
-                    logger.warning(
-                        "No facts found or unexpected format during refresh.",
-                        extra=log_extra,
-                    )
-                # Update cache with the list of fact *strings*
-                self.prompt_context_cache.update_facts(refreshed_fact_texts)
-
-        # --- Format System Prompt (using shared cache data) --- #
-        facts_str = (
-            "\n".join(f"- {fact}" for fact in self.prompt_context_cache.facts)
-            if self.prompt_context_cache.facts
-            else "Нет известных фактов."
+        # Format memories for prompt
+        memories_str = (
+            "\n".join(f"- {m.get('text', '')}" for m in relevant_memories)
+            if relevant_memories
+            else "Нет сохраненной информации о пользователе."
         )
         summary_str = (
-            self.prompt_context_cache.summary
-            if self.prompt_context_cache.summary
-            else "Нет предыдущей истории диалога (саммари)."
+            current_summary if current_summary else "Нет предыдущей истории диалога."
         )
 
         try:
             formatted_prompt = self.system_prompt_template.format(
-                summary_previous=summary_str, user_facts=facts_str
+                summary_previous=summary_str, memories=memories_str
             )
         except KeyError as e:
             logger.error(
                 f"Missing key in system_prompt_template: {e}. Using template as is.",
                 extra=log_extra,
             )
-            formatted_prompt = self.system_prompt_template  # Fallback
+            formatted_prompt = self.system_prompt_template
 
         system_message = SystemMessage(content=formatted_prompt)
-
-        # --- Combine with filtered history --- #
         final_messages: list[BaseMessage] = [system_message] + list(current_messages)
 
         try:
@@ -473,16 +269,16 @@ class LangGraphAssistant(BaseAssistant):
             # Формируем AssistantState для графа
             initial_state = AssistantState(
                 messages=[],
-                initial_message=message,  # Входящее сообщение
+                initial_message=message,
                 user_id=user_id,
                 assistant_id=self.assistant_id,
                 llm_context_size=self.context_window_size,
-                triggered_event=None,  # Обычное сообщение, а не триггер
+                triggered_event=None,
                 log_extra=combined_log_extra,
-                initial_message_id=None,  # ID ставит узел save_input_message_node
-                current_summary_content=None,  # Будет загружено графом
+                initial_message_id=None,
+                current_summary_content=None,
                 newly_summarized_message_ids=None,
-                user_facts=None,  # Будет загружено графом
+                relevant_memories=None,  # Will be populated by retrieve_memories node
             )
 
             # Запускаем граф

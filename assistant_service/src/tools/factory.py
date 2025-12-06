@@ -3,23 +3,14 @@ import logging
 from typing import TYPE_CHECKING, Optional
 
 from langchain_core.tools import Tool
-from shared_models.api_schemas import ToolRead  # Import new schema
+from shared_models.api_schemas import ToolRead
 
 from config.settings import Settings
-
-# Import shared models
 from tools.calendar_tool import CalendarCreateTool, CalendarListTool
-
-# Memory V2 tools
 from tools.memory_tool import MemorySaveTool, MemorySearchTool
-
-# Updated import for reminder tools
 from tools.reminder_tool import ReminderCreateTool, ReminderDeleteTool, ReminderListTool
-from tools.sub_assistant_tool import SubAssistantTool  # Import SubAssistantTool
-
-# Import specific tool implementation classes
+from tools.sub_assistant_tool import SubAssistantTool
 from tools.time_tool import TimeToolWrapper
-from tools.user_fact_tool import UserFactTool  # Import the new tool
 from tools.web_search_tool import WebSearchTool
 
 if TYPE_CHECKING:
@@ -88,8 +79,6 @@ class ToolFactory:
                         )
                 elif tool_type == "web_search":
                     tool_class = WebSearchTool
-                elif tool_type == "user_fact":  # Add handling for the new tool type
-                    tool_class = UserFactTool
                 elif tool_type == "memory_save":  # Memory V2 - save memories
                     tool_class = MemorySaveTool
                 elif tool_type == "memory_search":  # Memory V2 - search memories

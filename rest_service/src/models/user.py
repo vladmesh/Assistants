@@ -9,9 +9,7 @@ from .reminder import Reminder
 
 if TYPE_CHECKING:
     from .message import Message
-    from .user_fact import UserFact
     from .user_secretary import UserSecretaryLink
-    from .user_summary import UserSummary
 
 
 class TelegramUser(BaseModel, table=True):
@@ -33,6 +31,4 @@ class TelegramUser(BaseModel, table=True):
         back_populates="user", sa_relationship_kwargs={"lazy": "selectin"}
     )
     reminders: list[Reminder] = Relationship(back_populates="user")
-    user_facts: list["UserFact"] = Relationship(back_populates="user")
-    summaries: list["UserSummary"] = Relationship(back_populates="user")
     messages: list["Message"] = Relationship(back_populates="user")

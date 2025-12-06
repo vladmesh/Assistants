@@ -23,9 +23,8 @@ class MessageBase(BaseSchema):
     tool_call_id: str | None = None
     status: str = Field(
         default="active",
-        description="Message status: active/summarized/archived/error",
+        description="Message status: active/processed/archived/error",
     )
-    summary_id: int | None = None
     meta_data: dict[str, Any] | None = None
 
 
@@ -36,11 +35,8 @@ class MessageCreate(MessageBase):
 class MessageRead(MessageBase):
     id: int
     timestamp: datetime
-    # orm_mode handled via model_config=ConfigDict(from_attributes=True) in BaseSchema
 
 
 class MessageUpdate(BaseSchema):
     status: str | None = None
     meta_data: dict[str, Any] | None = None
-    summary_id: int | None = None
-    # role/content/content_type/tool_call_id are not updatable via this schema
