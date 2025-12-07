@@ -10,7 +10,7 @@ from models.memory_models import (
 )
 from services.memory_service import MemoryService
 
-router = APIRouter(prefix="/memories", tags=["memories"])
+router = APIRouter(prefix="/memory", tags=["memory"])
 
 
 async def get_memory_service() -> MemoryService:
@@ -42,7 +42,7 @@ async def search_memories_endpoint(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/create")
+@router.post("/")
 async def create_memory_endpoint(
     memory_request: MemoryCreateRequest,
     memory_service: Annotated[MemoryService, Depends(get_memory_service)],

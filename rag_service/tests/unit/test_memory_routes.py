@@ -33,7 +33,7 @@ def test_search_memories_endpoint(mock_memory_service):
     ]
 
     response = client.post(
-        "/api/memories/search",
+        "/api/memory/search",
         json={
             "query": "What do I like?",
             "user_id": 123,
@@ -58,7 +58,7 @@ def test_create_memory_endpoint(mock_memory_service):
     }
 
     response = client.post(
-        "/api/memories/create",
+        "/api/memory/",
         json={
             "user_id": 123,
             "text": "User prefers dark mode",
