@@ -2,30 +2,19 @@ SERVICES := admin_service assistant_service cron_service google_calendar_service
 RUFF_IMAGE := ghcr.io/astral-sh/ruff:0.14.8
 PWD_DIR := $(shell pwd)
 
-.PHONY: help lint format format-check test test-unit test-integration test-all build-test-base migrate upgrade history
+.PHONY: help lint format format-check test-unit test-integration test-all build-test-base migrate upgrade history
 
 help:
-	@echo "Targets: lint, format, format-check, test, test-unit, test-integration, test-all, build-test-base"
+	@echo "Targets: lint, format, format-check, test-unit, test-integration, test-all, build-test-base"
 	@echo "Use SERVICE=<name> to target a specific service"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make build-test-base              # Build base test image (run once)"
-	@echo "  make test-unit SERVICE=<name>     # Fast unit tests (no DB/Redis)"
-	@echo "  make test-integration SERVICE=<name>  # Integration tests (with DB/Redis)"
-	@echo "  make test-all                     # Run all unit + integration tests with coverage summary"
-	@echo "  make test SERVICE=<name>          # Legacy: per-service docker-compose.test.yml"
+	@echo "  make build-test-base                  # Build base test image (run once)"
+	@echo "  make test-unit [SERVICE=<name>]       # Fast unit tests (no DB/Redis)"
+	@echo "  make test-integration [SERVICE=<name>]  # Integration tests (with DB/Redis)"
+	@echo "  make test-all                         # Run all unit + integration tests"
 
 SERVICE ?= all
-
-# Allow `make test <service>` to set SERVICE and avoid extra targets
-ifneq ($(firstword $(MAKECMDGOALS)),)
-ifeq ($(firstword $(MAKECMDGOALS)),test)
-ifneq ($(word 2,$(MAKECMDGOALS)),)
-override SERVICE := $(word 2,$(MAKECMDGOALS))
-override MAKECMDGOALS := test
-endif
-endif
-endif
 
 lint:
 ifeq ($(SERVICE),all)
@@ -59,16 +48,6 @@ _ruff:
 		SRC_PATH=$(PWD_DIR)/$(SERVICE); \
 	fi; \
 	docker run --rm -v $$SRC_PATH:/workspace -w /workspace $(RUFF_IMAGE) $(ARGS)
-
-test:
-ifeq ($(SERVICE),all)
-	@./scripts/run_tests.sh
-else
-	@./scripts/run_tests.sh $(SERVICE)
-endif
-
-test-%:
-	@./scripts/run_tests.sh $*
 
 # Unit tests - fast, no DB/Redis, uses base test image
 build-test-base:
@@ -113,10 +92,10 @@ else
 	if [ $$STATUS -ne 0 ]; then exit $$STATUS; fi
 endif
 
-# Run all tests (unit + integration) with coverage summary
+# Run all tests (unit + integration)
 test-all:
 	@echo "=========================================="
-	@echo "Running all tests with coverage"
+	@echo "Running all tests"
 	@echo "=========================================="
 	@echo ""
 	@echo ">>> UNIT TESTS <<<"
@@ -125,15 +104,7 @@ test-all:
 	@echo ">>> INTEGRATION TESTS <<<"
 	@$(MAKE) test-integration
 	@echo ""
-	@echo "=========================================="
-	@echo "Coverage Summary"
-	@echo "=========================================="
-	@echo "Coverage reports are displayed inline above."
-	@echo "Configuration: .coveragerc"
-	@echo ""
-	@echo "To view detailed coverage for a specific service:"
-	@echo "  make test-unit SERVICE=<name>"
-	@echo "  make test-integration SERVICE=<name>"
+	@echo "All tests completed."
 
 # Migrations for rest_service (manage.py removed; adjust when new command available)
 migrate:
