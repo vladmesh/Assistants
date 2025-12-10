@@ -10,7 +10,7 @@ from langchain_core.runnables import Runnable
 # Langchain core and specific components
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.graph import CompiledGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 # Import existing nodes
@@ -67,7 +67,7 @@ def build_full_graph(
     memory_retrieve_limit: int = 5,
     memory_retrieve_threshold: float = 0.6,
     timeout: int = 30,
-) -> CompiledGraph:
+) -> CompiledStateGraph:
     """Builds the complete LangGraph state machine with database persistence.
 
     Flow:
