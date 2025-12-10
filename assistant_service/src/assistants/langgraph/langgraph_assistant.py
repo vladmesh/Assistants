@@ -6,7 +6,7 @@ from uuid import UUID
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
-from langgraph.graph.state import CompiledGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
 
 from assistants.base_assistant import BaseAssistant
@@ -30,7 +30,7 @@ class LangGraphAssistant(BaseAssistant):
     Handles fact caching internally.
     """
 
-    compiled_graph: CompiledGraph
+    compiled_graph: CompiledStateGraph
     agent_runnable: Any
     tools: list[Tool]
     rest_client: RestServiceClient
