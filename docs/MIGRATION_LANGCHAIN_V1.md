@@ -253,17 +253,31 @@ make test-unit SERVICE=assistant_service
 
 ---
 
-### Итерация 3: Миграция на create_agent (6-8 часов)
+### Итерация 3: Миграция на create_agent (6-8 часов) - ЗАВЕРШЕНА
 
 **Цель:** Заменить create_react_agent на create_agent с middleware
 
 **Файлы:**
-- `src/assistants/langgraph/langgraph_assistant.py`
-- `src/assistants/langgraph/graph_builder.py` (возможно удалить)
+- `src/assistants/langgraph/langgraph_assistant.py` - переписан
+- `src/assistants/langgraph/middleware/` - создана новая директория с middleware
+- `src/assistants/langgraph/graph_builder.py` - будет удален в Итерации 8
+
+**Результат:**
+- Создан `AssistantAgentState` наследующий от `langchain.agents.AgentState`
+- Реализованы все middleware классы:
+  - `MessageSaverMiddleware` (abefore_agent)
+  - `ContextLoaderMiddleware` (abefore_agent)
+  - `MemoryRetrievalMiddleware` (abefore_model)
+  - `SummarizationMiddleware` (abefore_model)
+  - `DynamicPromptMiddleware` (wrap_model_call)
+  - `ResponseSaverMiddleware` (aafter_model)
+  - `FinalizerMiddleware` (aafter_agent)
+- `LangGraphAssistant` переписан на `create_agent` с middleware
+- 32/32 тестов проходят
 
 **Задачи:**
 
-1. [ ] **Создать middleware классы:**
+1. [x] **Создать middleware классы:**
 
 **Файл:** `src/assistants/langgraph/middleware/__init__.py`
 ```python
@@ -273,7 +287,7 @@ from .context_loader import ContextLoaderMiddleware
 from .response_saver import ResponseSaverMiddleware
 ```
 
-2. [ ] **Создать SummarizationMiddleware:**
+2. [x] **Создать SummarizationMiddleware:**
 
 **Файл:** `src/assistants/langgraph/middleware/summarization.py`
 ```python
@@ -303,7 +317,7 @@ class SummarizationMiddleware(AgentMiddleware):
         pass
 ```
 
-3. [ ] **Создать MemoryRetrievalMiddleware:**
+3. [x] **Создать MemoryRetrievalMiddleware:**
 
 **Файл:** `src/assistants/langgraph/middleware/memory_retrieval.py`
 ```python
@@ -324,7 +338,7 @@ class MemoryRetrievalMiddleware(AgentMiddleware):
         pass
 ```
 
-4. [ ] **Создать DynamicPromptMiddleware:**
+4. [x] **Создать DynamicPromptMiddleware:**
 
 **Файл:** `src/assistants/langgraph/middleware/dynamic_prompt.py`
 ```python
@@ -348,7 +362,7 @@ def create_dynamic_prompt(request: ModelRequest) -> str:
     )
 ```
 
-5. [ ] **Переписать LangGraphAssistant:**
+5. [x] **Переписать LangGraphAssistant:**
 
 **До:**
 ```python
@@ -388,7 +402,7 @@ self.agent = create_agent(
 )
 ```
 
-6. [ ] **Обновить process_message:**
+6. [x] **Обновить process_message:**
 
 **До:**
 ```python
@@ -407,14 +421,14 @@ result = await self.agent.ainvoke(
 )
 ```
 
-7. [ ] **Удалить graph_builder.py** (если весь функционал перенесен в middleware)
+7. [ ] **Удалить graph_builder.py** (перенесено в Итерацию 8)
 
-8. [ ] **Запустить тесты:**
+8. [x] **Запустить тесты:**
 ```bash
 make test-unit SERVICE=assistant_service
 ```
 
-**Критерий завершения:** Agent создается и обрабатывает сообщения
+**Критерий завершения:** Agent создается и обрабатывает сообщения - **ВЫПОЛНЕНО**
 
 ---
 

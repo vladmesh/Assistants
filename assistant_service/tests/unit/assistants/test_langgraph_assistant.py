@@ -199,7 +199,7 @@ async def test_initialization(assistant_instance: LangGraphAssistant):
     assert isinstance(instance.llm, MockChatLLM)
     assert instance.tools is not None
     assert len(instance.tools) > 0  # Check tools are present
-    assert instance.compiled_graph is not None
+    assert instance.agent is not None  # Changed from compiled_graph to agent
     assert instance.user_id is not None
     assert instance.assistant_id is not None
     assert instance.rest_client is not None
