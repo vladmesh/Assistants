@@ -120,6 +120,9 @@ async def handle_text_message(**context: Any) -> None:
             secretary_id=assigned_secretary.id,
         )
 
+        # Show typing indicator to user
+        await telegram.send_chat_action(chat_id, "typing")
+
         # Prepare metadata for the queue message
         metadata = {
             "username": username,
@@ -133,8 +136,6 @@ async def handle_text_message(**context: Any) -> None:
             await message_queue.send_message_to_assistant(
                 user_id=user_id, content=text, metadata=metadata
             )
-            # Optionally send confirmation to user?
-            # await telegram.send_message(chat_id, "Сообщение передано ассистенту.")
         except (
             Exception
         ) as e_queue:  # Catch RedisError or other exceptions from the service
