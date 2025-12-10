@@ -1,7 +1,12 @@
 from . import (
     assistant_tools,
     assistants,
+    batch_jobs,
     calendar,
+    checkpoints,
+    conversations,
+    global_settings,
+    memory,
     messages,
     reminders,
     secretaries,
@@ -9,16 +14,18 @@ from . import (
     users,
 )
 
-# from . import user_secretary_links # Removed non-existent import
-
 __all__ = [
     "assistant_tools",
     "assistants",
+    "batch_jobs",
     "calendar",
+    "checkpoints",
+    "conversations",
+    "global_settings",
+    "memory",
     "messages",
     "reminders",
     "secretaries",
     "tools",
     "users",
-    # "user_secretary_links", # Removed non-existent export
 ]

@@ -11,8 +11,10 @@ from database import init_db
 from routers import (
     assistant_tools,
     assistants,
+    batch_jobs,
     calendar,
     checkpoints,
+    conversations,
     global_settings,
     memory,
     messages,
@@ -81,6 +83,8 @@ app.include_router(messages.router, prefix="/api", tags=["Messages"])
 app.include_router(global_settings.router, prefix="/api", tags=["Global Settings"])
 app.include_router(checkpoints.router, prefix="/api")
 app.include_router(memory.router, prefix="/api")
+app.include_router(conversations.router, prefix="/api")
+app.include_router(batch_jobs.router, prefix="/api")
 
 
 @app.get("/health")
