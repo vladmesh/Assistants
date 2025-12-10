@@ -1,6 +1,6 @@
 from typing import Any
 
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 
 from assistants.base_assistant import BaseAssistant
 from config.logger import get_logger
