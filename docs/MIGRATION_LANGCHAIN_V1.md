@@ -17,13 +17,13 @@
 
 ## Текущее состояние
 
-### Версии библиотек (pyproject.toml)
+### Версии библиотек (после Итерации 1)
 ```toml
-langchain = "^0.3.25"
-langchain-openai = "^0.3.11"
-langchain-community = "^0.3.20"
-langchain-core = "^0.3.47"
-langgraph = "^0.3.34"
+langchain = "^1.1.0"        # ОБНОВЛЕНО (было ^0.3.25)
+langchain-openai = "^1.1.0" # ОБНОВЛЕНО (было ^0.3.11)
+langchain-community = "^0.4.1" # ОБНОВЛЕНО (было ^0.3.20), удалим в Итерации 7
+langchain-core = "^1.1.0"   # ОБНОВЛЕНО (было ^0.3.47)
+langgraph = "^1.0.4"        # ОБНОВЛЕНО (было ^0.3.34)
 ```
 
 ### Используемые API
@@ -129,14 +129,14 @@ create_agent(
 
 ## Итерации миграции
 
-### Итерация 0: Подготовка (1-2 часа)
+### Итерация 0: Подготовка (1-2 часа) - ЗАВЕРШЕНА
 
 **Цель:** Создать изолированную среду для миграции
 
 **Задачи:**
-- [ ] Создать ветку `feature/langchain-v1-migration`
-- [ ] Убедиться что все тесты проходят на текущей версии
-- [ ] Сделать backup текущего состояния
+- [x] Создать ветку `feature/langchain-v1-migration`
+- [x] Убедиться что все тесты проходят на текущей версии
+- [x] Сделать backup текущего состояния
 
 **Команды:**
 ```bash
@@ -145,51 +145,65 @@ make test-unit SERVICE=assistant_service
 make test-integration SERVICE=assistant_service
 ```
 
-**Критерий завершения:** Все тесты зеленые, ветка создана
+**Критерий завершения:** Все тесты зеленые, ветка создана - **ВЫПОЛНЕНО**
 
 ---
 
-### Итерация 1: Обновление зависимостей (2-3 часа)
+### Итерация 1: Обновление зависимостей (2-3 часа) - ЗАВЕРШЕНА
 
 **Цель:** Обновить библиотеки до 1.x, сохранив работоспособность
 
 **Задачи:**
 
-1. [ ] **Обновить pyproject.toml:**
+1. [x] **Обновить pyproject.toml:**
 ```toml
 [tool.poetry.dependencies]
 langchain = "^1.1.0"
 langchain-openai = "^1.1.0"
+langchain-community = "^0.4.1"  # Сохранен, удалим в Итерации 7
 langchain-core = "^1.1.0"
 langgraph = "^1.0.4"
-# УДАЛИТЬ langchain-community если не используется напрямую
 ```
 
-2. [ ] **Обновить lock файл:**
+2. [x] **Обновить lock файл:**
 ```bash
 cd assistant_service && poetry lock && poetry install
 ```
 
-3. [ ] **Запустить lint и тесты:**
+3. [x] **Запустить lint и тесты:**
 ```bash
 make lint SERVICE=assistant_service
 make test-unit SERVICE=assistant_service
 ```
 
-4. [ ] **Исправить первичные ошибки импортов** (если есть)
+4. [x] **Исправить первичные ошибки импортов:**
+   - `CompiledGraph` -> `CompiledStateGraph` (langgraph 1.0 rename)
+   - Import path: `langgraph.graph.graph` -> `langgraph.graph.state`
 
-**Критерий завершения:** `poetry install` успешен, lint проходит
+**Результат:**
+- 32/32 тестов проходят
+- 3 deprecation warnings о `create_react_agent` (ожидаемо, исправим в Итерации 3)
+
+**Критерий завершения:** `poetry install` успешен, lint проходит - **ВЫПОЛНЕНО**
 
 ---
 
-### Итерация 2: Миграция State (2-3 часа)
+### Итерация 2: Миграция State (2-3 часа) - ОТЛОЖЕНА
 
 **Цель:** Перевести AssistantState на новый базовый класс
+
+**Статус:** Текущий `AssistantState` уже TypedDict и полностью совместим с LangGraph 1.x.
+Миграция на `langchain.agents.AgentState` будет выполнена в Итерации 3 вместе с переходом на `create_agent`.
+
+**Причина отложения:**
+- Текущий state работает с кастомным графом (`build_full_graph`)
+- `langchain.agents.AgentState` предназначен для использования с `create_agent`
+- Нет смысла менять state отдельно от миграции на `create_agent`
 
 **Файлы:**
 - `src/assistants/langgraph/state.py`
 
-**Задачи:**
+**Задачи (будут выполнены в Итерации 3):**
 
 1. [ ] **Обновить state.py:**
 
@@ -499,40 +513,7 @@ make test-unit SERVICE=assistant_service
 
 ---
 
-### Итерация 6: Удаление langchain-community (1-2 часа)
-
-**Цель:** Убрать зависимость от langchain-community, использовать только актуальные пакеты
-
-**Задачи:**
-
-1. [ ] **Проверить использование langchain-community:**
-```bash
-grep -r "langchain_community" assistant_service/src/
-grep -r "langchain-community" assistant_service/
-```
-
-2. [ ] **Если используется - найти замену:**
-   - Векторные хранилища -> отдельные пакеты (`langchain-chroma`, `langchain-pinecone`, etc.)
-   - Document loaders -> отдельные пакеты
-   - Если нет замены - реализовать самостоятельно или использовать напрямую библиотеку провайдера
-
-3. [ ] **Удалить из pyproject.toml:**
-```toml
-# УДАЛИТЬ эту строку:
-# langchain-community = "^0.3.20"
-```
-
-4. [ ] **Обновить lock и проверить:**
-```bash
-cd assistant_service && poetry lock && poetry install
-make test-unit SERVICE=assistant_service
-```
-
-**Критерий завершения:** langchain-community удален, тесты проходят
-
----
-
-### Итерация 7: Миграция тестов (3-4 часа)
+### Итерация 6: Миграция тестов (3-4 часа)
 
 **Цель:** Обновить все тесты для 1.x API
 
@@ -563,6 +544,39 @@ make test-integration SERVICE=assistant_service
 ```
 
 **Критерий завершения:** Все тесты проходят
+
+---
+
+### Итерация 7: Удаление langchain-community (1-2 часа)
+
+**Цель:** Убрать зависимость от langchain-community, использовать только актуальные пакеты
+
+**Задачи:**
+
+1. [ ] **Проверить использование langchain-community:**
+```bash
+grep -r "langchain_community" assistant_service/src/
+grep -r "langchain-community" assistant_service/
+```
+
+2. [ ] **Если используется - найти замену:**
+   - Векторные хранилища -> отдельные пакеты (`langchain-chroma`, `langchain-pinecone`, etc.)
+   - Document loaders -> отдельные пакеты
+   - Если нет замены - реализовать самостоятельно или использовать напрямую библиотеку провайдера
+
+3. [ ] **Удалить из pyproject.toml:**
+```toml
+# УДАЛИТЬ эту строку:
+# langchain-community = "^0.4.1"
+```
+
+4. [ ] **Обновить lock и проверить:**
+```bash
+cd assistant_service && poetry lock && poetry install
+make test-unit SERVICE=assistant_service
+```
+
+**Критерий завершения:** langchain-community удален, тесты проходят
 
 ---
 
