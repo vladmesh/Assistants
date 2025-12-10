@@ -11,6 +11,15 @@ from orchestrator import AssistantOrchestrator
 pytestmark = pytest.mark.asyncio
 
 
+async def test_extract_payload_field_accepts_bytes_key():
+    payload_bytes = b'{"content": "hi"}'
+    message_fields = {b"payload": payload_bytes}
+
+    result = AssistantOrchestrator._extract_payload_field(message_fields)
+
+    assert result == payload_bytes
+
+
 async def test_dispatch_human_message(
     mock_settings,
     mock_factory,

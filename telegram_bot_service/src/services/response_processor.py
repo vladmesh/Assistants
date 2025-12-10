@@ -153,7 +153,7 @@ async def _read_next_response(
         _, messages = entries[0]
         if messages:
             message_id, fields = messages[0]
-            payload = fields.get("payload")
+            payload = fields.get("payload") or fields.get(b"payload")
             if payload:
                 return message_id, payload if isinstance(payload, bytes) else str(
                     payload

@@ -11,7 +11,8 @@ import sqlalchemy as sa
 
 
 revision = "add_memory_v2_settings"
-down_revision = "20251206_180000_cleanup_legacy_user_tables"
+# Align with actual revision ID defined in cleanup migration
+down_revision = "cleanup_legacy_001"
 branch_labels = None
 depends_on = None
 
