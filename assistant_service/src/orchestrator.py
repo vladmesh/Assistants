@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import time
 
 import redis.asyncio as redis
@@ -47,6 +48,37 @@ class AssistantOrchestrator:
         logger.info(
             "Assistant service initialized",
         )
+
+    @staticmethod
+    def _extract_payload_field(message_fields):
+        return message_fields.get("payload") or message_fields.get(b"payload")
+
+    # region agent log
+    @staticmethod
+    def _dbg_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+        payload = {
+            "sessionId": "debug-session",
+            "runId": "pre-fix",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        log_paths = [
+            "/home/vlad/projects/Assistants/.cursor/debug.log",  # host path
+            "/src/debug.log",  # container-mounted path fallback
+        ]
+        for path in log_paths:
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "a") as f:
+                    f.write(json.dumps(payload) + "\n")
+                break
+            except Exception:
+                continue
+
+    # endregion
 
     async def _dispatch_event(self, event: QueueMessage | QueueTrigger) -> dict | None:
         """Handle incoming events and dispatch to secretary."""
@@ -296,7 +328,19 @@ class AssistantOrchestrator:
                     continue
 
                 stream_message_id, message_fields = stream_entry
-                raw_message_bytes = message_fields.get("payload")
+                # region agent log
+                self._dbg_log(
+                    "A",
+                    "orchestrator.listen_for_messages:after_read",
+                    "Received stream entry",
+                    {
+                        "message_id": stream_message_id,
+                        "field_keys": list(message_fields.keys()),
+                        "input_queue": self.settings.INPUT_QUEUE,
+                    },
+                )
+                # endregion
+                raw_message_bytes = self._extract_payload_field(message_fields)
                 if raw_message_bytes is None:
                     logger.error(
                         "Stream message missing payload",
@@ -320,6 +364,18 @@ class AssistantOrchestrator:
                     "Successfully parsed JSON",
                     extra={"keys": list(message_dict.keys())},
                 )
+                # region agent log
+                self._dbg_log(
+                    "B",
+                    "orchestrator.listen_for_messages:after_json",
+                    "Parsed JSON",
+                    {
+                        "keys": list(message_dict.keys()),
+                        "has_trigger_type": "trigger_type" in message_dict,
+                        "has_content": "content" in message_dict,
+                    },
+                )
+                # endregion
 
                 # Reset event_object before attempting QueueMessage parse
                 event_object = None
@@ -376,6 +432,20 @@ class AssistantOrchestrator:
                 if event_object:
                     # Now event_object can be either QueueMessage or QueueTrigger
                     # Assign the result directly to response_payload
+                    # region agent log
+                    self._dbg_log(
+                        "C",
+                        "orchestrator.listen_for_messages:before_dispatch",
+                        "Dispatching event",
+                        {
+                            "event_class": type(event_object).__name__,
+                            "user_id": getattr(event_object, "user_id", None),
+                            "source": getattr(event_object, "source", None).value
+                            if hasattr(event_object, "source")
+                            else None,
+                        },
+                    )
+                    # endregion
                     response_payload = await self._dispatch_event(event_object)
                 else:
                     # Parsing failed or structure was invalid
@@ -398,6 +468,18 @@ class AssistantOrchestrator:
 
                 # Send response if any
                 if response_payload:
+                    # region agent log
+                    self._dbg_log(
+                        "D",
+                        "orchestrator.listen_for_messages:before_output_add",
+                        "Enqueuing response",
+                        {
+                            "message_id": stream_message_id,
+                            "user_id": response_payload.get("user_id"),
+                            "output_queue": self.settings.OUTPUT_QUEUE,
+                        },
+                    )
+                    # endregion
                     try:
                         # Use AssistantResponseMessage for structuring the response
                         response_message = AssistantResponseMessage(

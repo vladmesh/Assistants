@@ -18,15 +18,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # First, drop FK constraint and column from messages table
-    op.drop_constraint("messages_summary_id_fkey", "messages", type_="foreignkey")
-    op.drop_column("messages", "summary_id")
-    
-    # Drop user_summaries table (replaced by Memory V2)
-    op.drop_table("user_summaries")
-    
-    # Drop user_facts table (replaced by Memory V2)
-    op.drop_table("user_facts")
+    # Drop FK/column from messages if they still exist
+    op.execute(
+        "ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_summary_id_fkey"
+    )
+    op.execute("ALTER TABLE messages DROP COLUMN IF EXISTS summary_id")
+
+    # Drop legacy tables if they still exist
+    op.execute("DROP TABLE IF EXISTS user_summaries CASCADE")
+    op.execute("DROP TABLE IF EXISTS user_facts CASCADE")
 
 
 def downgrade() -> None:

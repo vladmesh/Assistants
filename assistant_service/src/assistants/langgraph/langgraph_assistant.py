@@ -163,6 +163,10 @@ class LangGraphAssistant(BaseAssistant):
                 f"Failed to initialize LangGraph assistant '{name}': {e}"
             ) from e
 
+    async def _load_initial_data(self) -> None:
+        """Placeholder hook for loading initial data (no-op)."""
+        return None
+
     def _initialize_llm(self) -> ChatOpenAI:
         """Initializes the language model based on configuration."""
         model_name = self.config["model_name"]  # Требуем обязательное значение
