@@ -3,7 +3,7 @@ import time  # Import time
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID  # Import UUID for reminder_id type hint in delete_reminder
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from shared_models.api_schemas import ReminderCreate  # For ReminderCreateTool
@@ -246,113 +246,9 @@ class ReminderCreateTool(BaseReminderTool):
                 trigger_datetime_utc_iso = dt_utc.isoformat()
             final_cron_expression = None
 
-        elif (
-            reminder_input_schema.type == "recurring"
-            and reminder_input_schema.cron_expression
-            and reminder_input_schema.timezone
-        ):
-            try:
-                cron_parts = reminder_input_schema.cron_expression.split()
-                if len(cron_parts) == 5:
-                    (
-                        minute_cron,
-                        hour_cron,
-                        day_month_cron,
-                        month_cron,
-                        day_week_cron,
-                    ) = cron_parts
-
-                    if hour_cron.isdigit():
-                        local_hour = int(hour_cron)
-                        if not (0 <= local_hour <= 23):
-                            logger.warning(
-                                f"Час в CRON '{local_hour}' вне диапазона 0-23. "
-                                "Используется оригинальное CRON выражение: "
-                                f"'{reminder_input_schema.cron_expression}'.",
-                                extra=log_extra,
-                            )
-                        else:
-                            context_minute_for_conversion = 0
-                            if minute_cron.isdigit():
-                                context_minute_for_conversion = int(minute_cron)
-                                if not (0 <= context_minute_for_conversion <= 59):
-                                    context_minute_for_conversion = 0
-
-                            now_in_user_tz = datetime.now(
-                                ZoneInfo(reminder_input_schema.timezone)
-                            )
-                            local_dt_for_conversion = now_in_user_tz.replace(
-                                hour=local_hour,
-                                minute=context_minute_for_conversion,
-                                second=0,
-                                microsecond=0,
-                            )
-
-                            utc_dt = local_dt_for_conversion.astimezone(UTC)
-                            utc_hour = utc_dt.hour
-
-                            final_cron_expression = (
-                                f"{minute_cron} {utc_hour} {day_month_cron} "
-                                f"{month_cron} {day_week_cron}"
-                            )
-                            log_extra["original_cron"] = (
-                                reminder_input_schema.cron_expression
-                            )
-                            log_extra["converted_cron"] = final_cron_expression
-                            log_extra["conversion_timezone"] = (
-                                reminder_input_schema.timezone
-                            )
-                            logger.info(
-                                f"Конвертировано CRON выражение с учетом timezone. "
-                                "Оригинал: "
-                                f"'{reminder_input_schema.cron_expression}' "
-                                f"({reminder_input_schema.timezone}), "
-                                f"Результат (UTC): '{final_cron_expression}'.",
-                                extra=log_extra,
-                            )
-                    else:
-                        logger.warning(
-                            "Час '{hour_cron}' в CRON выражении "
-                            f"'{reminder_input_schema.cron_expression}' не является "
-                            "простой цифрой. Конвертация в UTC не выполнена. "
-                            "Используется оригинальное выражение.",
-                            extra=log_extra,
-                        )
-                else:
-                    logger.warning(
-                        "CRON выражение "
-                        f"'{reminder_input_schema.cron_expression}' имеет неверный "
-                        "формат (не 5 частей). Конвертация в UTC не выполнена. "
-                        "Используется оригинальное выражение.",
-                        extra=log_extra,
-                    )
-            except ZoneInfoNotFoundError:
-                logger.warning(
-                    "Неверная временная зона "
-                    f"'{reminder_input_schema.timezone}' указана для CRON выражения "
-                    f"'{reminder_input_schema.cron_expression}'. "
-                    "Используется оригинальное выражение.",
-                    extra=log_extra,
-                )
-            except ValueError as ve:
-                logger.warning(
-                    "Ошибка значения при попытке конвертировать CRON выражение "
-                    f"'{reminder_input_schema.cron_expression}' "
-                    f"с timezone '{reminder_input_schema.timezone}': {str(ve)}. "
-                    "Используется оригинальное выражение.",
-                    extra=log_extra,
-                )
-            except Exception as e:
-                logger.exception(
-                    "Непредвиденная ошибка при конвертации CRON выражения "
-                    f"'{reminder_input_schema.cron_expression}' "
-                    f"с timezone '{reminder_input_schema.timezone}': {str(e)}. "
-                    "Используется оригинальное выражение.",
-                    exc_info=True,
-                    extra=log_extra,
-                )
         elif reminder_input_schema.type == "recurring":
             trigger_datetime_utc_iso = None
+            final_cron_expression = reminder_input_schema.cron_expression
 
         # Prepare ReminderCreate Pydantic model for the client
         reminder_create_data = ReminderCreate(
@@ -363,6 +259,7 @@ class ReminderCreateTool(BaseReminderTool):
             status="active",  # Default status
             trigger_at=trigger_datetime_utc_iso,
             cron_expression=final_cron_expression,
+            timezone=reminder_input_schema.timezone,
         )
 
         rest_client = self.get_rest_client()

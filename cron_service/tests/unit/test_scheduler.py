@@ -51,6 +51,7 @@ def sample_one_time_reminder():
         "type": "one_time",
         "trigger_at": future_time.isoformat(),
         "cron_expression": None,
+        "timezone": "UTC",
         "payload": '{"text": "One time reminder", "priority": "normal"}',
         "status": "active",
         "last_triggered_at": None,
@@ -70,6 +71,7 @@ def sample_recurring_reminder():
         "type": "recurring",
         "trigger_at": None,
         "cron_expression": "0 10 * * *",  # Every day at 10:00
+        "timezone": "Europe/Moscow",
         "payload": '{"check_type": "daily_report", "report_id": "daily_456"}',
         "status": "active",
         "last_triggered_at": None,
@@ -123,6 +125,11 @@ def test_schedule_recurring_job(mock_scheduler_global, sample_recurring_reminder
     assert kwargs["id"] == job_id
     assert kwargs["name"] == f"Recurring reminder {reminder['id']}"
     assert isinstance(kwargs["trigger"], CronTrigger)
+    tz_obj = kwargs["trigger"].timezone
+    tz_name = (
+        getattr(tz_obj, "zone", None) or getattr(tz_obj, "key", None) or str(tz_obj)
+    )
+    assert tz_name == reminder["timezone"]
     assert args[0] == _job_func
 
 

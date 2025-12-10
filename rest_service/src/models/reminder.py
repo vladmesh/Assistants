@@ -26,6 +26,7 @@ class Reminder(BaseModel, table=True):
     type: ReminderType = Field(sa_column=Column(String, nullable=False))
     trigger_at: datetime | None = Field(default=None, index=True)  # для одноразовых
     cron_expression: str | None = Field(default=None)  # для периодических
+    timezone: str | None = Field(default=None, index=True)
     payload: str  # JSON строка с валидацией
     status: ReminderStatus = Field(
         sa_column=Column(String, default=ReminderStatus.ACTIVE.value),

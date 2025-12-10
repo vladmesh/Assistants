@@ -9,6 +9,7 @@ services:
     image: assistants-test-base:latest
     volumes:
       - ./${SERVICE:-rest_service}:/svc
+      - ./shared_models:/shared_models
       - ./.coveragerc:/svc/.coveragerc:ro
       - poetry-cache:/root/.cache/pypoetry
       - test-tmp:/tmp
