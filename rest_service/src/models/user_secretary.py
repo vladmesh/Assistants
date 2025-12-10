@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from sqlmodel import Field, Relationship
 
 from .assistant import Assistant
-from .base import BaseModel
+from .base import BaseModel, get_utc_now
 from .user import TelegramUser
 
 
@@ -17,8 +17,8 @@ class UserSecretaryLink(BaseModel, table=True):
     user_id: int = Field(foreign_key="telegramuser.id")
     secretary_id: UUID = Field(foreign_key="assistant.id")
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=get_utc_now)
+    updated_at: datetime = Field(default_factory=get_utc_now)
 
     # Relationships
     user: "TelegramUser" = Relationship(

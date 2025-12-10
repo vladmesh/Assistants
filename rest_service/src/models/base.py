@@ -5,16 +5,16 @@ from sqlmodel import Field, SQLModel
 
 
 def get_utc_now() -> datetime:
-    """Get current UTC time without timezone info"""
-    return datetime.now(UTC).replace(tzinfo=None)
+    """Return aware UTC timestamp"""
+    return datetime.now(UTC)
 
 
 class BaseModel(SQLModel):
     created_at: datetime = Field(
-        default_factory=get_utc_now, nullable=False, sa_type=TIMESTAMP(timezone=False)
+        default_factory=get_utc_now, nullable=False, sa_type=TIMESTAMP(timezone=True)
     )
     updated_at: datetime = Field(
-        default_factory=get_utc_now, nullable=False, sa_type=TIMESTAMP(timezone=False)
+        default_factory=get_utc_now, nullable=False, sa_type=TIMESTAMP(timezone=True)
     )
 
 

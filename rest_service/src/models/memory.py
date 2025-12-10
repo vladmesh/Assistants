@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -42,4 +42,4 @@ class Memory(BaseModel, table=True):
         default=None, description="Link to origin message"
     )
     importance: int = Field(default=1, description="1-10 scale for retention policy")
-    last_accessed_at: datetime = Field(default_factory=datetime.utcnow)
+    last_accessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

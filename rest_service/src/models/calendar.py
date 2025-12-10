@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from sqlmodel import Field, Relationship, SQLModel
@@ -12,8 +12,8 @@ class CalendarCredentials(SQLModel, table=True):
     access_token: str
     refresh_token: str
     token_expiry: datetime
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
     user: Optional["TelegramUser"] = Relationship(  # noqa: F821

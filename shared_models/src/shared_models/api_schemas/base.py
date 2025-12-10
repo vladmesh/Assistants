@@ -1,6 +1,10 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict  # Import BaseModel from Pydantic
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    field_validator,
+)  # Import BaseModel from Pydantic
 
 # from sqlmodel import SQLModel # Remove SQLModel import
 
@@ -19,3 +23,10 @@ class BaseSchema(BaseModel):  # Inherit from pydantic.BaseModel
 class TimestampSchema(BaseSchema):
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def ensure_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("Datetime must be timezone-aware")
+        return value.astimezone(UTC)

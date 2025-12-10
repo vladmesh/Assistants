@@ -58,6 +58,25 @@ class TestTelegramUserSchemas:
 
         assert user.id == 1
         assert user.telegram_id == 12345
+        assert user.username == "test_user"
+        assert user.is_active is True
+
+    def test_timestamp_schema_rejects_naive_datetime(self):
+        """Ensure schemas require timezone-aware datetime."""
+        from shared_models.api_schemas import AssistantRead
+
+        with pytest.raises(ValueError):
+            AssistantRead(
+                id=uuid4(),
+                name="Test Assistant",
+                model="gpt-4",
+                is_secretary=False,
+                assistant_type=None,
+                is_active=True,
+                tools=[],
+                created_at=datetime(2025, 1, 1),
+                updated_at=datetime(2025, 1, 2),
+            )
 
 
 class TestReminderSchemas:
