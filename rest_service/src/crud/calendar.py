@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from shared_models.api_schemas import CalendarCredentialsCreate  # Use Create for input
 from sqlmodel import select
@@ -45,7 +45,7 @@ async def create_or_update_credentials(
         credentials.access_token = creds_in.access_token
         credentials.refresh_token = creds_in.refresh_token
         credentials.token_expiry = creds_in.token_expiry
-        credentials.updated_at = datetime.utcnow()  # Manually update timestamp
+        credentials.updated_at = datetime.now(UTC)  # Manually update timestamp
         db.add(credentials)  # Add to session to track changes
 
     await db.commit()
