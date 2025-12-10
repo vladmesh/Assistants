@@ -31,7 +31,8 @@ async def log_messages_to_file(
     }
 
     try:
-        timestamp = datetime.now(UTC).isoformat()
+        # Drop microseconds to reduce token usage in logs
+        timestamp = datetime.now(UTC).replace(microsecond=0).isoformat()
         context_percentage = (
             (total_tokens / context_limit) * 100 if context_limit > 0 else 0
         )

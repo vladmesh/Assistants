@@ -92,7 +92,8 @@ class AssistantOrchestrator:
         try:
             # Extract user_id from the event
             user_id = event.user_id
-            timestamp_iso = event.timestamp.isoformat()
+            # Normalize to seconds to avoid extra tokens
+            timestamp_iso = event.timestamp.replace(microsecond=0).isoformat()
 
             # Prepare common log info
             log_extra = {
