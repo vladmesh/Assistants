@@ -41,7 +41,9 @@ class QueueMessage(BaseModel):
     source: QueueMessageSource = QueueMessageSource.USER
     content: QueueMessageContent | str
     metadata: dict[str, Any] | None = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC).replace(microsecond=0)
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -108,7 +110,7 @@ class QueueTrigger(BaseModel):
         default_factory=dict
     )  # Specific data associated with the trigger
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(UTC)
+        default_factory=lambda: datetime.now(UTC).replace(microsecond=0)
     )  # Timestamp of trigger generation
 
     model_config = {

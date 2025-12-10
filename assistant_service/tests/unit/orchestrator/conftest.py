@@ -13,7 +13,7 @@ def human_queue_message():
         user_id=123,
         content="Hello, assistant!",
         metadata={"chat_id": 456, "source": "telegram"},
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(UTC).replace(microsecond=0),
     )
 
 

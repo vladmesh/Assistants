@@ -51,7 +51,7 @@ async def test_dispatch_human_message(
     # Check the type and content of the message passed
     call_args, call_kwargs = mock_secretary.process_message.call_args
     assert isinstance(call_kwargs["message"], HumanMessage)
-    expected_timestamp = human_queue_message.timestamp
+    expected_timestamp = human_queue_message.timestamp.replace(microsecond=0)
     expected_content = (
         f"(Sent at UTC: {expected_timestamp.isoformat()}) {human_queue_message.content}"
     )
@@ -174,7 +174,7 @@ async def test_dispatch_reminder_trigger(
     assert isinstance(passed_message, HumanMessage)
 
     # Verify content structure created by _dispatch_event
-    expected_timestamp = reminder_trigger_event.timestamp
+    expected_timestamp = reminder_trigger_event.timestamp.replace(microsecond=0)
     expected_payload_json = json.dumps(reminder_trigger_event.payload)
     expected_content = (
         "System Trigger Activated:\n"
