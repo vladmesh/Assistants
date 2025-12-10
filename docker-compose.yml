@@ -20,6 +20,8 @@ services:
         condition: service_healthy
       rest_service:
         condition: service_healthy
+      rag_service:
+        condition: service_healthy
     networks:
       - app_network
     # Add healthcheck
@@ -204,6 +206,32 @@ services:
       interval: 10s
       timeout: 3s
       retries: 4
+
+  rag_service:
+    build:
+      context: .
+      dockerfile: rag_service/Dockerfile
+    container_name: rag-service
+    environment:
+      - REST_SERVICE_URL=http://rest_service:8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDING_MODEL=text-embedding-3-small
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./rag_service/src:/src
+    depends_on:
+      rest_service:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8002/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   # qdrant:
   #   image: qdrant/qdrant:latest
   #   container_name: qdrant

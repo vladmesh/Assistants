@@ -82,19 +82,12 @@ async def update(
         # exclude_unset=True ensures only provided fields are used for update
         update_data = obj_in.model_dump(exclude_unset=True)
 
-    print(f"DEBUG - update_data before update: {update_data}")
-    print("DEBUG - db_obj before update:", db_obj.summary_id, db_obj.status)
-
     for field, value in update_data.items():
         setattr(db_obj, field, value)
 
-    print("DEBUG - db_obj after update:", db_obj.summary_id, db_obj.status)
-
-    db.add(db_obj)  # Add to session to track changes
+    db.add(db_obj)
     await db.commit()
     await db.refresh(db_obj)
-
-    print("DEBUG - db_obj after refresh:", db_obj.summary_id, db_obj.status)
 
     return db_obj
 

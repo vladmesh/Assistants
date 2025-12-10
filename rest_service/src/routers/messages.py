@@ -95,11 +95,7 @@ async def update_message_endpoint(
     message_in: MessageUpdate,
     session: SessionDep,
 ) -> Message:
-    print(f"DEBUG - Received update request with raw data: {message_in}")
-    # Использовать exclude_unset=True вместо exclude_none=True
     update_data = message_in.model_dump(exclude_unset=True)
-    print(f"DEBUG - Parsed update data: {update_data}")
-
     logger.info("Updating message", message_id=message_id, update_data=update_data)
     db_message = await message_crud.get(db=session, id=message_id)
     if not db_message:

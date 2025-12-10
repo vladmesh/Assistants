@@ -34,9 +34,6 @@ class BaseTool(LangBaseTool):
     assistant_id: str | None = None
     tool_id: str | None = None
 
-    # Allow arbitrary types for flexibility, though specific tools might constrain this
-    args_schema: type[BaseModel] | None = None
-
     model_config = ConfigDict(
         # Allow arbitrary types to be stored on the model
         arbitrary_types_allowed=True
@@ -76,16 +73,6 @@ class BaseTool(LangBaseTool):
             self.assistant_id = assistant_id
             self.tool_id = tool_id
 
-            # Check if the class itself has args_schema defined
-            if (
-                not hasattr(self.__class__, "args_schema")
-                or getattr(self.__class__, "args_schema", None) is None
-            ):
-                logger.warning(
-                    f"Tool class '{self.__class__.__name__}' (name='{name}') "
-                    "is defined without args_schema."
-                )
-
         except Exception as e:
             # Log the actual error during initialization
             logger.error(f"Failed to initialize tool '{name}': {str(e)}", exc_info=True)
@@ -95,7 +82,8 @@ class BaseTool(LangBaseTool):
     @property
     def openai_schema(self) -> dict[str, Any]:
         """Get OpenAI function schema for the tool"""
-        schema = self.args_schema.model_json_schema() if self.args_schema else {}
+        args_schema = getattr(self, "args_schema", None)
+        schema = args_schema.model_json_schema() if args_schema else {}
 
         return {
             "type": "function",

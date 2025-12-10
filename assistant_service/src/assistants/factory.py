@@ -527,26 +527,18 @@ class AssistantFactory:
             if latest_assistant_data:
                 latest_updated_at = getattr(latest_assistant_data, "updated_at", None)
                 if latest_updated_at and loaded_at:
-                    # --- Make comparison timezone-aware ---
                     # Ensure both datetimes are aware and compared in UTC
                     if not loaded_at.tzinfo:
-                        logger.warning(
-                            f"Loaded_at for {cache_key} is naive, assuming UTC."
-                        )
                         loaded_at_aware = loaded_at.replace(tzinfo=UTC)
                     else:
                         loaded_at_aware = loaded_at.astimezone(UTC)
 
                     if not latest_updated_at.tzinfo:
-                        logger.warning(
-                            f"Latest_updated_at for {cache_key} is naive, assuming UTC."
-                        )
                         latest_updated_at_aware = latest_updated_at.replace(tzinfo=UTC)
                     else:
                         latest_updated_at_aware = latest_updated_at.astimezone(UTC)
 
                     if latest_updated_at_aware > loaded_at_aware:
-                        # --- End timezone comparison fix ---
                         logger.info(
                             "Assistant config for %s (user %s) changed. Reloading.",
                             assistant_uuid,
