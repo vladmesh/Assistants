@@ -33,8 +33,7 @@ A comprehensive intelligent assistant system built on OpenAI Assistants API, des
   - Configuration control
   - Monitoring capabilities
 - **rag_service** - Retrieval-Augmented Generation service
-  - Vector database integration with Qdrant
-  - Storage and retrieval of text embeddings
+  - Storage and retrieval of text embeddings (in-memory)
   - Context-aware search functionality
   - Integration with assistant service
 
@@ -47,7 +46,6 @@ A comprehensive intelligent assistant system built on OpenAI Assistants API, des
 - OpenAI Assistants API
 - Telegram Bot API
 - Google Calendar API
-- Qdrant Vector Database
 - Poetry for dependency management
 - Black & isort for code formatting
 - Pytest for testing
@@ -72,9 +70,6 @@ ASYNC_DATABASE_URL=postgresql+asyncpg://user:password@db:5432/dbname
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=your_google_redirect_uri
-QDRANT_HOST=qdrant
-QDRANT_PORT=6333
-QDRANT_COLLECTION=rag_data
 ```
 
 3. Start services using Docker Compose:
@@ -161,10 +156,6 @@ make history
   - Assistant configurations
   - Interaction history
   - Task scheduling
-- Qdrant used for:
-  - Vector embeddings storage
-  - Semantic search functionality
-  - Context retrieval
 
 ## Monitoring
 
