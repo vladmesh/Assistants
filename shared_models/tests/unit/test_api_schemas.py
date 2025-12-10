@@ -197,6 +197,7 @@ class TestReminderSchemas:
             assistant_id=assistant_id,
             type=ReminderType.ONE_TIME,
             trigger_at=datetime(2025, 6, 1, tzinfo=UTC),
+            timezone="Europe/Moscow",
             payload={"text": "Test"},
             status=ReminderStatus.ACTIVE,
             last_triggered_at=None,
@@ -205,6 +206,33 @@ class TestReminderSchemas:
         )
 
         assert reminder.id == reminder_id
+        assert reminder.timezone == "Europe/Moscow"
+
+    def test_reminder_timezone_validation(self):
+        """Timezone must be valid IANA name or None."""
+        from shared_models.api_schemas import ReminderCreate
+        from shared_models.enums import ReminderType
+
+        reminder = ReminderCreate(
+            user_id=1,
+            assistant_id=uuid4(),
+            type=ReminderType.RECURRING,
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            payload={"text": "Test"},
+        )
+
+        assert reminder.timezone == "UTC"
+
+        with pytest.raises(ValueError, match="Unknown timezone"):
+            ReminderCreate(
+                user_id=1,
+                assistant_id=uuid4(),
+                type=ReminderType.RECURRING,
+                cron_expression="0 9 * * *",
+                timezone="Invalid/Zone",
+                payload={"text": "Test"},
+            )
 
 
 class TestAssistantSchemas:

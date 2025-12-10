@@ -125,8 +125,8 @@ class TestRestClientParseResponse:
             "telegram_id": 12345,
             "username": "test_user",
             "is_active": True,
-            "created_at": "2025-01-01T00:00:00",
-            "updated_at": "2025-01-01T00:00:00",
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z",
         }
 
         result = rest_client._parse_response(
@@ -147,16 +147,16 @@ class TestRestClientParseResponse:
                 "telegram_id": 12345,
                 "username": "user1",
                 "is_active": True,
-                "created_at": "2025-01-01T00:00:00",
-                "updated_at": "2025-01-01T00:00:00",
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z",
             },
             {
                 "id": 2,
                 "telegram_id": 67890,
                 "username": "user2",
                 "is_active": True,
-                "created_at": "2025-01-01T00:00:00",
-                "updated_at": "2025-01-01T00:00:00",
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z",
             },
         ]
 
@@ -191,8 +191,8 @@ class TestRestClientUserMethods:
             "telegram_id": 12345,
             "username": "test_user",
             "is_active": True,
-            "created_at": "2025-01-01T00:00:00",
-            "updated_at": "2025-01-01T00:00:00",
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z",
         }
 
         rest_client._make_request = AsyncMock(return_value=user_data)
@@ -221,8 +221,8 @@ class TestRestClientUserMethods:
             "telegram_id": 12345,
             "username": "test_user",
             "is_active": True,
-            "created_at": "2025-01-01T00:00:00",
-            "updated_at": "2025-01-01T00:00:00",
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z",
         }
 
         rest_client._get_user = AsyncMock(return_value=MagicMock(**user_data))
@@ -242,8 +242,8 @@ class TestRestClientUserMethods:
             "telegram_id": 12345,
             "username": "new_user",
             "is_active": True,
-            "created_at": "2025-01-01T00:00:00",
-            "updated_at": "2025-01-01T00:00:00",
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z",
         }
 
         rest_client._get_user = AsyncMock(return_value=None)
@@ -271,8 +271,8 @@ class TestRestClientSecretaryMethods:
                 "model": "gpt-4",
                 "assistant_type": "llm",
                 "is_active": True,
-                "created_at": "2025-01-01T00:00:00",
-                "updated_at": "2025-01-01T00:00:00",
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z",
                 "tools": [],
             }
         ]
@@ -305,8 +305,8 @@ class TestRestClientSecretaryMethods:
             "model": "gpt-4",
             "assistant_type": "llm",
             "is_active": True,
-            "created_at": "2025-01-01T00:00:00",
-            "updated_at": "2025-01-01T00:00:00",
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z",
             "tools": [],
         }
 

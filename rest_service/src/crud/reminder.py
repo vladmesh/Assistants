@@ -106,6 +106,7 @@ async def create_reminder(db: AsyncSession, reminder_in: ReminderCreate) -> Remi
         type=reminder_type,
         trigger_at=trigger_at_naive_utc,
         cron_expression=reminder_in.cron_expression,
+        timezone=reminder_in.timezone,
         payload=payload_str,  # Use the JSON string
         status=reminder_status,
     )

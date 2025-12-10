@@ -5,6 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from dateutil.parser import isoparse  # For parsing ISO 8601 datetime strings
+from pytz import timezone as pytz_timezone
 from pytz import utc
 
 # Change back to absolute imports (without src.)
@@ -84,9 +85,21 @@ def schedule_job(reminder):
 
     trigger = None
     trigger_args = {
-        "timezone": utc,
         "args": [reminder],  # Pass the full reminder data to the job function
     }
+
+    reminder_timezone = reminder.get("timezone")
+    job_timezone = utc
+    if reminder_timezone:
+        try:
+            job_timezone = pytz_timezone(reminder_timezone)
+        except Exception:
+            logger.warning(
+                "Invalid timezone '%s' for reminder %s. Falling back to UTC.",
+                reminder_timezone,
+                reminder.get("id"),
+            )
+            job_timezone = utc
 
     try:
         if reminder["type"] == "one_time" and reminder.get("trigger_at"):
@@ -97,7 +110,7 @@ def schedule_job(reminder):
             else:
                 run_date = run_date.astimezone(utc)
 
-            trigger = DateTrigger(run_date=run_date)
+            trigger = DateTrigger(run_date=run_date, timezone=utc)
             trigger_args["trigger"] = trigger
             trigger_args["name"] = f"One-time reminder {reminder['id']}"
             trigger_args["misfire_grace_time"] = (
@@ -119,7 +132,7 @@ def schedule_job(reminder):
                 day=cron_parts[2],
                 month=cron_parts[3],
                 day_of_week=cron_parts[4],
-                timezone=utc,
+                timezone=job_timezone,
             )
             trigger_args["trigger"] = trigger
             trigger_args["name"] = f"Recurring reminder {reminder['id']}"

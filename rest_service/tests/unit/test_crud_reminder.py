@@ -32,6 +32,7 @@ def sample_reminder_create():
         assistant_id=uuid4(),
         type=ReminderType.ONE_TIME,
         trigger_at=datetime(2025, 6, 1, 12, 0, tzinfo=UTC),
+        timezone="UTC",
         payload={"text": "Test reminder"},
         status=ReminderStatus.ACTIVE,
     )
@@ -152,6 +153,7 @@ class TestCreateReminder:
             mock_reminder = MagicMock()
             mock_reminder.id = uuid4()
             mock_reminder.user_id = sample_reminder_create.user_id
+            mock_reminder.timezone = sample_reminder_create.timezone
             MockReminder.return_value = mock_reminder
 
             result = await create_reminder(mock_session, sample_reminder_create)
@@ -192,6 +194,7 @@ class TestCreateReminder:
             assistant_id=uuid4(),
             type=ReminderType.ONE_TIME,
             trigger_at=trigger_time,
+            timezone="UTC",
             payload={"text": "Test"},
         )
 
@@ -205,6 +208,7 @@ class TestCreateReminder:
             call_kwargs = MockReminder.call_args[1]
             # trigger_at should be naive (tzinfo removed)
             assert call_kwargs["trigger_at"].tzinfo is None
+            assert call_kwargs["timezone"] == "UTC"
 
 
 class TestUpdateReminderStatus:
