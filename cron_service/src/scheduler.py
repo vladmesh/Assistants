@@ -1,16 +1,21 @@
+import asyncio
 import logging
 import time
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from dateutil.parser import isoparse  # For parsing ISO 8601 datetime strings
+from apscheduler.triggers.interval import IntervalTrigger
+from dateutil.parser import isoparse
 from pytz import timezone as pytz_timezone
 from pytz import utc
 
-# Change back to absolute imports (without src.)
 from redis_client import send_reminder_trigger
-from rest_client import fetch_active_reminders, mark_reminder_completed
+from rest_client import (
+    fetch_active_reminders,
+    fetch_global_settings,
+    mark_reminder_completed,
+)
 
 # Настройка логирования
 logging.basicConfig(
@@ -219,6 +224,39 @@ def update_jobs_from_rest():
                 break  # Stop retrying for now
 
 
+def _run_memory_extraction_sync():
+    """Synchronous wrapper to run async memory extraction job."""
+    # Lazy import to avoid loading heavy dependencies at module level
+    from jobs.memory_extraction import run_memory_extraction
+
+    logger.info("Starting memory extraction job...")
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            stats = loop.run_until_complete(run_memory_extraction())
+            logger.info(
+                "Memory extraction completed: %d conversations, %d facts extracted",
+                stats.get("conversations_processed", 0),
+                stats.get("facts_extracted", 0),
+            )
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.error("Memory extraction job failed: %s", e, exc_info=True)
+
+
+def _get_memory_extraction_interval_hours() -> int:
+    """Get memory extraction interval from settings."""
+    try:
+        settings = fetch_global_settings()
+        if settings:
+            return settings.get("memory_extraction_interval_hours", 24)
+    except Exception as e:
+        logger.warning("Failed to fetch settings for interval: %s", e)
+    return 24
+
+
 def start_scheduler():
     """Starts the background scheduler."""
     try:
@@ -226,11 +264,26 @@ def start_scheduler():
         scheduler.add_job(
             update_jobs_from_rest,
             "interval",
-            minutes=1,  # Check for updates every minute
+            minutes=1,
             id="update_reminders_from_rest",
             name="Update Reminders",
-            misfire_grace_time=30,  # 30 seconds grace if update job misses schedule
+            misfire_grace_time=30,
         )
+
+        # Add memory extraction job
+        extraction_interval = _get_memory_extraction_interval_hours()
+        scheduler.add_job(
+            _run_memory_extraction_sync,
+            IntervalTrigger(hours=extraction_interval, timezone=utc),
+            id="memory_extraction",
+            name="Memory Extraction",
+            misfire_grace_time=3600,  # 1 hour grace period
+        )
+        logger.info(
+            "Scheduled memory extraction job to run every %d hours",
+            extraction_interval,
+        )
+
         # Perform an initial update immediately on start
         update_jobs_from_rest()
 
@@ -247,5 +300,5 @@ def start_scheduler():
         logger.info("Scheduler shut down gracefully.")
     except Exception as e:
         logger.critical(f"Failed to start scheduler: {e}", exc_info=True)
-        scheduler.shutdown()  # Attempt graceful shutdown on error
+        scheduler.shutdown()
         raise

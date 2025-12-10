@@ -6,6 +6,7 @@ from .assistant import (
     ToolType,
 )
 from .base import BaseModel
+from .batch_job import BatchJob
 from .calendar import CalendarCredentials
 from .checkpoint import Checkpoint
 from .global_settings import GlobalSettings
@@ -32,4 +33,5 @@ __all__ = [
     "GlobalSettings",
     "Message",
     "Memory",
+    "BatchJob",
 ]

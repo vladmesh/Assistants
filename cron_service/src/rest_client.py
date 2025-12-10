@@ -1,6 +1,8 @@
 import logging
 import os
-from uuid import UUID  # Import UUID
+from datetime import datetime
+from typing import Any
+from uuid import UUID
 
 import requests
 
@@ -8,15 +10,16 @@ logger = logging.getLogger(__name__)
 
 REST_SERVICE_URL = os.getenv("REST_SERVICE_URL", "http://rest_service:8000")
 REMINDERS_ENDPOINT = f"{REST_SERVICE_URL}/api/reminders/scheduled"
-REMINDER_DETAIL_ENDPOINT_TPL = (
-    f"{REST_SERVICE_URL}/api/reminders/{{reminder_id}}"  # Template for detail endpoint
-)
+REMINDER_DETAIL_ENDPOINT_TPL = f"{REST_SERVICE_URL}/api/reminders/{{reminder_id}}"
+GLOBAL_SETTINGS_ENDPOINT = f"{REST_SERVICE_URL}/api/global-settings/"
+CONVERSATIONS_ENDPOINT = f"{REST_SERVICE_URL}/api/conversations/"
+BATCH_JOBS_ENDPOINT = f"{REST_SERVICE_URL}/api/batch-jobs/"
 
 
-def fetch_active_reminders():
+def fetch_active_reminders() -> list[dict]:
     """Fetches the list of active reminders from the REST service."""
     try:
-        response = requests.get(REMINDERS_ENDPOINT, timeout=10)  # Add timeout
+        response = requests.get(REMINDERS_ENDPOINT, timeout=10)
         response.raise_for_status()
         reminders = response.json()
         logger.info(f"Fetched {len(reminders)} active reminders.")
@@ -35,7 +38,7 @@ def mark_reminder_completed(reminder_id: UUID) -> bool:
     payload = {"status": "completed"}
     try:
         response = requests.patch(url, json=payload, timeout=10)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()
         logger.info(f"Successfully marked reminder {reminder_id} as completed.")
         return True
     except requests.RequestException as e:
@@ -48,3 +51,132 @@ def mark_reminder_completed(reminder_id: UUID) -> bool:
             e,
         )
         return False
+
+
+def fetch_global_settings() -> dict[str, Any] | None:
+    """Fetches global settings from the REST service."""
+    try:
+        response = requests.get(GLOBAL_SETTINGS_ENDPOINT, timeout=10)
+        response.raise_for_status()
+        settings = response.json()
+        logger.info("Fetched global settings.")
+        return settings
+    except requests.RequestException as e:
+        logger.error(f"Error fetching global settings: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error fetching global settings: {e}")
+        return None
+
+
+def fetch_conversations(
+    since: datetime | None = None,
+    user_id: int | None = None,
+    min_messages: int = 2,
+    limit: int = 50,
+) -> list[dict]:
+    """Fetches conversations grouped by user/assistant for fact extraction."""
+    try:
+        params: dict[str, Any] = {
+            "min_messages": min_messages,
+            "limit": limit,
+        }
+        if since:
+            params["since"] = since.isoformat()
+        if user_id:
+            params["user_id"] = user_id
+
+        response = requests.get(CONVERSATIONS_ENDPOINT, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        conversations = data.get("conversations", [])
+        logger.info(
+            f"Fetched {len(conversations)} conversations "
+            f"({data.get('total_messages', 0)} messages total)."
+        )
+        return conversations
+    except requests.RequestException as e:
+        logger.error(f"Error fetching conversations: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error fetching conversations: {e}")
+        return []
+
+
+def create_batch_job(
+    batch_id: str,
+    user_id: int,
+    assistant_id: UUID | None = None,
+    provider: str = "openai",
+    model: str = "gpt-4o-mini",
+    messages_processed: int = 0,
+) -> dict | None:
+    """Creates a batch job record for tracking."""
+    try:
+        payload = {
+            "batch_id": batch_id,
+            "user_id": user_id,
+            "provider": provider,
+            "model": model,
+            "messages_processed": messages_processed,
+        }
+        if assistant_id:
+            payload["assistant_id"] = str(assistant_id)
+
+        response = requests.post(BATCH_JOBS_ENDPOINT, json=payload, timeout=10)
+        response.raise_for_status()
+        job = response.json()
+        logger.info(f"Created batch job {job.get('id')} for user {user_id}.")
+        return job
+    except requests.RequestException as e:
+        logger.error(f"Error creating batch job: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error creating batch job: {e}")
+        return None
+
+
+def fetch_pending_batch_jobs(job_type: str = "memory_extraction") -> list[dict]:
+    """Fetches pending batch jobs for processing."""
+    try:
+        url = f"{BATCH_JOBS_ENDPOINT}pending"
+        params = {"job_type": job_type}
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        jobs = response.json()
+        logger.info(f"Fetched {len(jobs)} pending batch jobs.")
+        return jobs
+    except requests.RequestException as e:
+        logger.error(f"Error fetching pending batch jobs: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error fetching pending batch jobs: {e}")
+        return []
+
+
+def update_batch_job_status(
+    job_id: UUID,
+    status: str,
+    facts_extracted: int | None = None,
+    error_message: str | None = None,
+) -> dict | None:
+    """Updates a batch job status."""
+    try:
+        url = f"{BATCH_JOBS_ENDPOINT}{job_id}"
+        payload: dict[str, Any] = {"status": status}
+        if facts_extracted is not None:
+            payload["facts_extracted"] = facts_extracted
+        if error_message is not None:
+            payload["error_message"] = error_message
+
+        response = requests.patch(url, json=payload, timeout=10)
+        response.raise_for_status()
+        job = response.json()
+        logger.info(f"Updated batch job {job_id} status to {status}.")
+        return job
+    except requests.RequestException as e:
+        logger.error(f"Error updating batch job {job_id}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error updating batch job {job_id}: {e}")
+        return None
