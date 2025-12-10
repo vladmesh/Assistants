@@ -7,10 +7,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "DEBUG"
     API_PORT: int = 8002
-    QDRANT_HOST: str = "qdrant"
-    QDRANT_PORT: int = 6333
-    QDRANT_COLLECTION_NAME: str = "rag_data"
-
     # REST Service for Memory V2
     REST_SERVICE_URL: str = "http://rest_service:8000"
 

@@ -10,7 +10,7 @@ smart-assistant/
 ├── google_calendar_service/  # OAuth2 + события календаря
 ├── cron_service/             # APScheduler, триггеры напоминаний → Redis
 ├── telegram_bot_service/     # Telegram-бот, мост к Redis/REST
-├── rag_service/              # RAG API, OpenAI embeddings, клиент Qdrant
+├── rag_service/              # RAG API, OpenAI embeddings
 ├── admin_service/            # Streamlit-панель поверх REST
 ├── shared_models/            # Общие схемы/enum
 ├── scripts/, docs/           # Утилиты и дизайн-доки
@@ -25,7 +25,7 @@ smart-assistant/
 - FastAPI (rest/rag/calendar), Streamlit (admin).
 - LangGraph + LangChain в `assistant_service`.
 - Postgres (pgvector), Redis.
-- RAG: клиент Qdrant; контейнер Qdrant выключен в compose (нужен внешний инстанс или раскомментировать блок).
+- RAG: без внешней векторной БД (in-memory реализация).
 - OpenAI (chat + embeddings), Tavily web-search (опционально).
 - Линт/формат: Ruff (format + check). Тесты: Pytest. Логи: structlog.
 - CI/CD: GitHub Actions (lint, unit, integration, GHCR build/push, deploy).
@@ -36,13 +36,13 @@ smart-assistant/
 - `telegram_bot_service`: приём/отправка сообщений Telegram, резолвит пользователей через REST, мостит события в Redis очереди.
 - `cron_service`: тянет активные напоминания из REST, шлёт `reminder_triggered` в `REDIS_QUEUE_TO_SECRETARY`.
 - `google_calendar_service`: OAuth2 токены и операции с календарём, взаимодействует с REST и Redis.
-- `rag_service`: REST API для добавления/поиска эмбеддингов. Использует OpenAI embeddings и Qdrant client; сервис Qdrant в compose закомментирован (нужен внешний).
+- `rag_service`: REST API для добавления/поиска эмбеддингов. Использует OpenAI embeddings, хранение пока in-memory.
 - `admin_service`: Streamlit UI поверх REST (конфиг/мониторинг).
 - `shared_models`: общие Pydantic-схемы/enum для всех сервисов.
 
 ## Локальный запуск
 - Подготовить `.env`: `POSTGRES_*`, `ASYNC_DATABASE_URL`, `REDIS_HOST/PORT/DB`, `REDIS_QUEUE_TO_TELEGRAM`, `REDIS_QUEUE_TO_SECRETARY`, `OPENAI_API_KEY`, `TELEGRAM_TOKEN`, `REST_SERVICE_URL`, `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`, при использовании RAG — `QDRANT_HOST/PORT/COLLECTION`.
-- Запуск dev-стенда: `docker compose up --build -d`. Код монтируется как volume, healthcheck-и включены. Qdrant не стартует по умолчанию (раскомментировать блок в compose или подключить внешний инстанс).
+- Запуск dev-стенда: `docker compose up --build -d`. Код монтируется как volume, healthcheck-и включены.
 - Управление: `docker compose ps`, `docker compose logs -f <service>`, `docker compose restart <service>`.
 
 ## Makefile workflow (dockerized Ruff/Pytest)

@@ -2,7 +2,7 @@
 
 ## Обзор
 
-RAG (Retrieval-Augmented Generation) сервис предоставляет функциональность для хранения и поиска векторных эмбеддингов текстовых данных. Сервис использует векторную базу данных ChromaDB для эффективного хранения и поиска по эмбеддингам.
+RAG сервис сейчас работает поверх `rest_service` (pgvector) через Memory API и не содержит собственной векторной БД.
 
 ## Структура директорий
 
@@ -11,16 +11,14 @@ rag_service/
 ├── src/
 │   ├── api/
 │   │   ├── __init__.py
-│   │   └── routes.py
+│   │   ├── memory_routes.py
+│   │   └── routes.py          # health
 │   ├── config/
 │   │   ├── __init__.py
 │   │   └── settings.py
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── rag_models.py
 │   ├── services/
 │   │   ├── __init__.py
-│   │   └── vector_db_service.py
+│   │   └── memory_service.py  # работает через rest_service
 │   ├── scripts/
 │   │   └── __init__.py
 │   ├── __init__.py
@@ -36,92 +34,15 @@ rag_service/
 
 ## API Эндпоинты
 
-### Добавление данных
+### Memory API (через rest_service)
 
-```
-POST /api/data/add
-```
-
-Добавляет новые данные в векторную базу данных.
-
-**Тело запроса:**
-```json
-{
-  "text": "Текстовое содержимое",
-  "embedding": [0.1, 0.2, 0.3, ...],
-  "data_type": "shared_rule",
-  "user_id": 123,
-  "assistant_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Ответ:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "text": "Текстовое содержимое",
-  "embedding": [0.1, 0.2, 0.3, ...],
-  "data_type": "shared_rule",
-  "user_id": 123,
-  "assistant_id": "550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2023-01-01T00:00:00Z"
-}
-```
-
-### Поиск данных
-
-```
-POST /api/data/search
-```
-
-Ищет данные в векторной базе данных по эмбеддингу запроса.
-
-**Тело запроса:**
-```json
-{
-  "query_embedding": [0.1, 0.2, 0.3, ...],
-  "data_type": "shared_rule",
-  "user_id": 123,
-  "assistant_id": "550e8400-e29b-41d4-a716-446655440000",
-  "top_k": 5
-}
-```
-
-**Ответ:**
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "text": "Текстовое содержимое",
-    "distance": 0.123,
-    "metadata": {
-      "data_type": "shared_rule",
-      "user_id": 123,
-      "assistant_id": "550e8400-e29b-41d4-a716-446655440000",
-      "timestamp": "2023-01-01T00:00:00Z"
-    }
-  }
-]
-```
-
-### Проверка работоспособности
-
-```
-GET /health
-```
-
-Проверяет работоспособность сервиса.
-
-**Ответ:**
-```json
-{
-  "status": "healthy"
-}
-```
+- `POST /api/memory/search` — генерирует embedding в RAG, ищет в `rest_service` (pgvector).
+- `POST /api/memory/` — генерирует embedding и создаёт память через `rest_service`.
+- `GET /api/health` и корневой `/health` — проверки.
 
 ## Интеграция с Assistant Service
 
-RAG сервис интегрируется с Assistant Service через инструмент `RAGTool`, который позволяет ассистентам использовать функциональность RAG для генерации ответов с учетом контекста из векторной базы данных.
+Ассистент использует REST эндпоинты `rest_service` для хранения/поиска памяти; RAG сервис лишь генерирует embedding и проксирует вызовы.
 
 ## Запуск и тестирование
 
