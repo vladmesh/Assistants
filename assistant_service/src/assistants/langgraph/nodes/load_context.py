@@ -20,10 +20,9 @@ async def load_context_node(
     """
     Loads the conversation context from the database:
     1. Historical messages (up to a limit)
-    2. Current summary
-    3. User facts
 
-    Updates the AssistantState with the loaded context.
+    Note: Summary is now kept in-memory only (updated by summarize_history_node).
+    Memory retrieval is handled by retrieve_memories_node via RAG service.
     """
 
     # Extract necessary IDs
@@ -49,86 +48,33 @@ async def load_context_node(
         )
         return state  # Return state unchanged
 
-    # 1. Get the latest summary first
-    summary = None
-    try:
-        summary = await rest_client.get_user_summary(user_id, assistant_id_str)
-        if summary:
-            logger.info(
-                f"Loaded summary (ID: {summary.id}) for user {user_id}", extra=log_extra
-            )
-            print(f"Loaded summary: ID={summary.id}")
-        else:
-            logger.info(f"No summary found for user {user_id}", extra=log_extra)
-            print("No summary found")
-    except Exception as e:
-        logger.error(f"Error loading summary: {str(e)}", extra=log_extra)
-        print(f"Error loading summary: {e}")
-
-    # 2. Load historical messages
+    # Load historical messages
     messages: list[BaseMessage] = []
-    if summary and summary.last_message_id_covered:
-        # If we have a summary, load messages after the last summarized message
-        try:
-            print(
-                "Loading messages after summary "
-                f"last_id: {summary.last_message_id_covered}"
-            )
-            raw_messages = await rest_client.get_messages(
-                user_id=user_id,
-                assistant_id=assistant_id_str,
-                id_gt=summary.last_message_id_covered,
-                limit=history_limit,
-                status="processed",
-                sort_by="id",  # Сортировка по id вместо timestamp
-                sort_order="asc",
-            )
+    try:
+        raw_messages = await rest_client.get_messages(
+            user_id=user_id,
+            assistant_id=assistant_id_str,
+            limit=history_limit,
+            status="processed",
+            sort_by="id",
+            sort_order="asc",
+        )
 
-            # Convert to BaseMessage objects
-            messages = [_convert_db_message_to_langchain(msg) for msg in raw_messages]
-            logger.info(
-                (
-                    f"Loaded {len(messages)} messages after summary "
-                    f"(last_id: {summary.last_message_id_covered})"
-                ),
-                extra=log_extra,
-            )
-        except Exception as e:
-            logger.error(
-                f"Error loading messages after summary: {str(e)}", extra=log_extra
-            )
-            print(f"Error loading messages after summary: {e}")
-    else:
-        # If no summary, just load the most recent messages
-        try:
-            print("Loading most recent messages (no summary)")
-            raw_messages = await rest_client.get_messages(
-                user_id=user_id,
-                assistant_id=assistant_id_str,
-                limit=history_limit,
-                status="processed",
-                sort_by="id",  # Сортировка по id вместо timestamp
-                sort_order="asc",
-            )
+        # Convert to BaseMessage objects
+        messages = [_convert_db_message_to_langchain(msg) for msg in raw_messages]
+        logger.info(
+            f"Loaded {len(messages)} recent messages for user {user_id}",
+            extra=log_extra,
+        )
+    except Exception as e:
+        logger.error(f"Error loading messages: {str(e)}", extra=log_extra)
 
-            # Convert to BaseMessage objects
-            messages = [_convert_db_message_to_langchain(msg) for msg in raw_messages]
-            logger.info(
-                f"Loaded {len(messages)} recent messages (no summary)", extra=log_extra
-            )
-        except Exception as e:
-            logger.error(f"Error loading recent messages: {str(e)}", extra=log_extra)
-            print(f"Error loading recent messages: {e}")
-
-    # 3. Prepare the updated state
-    # В полный контекст сначала идут исторические сообщения
-    # (отсортированные в БД по id), затем входящее сообщение
-
-    # Получаем initial_message_id, если он есть в state
+    # Prepare the updated state
+    # Historical messages first (sorted by id in DB), then incoming message
     initial_message = state.get("initial_message")
     initial_message_id = state.get("initial_message_id")
 
-    # Если у initial_message есть ID из БД, добавим его в id
+    # Set DB ID on initial_message if available
     if initial_message and initial_message_id:
         initial_message.id = str(initial_message_id)
 
@@ -138,10 +84,8 @@ async def load_context_node(
         f"Loaded context contains {len(full_context)} messages", extra=log_extra
     )
 
-    # Return the updated state
     return {
         "messages": full_context,
-        "current_summary_content": summary.summary_text if summary else None,
     }
 
 
