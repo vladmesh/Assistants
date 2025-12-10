@@ -136,3 +136,28 @@ class TelegramClient:
             },
         )
         return result if isinstance(result, list) else []
+
+    async def send_chat_action(self, chat_id: int, action: str = "typing") -> bool:
+        """Send chat action to indicate bot activity (e.g., 'typing').
+
+        Args:
+            chat_id: Target chat ID
+            action: Type of action (typing, upload_photo, upload_document, etc.)
+
+        Returns:
+            True if action was sent successfully, False otherwise
+        """
+        try:
+            await self._make_request(
+                "sendChatAction", json={"chat_id": chat_id, "action": action}
+            )
+            logger.debug("Chat action sent", chat_id=chat_id, action=action)
+            return True
+        except Exception as e:
+            logger.warning(
+                "Failed to send chat action",
+                chat_id=chat_id,
+                action=action,
+                error=str(e),
+            )
+            return False
