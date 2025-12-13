@@ -134,7 +134,7 @@ migrate:
 	@docker compose exec --user $$(id -u):$$(id -g) rest_service alembic revision --autogenerate -m "$(MESSAGE)"
 
 upgrade:
-	@echo "manage.py removed; add upgrade command implementation"
+	@docker compose exec rest_service alembic upgrade head
 
 history:
-	@echo "manage.py removed; add history command implementation"
+	@docker compose exec rest_service alembic history

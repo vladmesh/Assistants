@@ -18,12 +18,12 @@ depends_on = None
 
 def upgrade() -> None:
     op.add_column(
-        "reminders",
+        "reminder",
         sa.Column("timezone", sa.String(), nullable=True),
     )
-    op.create_index(op.f("ix_reminders_timezone"), "reminders", ["timezone"], unique=False)
+    op.create_index(op.f("ix_reminder_timezone"), "reminder", ["timezone"], unique=False)
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_reminders_timezone"), table_name="reminders")
-    op.drop_column("reminders", "timezone")
+    op.drop_index(op.f("ix_reminder_timezone"), table_name="reminder")
+    op.drop_column("reminder", "timezone")
