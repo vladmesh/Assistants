@@ -23,7 +23,7 @@ smart-assistant/
 ## Ключевые технологии
 - Python 3.11, Poetry per-service.
 - FastAPI (rest/rag/calendar), Streamlit (admin).
-- LangGraph + LangChain в `assistant_service`.
+- LangChain 1.x + LangGraph 1.x в `assistant_service` (middleware архитектура).
 - Postgres (pgvector), Redis.
 - RAG: без внешней векторной БД (in-memory реализация).
 - OpenAI (chat + embeddings), Tavily web-search (опционально).
@@ -75,6 +75,6 @@ smart-assistant/
 
 ## Architecture Decision Records
 
-### ADR-001: LangGraph + LangChain как основной фреймворк (2025-12)
-- Стандартизируемся на LangGraph + LangChain; legacy OpenAI Assistants API удалён.
+### ADR-001: LangGraph + LangChain как основной фреймворк
+- LangChain 1.x + LangGraph 1.x с middleware архитектурой.
 - Один тип ассистента (LLM), контекст хранится в Postgres через REST.

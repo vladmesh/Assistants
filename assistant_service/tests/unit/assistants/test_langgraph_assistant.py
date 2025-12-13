@@ -15,21 +15,11 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import Tool
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import (  # Keep using MemorySaver for unit tests
-    MemorySaver,
-)
 from shared_models.api_schemas import ToolRead
 
-# Adjust imports based on new structure
 from assistants.langgraph.langgraph_assistant import LangGraphAssistant
 from config.settings import Settings
-
-# Assuming RestServiceClient mock is in unit/conftest.py
-# from services.rest_service import RestServiceClient
 from tools.factory import ToolFactory
-
-# from tools.time_tool import TimeToolWrapper # Example tool
 
 
 # Mock LLM remains the same
@@ -135,23 +125,15 @@ def assistant_config(time_tool_def) -> dict:
 
 
 @pytest.fixture
-def mock_checkpointer(mocker) -> BaseCheckpointSaver:
-    """Mock BaseCheckpointSaver."""
-    # Using MemorySaver as a stand-in mock for unit tests
-    return MemorySaver()
-
-
-@pytest.fixture
 @patch(
     "assistants.langgraph.langgraph_assistant.ChatOpenAI",
     new_callable=lambda: MockChatLLM,
 )
 async def assistant_instance(
     mock_llm_class,  # The patched class mock
-    mock_checkpointer: BaseCheckpointSaver,
     assistant_config: dict,
-    mock_tool_factory: ToolFactory,  # Use mocked factory
-    mock_rest_client: AsyncMock,  # Use mock from unit/conftest.py
+    mock_tool_factory: ToolFactory,
+    mock_rest_client: AsyncMock,
     assistant_user_id: str,
     assistant_id: str,
 ) -> LangGraphAssistant:
@@ -199,7 +181,7 @@ async def test_initialization(assistant_instance: LangGraphAssistant):
     assert isinstance(instance.llm, MockChatLLM)
     assert instance.tools is not None
     assert len(instance.tools) > 0  # Check tools are present
-    assert instance.compiled_graph is not None
+    assert instance.agent is not None
     assert instance.user_id is not None
     assert instance.assistant_id is not None
     assert instance.rest_client is not None
