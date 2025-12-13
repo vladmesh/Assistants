@@ -7,6 +7,7 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
+from shared_models.api_schemas.message import MessageUpdate
 
 from assistants.base_assistant import BaseAssistant
 from assistants.langgraph.middleware import (
@@ -86,6 +87,8 @@ class LangGraphAssistant(BaseAssistant):
         self.memory_retrieve_limit = memory_retrieve_limit
         self.memory_retrieve_threshold = memory_retrieve_threshold
         self.rag_client = RagServiceClient(settings=settings)
+        # Store initial_message_id for error handling
+        self._current_initial_message_id: int | None = None
 
         try:
             # Initialize LLM
@@ -147,8 +150,14 @@ class LangGraphAssistant(BaseAssistant):
         """Creates the agent with middleware using LangChain 1.x create_agent."""
         try:
             # Create middleware instances
+            # Create callback to store initial_message_id for error handling
+            def store_message_id(message_id: int) -> None:
+                self._current_initial_message_id = message_id
+
             middleware = [
-                MessageSaverMiddleware(rest_client=self.rest_client),
+                MessageSaverMiddleware(
+                    rest_client=self.rest_client, message_id_callback=store_message_id
+                ),
                 ContextLoaderMiddleware(rest_client=self.rest_client),
                 MemoryRetrievalMiddleware(
                     rag_client=self.rag_client,
@@ -224,6 +233,9 @@ class LangGraphAssistant(BaseAssistant):
             }
 
             # Invoke the agent
+            # Reset initial_message_id before invocation
+            self._current_initial_message_id = None
+            initial_message_id = None
             try:
                 result = await self.agent.ainvoke(initial_input)
 
@@ -232,6 +244,12 @@ class LangGraphAssistant(BaseAssistant):
                         "Agent execution finished but result is missing or invalid.",
                         self.name,
                     )
+
+                # Get initial_message_id from result state if available
+                initial_message_id = result.get("initial_message_id")
+                # Also update the instance variable
+                if initial_message_id:
+                    self._current_initial_message_id = initial_message_id
 
                 # Extract the response from the result
                 ai_response = None
@@ -257,6 +275,39 @@ class LangGraphAssistant(BaseAssistant):
                 return ai_response
 
             except Exception as e:
+                # Try to update message status to error if initial_message_id available
+                # Handles cases where MessageSaverMiddleware saved the message
+                # but agent execution failed before FinalizerMiddleware could update
+                # Use instance variable as fallback since result may not be available
+                message_id_to_update = (
+                    initial_message_id or self._current_initial_message_id
+                )
+                if message_id_to_update:
+                    try:
+                        update_data = MessageUpdate(status="error")
+                        await self.rest_client.update_message(
+                            message_id_to_update, update_data
+                        )
+                        logger.info(
+                            f"Updated message status to 'error' "
+                            f"(ID: {message_id_to_update}) "
+                            f"after agent execution failure",
+                            extra=combined_log_extra,
+                        )
+                    except Exception as update_error:
+                        logger.error(
+                            f"Failed to update message status to 'error': "
+                            f"{update_error}",
+                            extra=combined_log_extra,
+                            exc_info=True,
+                        )
+                else:
+                    logger.debug(
+                        "Could not update message status: "
+                        "initial_message_id not available",
+                        extra=combined_log_extra,
+                    )
+
                 # Log the error and re-raise
                 logger.exception(
                     f"Error during agent execution: {e}",

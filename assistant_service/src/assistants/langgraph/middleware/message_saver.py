@@ -25,9 +25,10 @@ class MessageSaverMiddleware(AgentMiddleware[AssistantAgentState]):
 
     state_schema = AssistantAgentState
 
-    def __init__(self, rest_client: RestServiceClient):
+    def __init__(self, rest_client: RestServiceClient, message_id_callback: Any = None):
         super().__init__()
         self.rest_client = rest_client
+        self.message_id_callback = message_id_callback
 
     async def abefore_agent(
         self, state: AssistantAgentState, runtime: Runtime
@@ -85,7 +86,7 @@ class MessageSaverMiddleware(AgentMiddleware[AssistantAgentState]):
             content_type="text",
             status="pending_processing",
             tool_call_id=None,
-            metadata={},
+            meta_data={},
         )
 
         # Special handling for tool messages
@@ -100,6 +101,16 @@ class MessageSaverMiddleware(AgentMiddleware[AssistantAgentState]):
                     f"Saved input message (ID: {saved_message.id}, Role: {role})",
                     extra=log_extra,
                 )
+                # Call callback if provided to store initial_message_id
+                # for error handling
+                if self.message_id_callback:
+                    try:
+                        self.message_id_callback(saved_message.id)
+                    except Exception as callback_error:
+                        logger.warning(
+                            f"Error calling message_id_callback: {callback_error}",
+                            extra=log_extra,
+                        )
                 return {
                     "initial_message_id": saved_message.id,
                     "initial_message": input_message,
