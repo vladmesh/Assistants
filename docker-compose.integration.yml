@@ -3,7 +3,7 @@
 #   make test-integration                    # Run all integration tests
 #   make test-integration SERVICE=rest_service  # Run specific service integration tests
 #
-# Provides shared infrastructure: PostgreSQL, Redis
+# Provides shared infrastructure: PostgreSQL, Redis, RAG service
 
 services:
   # Shared PostgreSQL for services that need it
@@ -29,6 +29,45 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
+
+  # RAG service for integration tests
+  test-rag-service:
+    build:
+      context: .
+      dockerfile: rag_service/Dockerfile
+    environment:
+      - REST_SERVICE_URL=http://test-rest-service:8000
+      - OPENAI_API_KEY=${TEST_OPENAI_KEY:-test-openai-key-placeholder}
+      - EMBEDDING_MODEL=text-embedding-3-small
+      - LOG_LEVEL=DEBUG
+      - API_PORT=8002
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      test-rest-service:
+        condition: service_healthy
+
+  # REST service for RAG integration tests
+  test-rest-service:
+    build:
+      context: .
+      dockerfile: rest_service/Dockerfile
+    environment:
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://${TEST_DB_USER:-test_user}:${TEST_DB_PASSWORD:-testpass123}@test-db:5432/${TEST_DB_NAME:-test_db}
+      - DATABASE_URL=postgresql://${TEST_DB_USER:-test_user}:${TEST_DB_PASSWORD:-testpass123}@test-db:5432/${TEST_DB_NAME:-test_db}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      test-db:
+        condition: service_healthy
 
   # Integration test runner - uses base test image
   integration-test:
@@ -60,6 +99,7 @@ services:
       - REDIS_QUEUE_TO_SECRETARY=queue:to_secretary
       # Services
       - REST_SERVICE_URL=http://localhost:8000
+      - RAG_SERVICE_URL=http://test-rag-service:8002
       # Test keys (mocked in tests, use env vars or defaults)
       - OPENAI_API_KEY=${TEST_OPENAI_KEY:-test-openai-key-placeholder}
       - TELEGRAM_BOT_TOKEN=${TEST_TELEGRAM_TOKEN:-test-telegram-token}
@@ -68,6 +108,8 @@ services:
       test-db:
         condition: service_healthy
       test-redis:
+        condition: service_healthy
+      test-rag-service:
         condition: service_healthy
     command: >
       bash -c "
