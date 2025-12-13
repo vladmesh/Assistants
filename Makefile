@@ -6,15 +6,37 @@ PWD_DIR := $(shell pwd)
 
 help:
 	@echo "Targets: lint, format, format-check, test-unit, test-integration, test-all, build-test-base"
-	@echo "Use SERVICE=<name> to target a specific service"
+	@echo "Use SERVICE=<name> or positional arg to target a specific service"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make build-test-base                  # Build base test image (run once)"
 	@echo "  make test-unit [SERVICE=<name>]       # Fast unit tests (no DB/Redis)"
+	@echo "  make test-unit <service>              # Same as above (e.g. make test-unit assistant_service)"
 	@echo "  make test-integration [SERVICE=<name>]  # Integration tests (with DB/Redis)"
+	@echo "  make test-integration <service>       # Same as above"
 	@echo "  make test-all                         # Run all unit + integration tests"
 
-SERVICE ?= all
+# Support positional arguments: make test-unit assistant_service
+# Extract SERVICE from command line arguments if not set explicitly
+ifndef SERVICE
+  # Get all goals that are not known targets
+  POSITIONAL_ARGS := $(filter-out help lint format format-check test-unit test-integration test-all build-test-base migrate upgrade history,$(MAKECMDGOALS))
+  ifneq ($(POSITIONAL_ARGS),)
+    # Take first positional arg as SERVICE if it's a valid service name
+    CANDIDATE := $(firstword $(POSITIONAL_ARGS))
+    ifneq ($(filter $(CANDIDATE),$(SERVICES) shared_models),)
+      SERVICE := $(CANDIDATE)
+    else
+      SERVICE := all
+    endif
+  else
+    SERVICE := all
+  endif
+endif
+
+# Prevent Make from trying to run positional args as targets
+%:
+	@:
 
 lint:
 ifeq ($(SERVICE),all)
