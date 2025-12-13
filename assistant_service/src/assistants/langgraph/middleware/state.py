@@ -36,3 +36,4 @@ class AssistantAgentState(AgentState):
     current_summary_content: NotRequired[str | None]
     newly_summarized_message_ids: NotRequired[list[int] | None]
     relevant_memories: NotRequired[list[dict[str, Any]] | None]
+    error_occurred: NotRequired[bool | None]
