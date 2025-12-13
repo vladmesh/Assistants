@@ -1,12 +1,11 @@
 """User-Secretary relationship model"""
 
-from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship
 
 from .assistant import Assistant
-from .base import BaseModel, get_utc_now
+from .base import BaseModel
 from .user import TelegramUser
 
 
@@ -17,8 +16,7 @@ class UserSecretaryLink(BaseModel, table=True):
     user_id: int = Field(foreign_key="telegramuser.id")
     secretary_id: UUID = Field(foreign_key="assistant.id")
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=get_utc_now)
-    updated_at: datetime = Field(default_factory=get_utc_now)
+    # created_at/updated_at inherited from BaseModel with proper timezone support
 
     # Relationships
     user: "TelegramUser" = Relationship(
