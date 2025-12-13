@@ -28,5 +28,6 @@ class TimestampSchema(BaseSchema):
     @classmethod
     def ensure_timezone_aware(cls, value: datetime) -> datetime:
         if value.tzinfo is None:
-            raise ValueError("Datetime must be timezone-aware")
+            # Assume naive datetime is UTC
+            value = value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
