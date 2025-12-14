@@ -1,9 +1,9 @@
 """Middleware for saving incoming messages to the database."""
 
-import logging
 from typing import Any
 from uuid import UUID
 
+import structlog
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langgraph.runtime import Runtime
@@ -13,14 +13,15 @@ from services.rest_service import RestServiceClient
 
 from .state import AssistantAgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MessageSaverMiddleware(AgentMiddleware[AssistantAgentState]):
     """Middleware that saves incoming messages to the database.
 
-    Runs before the agent starts (before_agent hook).
+    Runs before the first model call (before_model hook).
     Sets initial_message_id in state for later reference.
+    Uses _message_saved flag in state to run only once per invocation.
     """
 
     state_schema = AssistantAgentState
@@ -30,11 +31,20 @@ class MessageSaverMiddleware(AgentMiddleware[AssistantAgentState]):
         self.rest_client = rest_client
         self.message_id_callback = message_id_callback
 
-    async def abefore_agent(
+    async def abefore_model(
         self, state: AssistantAgentState, runtime: Runtime
     ) -> dict[str, Any] | None:
-        """Save the input message to the database before agent starts (async)."""
+        """Save the input message to the database (async).
+
+        Only runs on the first model call (checks _message_saved flag).
+        """
         log_extra = state.get("log_extra", {})
+        logger.debug("MessageSaverMiddleware.abefore_model called", extra=log_extra)
+
+        # Skip if message already saved in this invocation
+        if state.get("_message_saved"):
+            logger.debug("Message already saved, skipping", extra=log_extra)
+            return None
         user_id_str = state.get("user_id", "")
         assistant_id_str = state.get("assistant_id", "")
 
@@ -45,13 +55,13 @@ class MessageSaverMiddleware(AgentMiddleware[AssistantAgentState]):
             )
             return None
 
-        # Get the last message (should be the new input)
-        messages = state.get("messages", [])
-        if not messages:
-            logger.warning("No messages in state, nothing to save.", extra=log_extra)
+        # Get the pending message (the new input)
+        input_message = state.get("pending_message")
+        if not input_message:
+            logger.warning(
+                "No pending_message in state, nothing to save.", extra=log_extra
+            )
             return None
-
-        input_message = messages[-1]
 
         # Convert user_id to int
         try:
@@ -114,6 +124,7 @@ class MessageSaverMiddleware(AgentMiddleware[AssistantAgentState]):
                 return {
                     "initial_message_id": saved_message.id,
                     "initial_message": input_message,
+                    "_message_saved": True,
                 }
             else:
                 logger.error(

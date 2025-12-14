@@ -1,8 +1,8 @@
 """Middleware for retrieving relevant memories from RAG service."""
 
-import logging
 from typing import Any
 
+import structlog
 from langchain.agents.middleware import AgentMiddleware
 from langgraph.runtime import Runtime
 
@@ -10,7 +10,7 @@ from services.rag_service import RagServiceClient
 
 from .state import AssistantAgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MemoryRetrievalMiddleware(AgentMiddleware[AssistantAgentState]):
@@ -37,8 +37,9 @@ class MemoryRetrievalMiddleware(AgentMiddleware[AssistantAgentState]):
         self, state: AssistantAgentState, runtime: Runtime
     ) -> dict[str, Any] | None:
         """Retrieve relevant memories based on the conversation (async)."""
-        user_id_str = state.get("user_id", "")
         log_extra = state.get("log_extra", {})
+        logger.debug("MemoryRetrievalMiddleware.abefore_model called", extra=log_extra)
+        user_id_str = state.get("user_id", "")
 
         if not user_id_str:
             logger.warning(

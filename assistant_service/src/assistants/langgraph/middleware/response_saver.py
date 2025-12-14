@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage
 from langgraph.runtime import Runtime
 from shared_models.api_schemas.message import MessageCreate, MessageUpdate
 
@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class ResponseSaverMiddleware(AgentMiddleware[AssistantAgentState]):
-    """Middleware that saves assistant responses to the database.
+    """Middleware that saves final assistant responses to the database.
 
     Runs after each model call (after_model hook).
-    Saves AI messages and tool messages to the database.
+    Only saves final AIMessages (with content and without tool_calls).
+    Intermediate messages (tool calls, tool results) are not saved to history.
     """
 
     state_schema = AssistantAgentState
@@ -69,81 +70,74 @@ class ResponseSaverMiddleware(AgentMiddleware[AssistantAgentState]):
         # Get the last message - should be the AI response
         last_message = messages[-1]
 
-        # Only save AI and Tool messages
-        if isinstance(last_message, HumanMessage):
+        # Only save final AIMessages (with content and without tool_calls)
+        if not isinstance(last_message, AIMessage):
             return None
 
-        # Save the message
+        # Skip intermediate messages (tool calls without final response)
+        if last_message.tool_calls:
+            logger.debug(
+                "Skipping intermediate AIMessage with tool_calls",
+                extra=log_extra,
+            )
+            return None
+
+        # Skip empty responses
+        if not last_message.content:
+            logger.debug(
+                "Skipping AIMessage with empty content",
+                extra=log_extra,
+            )
+            return None
+
+        # Save the final response
         await self._save_message(last_message, user_id, assistant_id, log_extra)
+
+        # Update initial message status to 'processed' (finalization)
+        initial_message_id = state.get("initial_message_id")
+        if initial_message_id:
+            await self._update_initial_message_status(
+                initial_message_id, "processed", log_extra
+            )
 
         return None
 
     async def _save_message(
         self,
-        message: BaseMessage,
+        message: AIMessage,
         user_id: int,
         assistant_id: UUID,
         log_extra: dict,
     ) -> None:
-        """Save a single message to the database."""
-        if isinstance(message, AIMessage):
-            role = "assistant"
-            content = message.content if message.content is not None else ""
-            metadata: dict[str, Any] = {}
+        """Save a final AIMessage to the database."""
+        content = message.content if message.content is not None else ""
 
-            if message.tool_calls:
-                tool_calls_data = [
-                    {"name": tc.get("name"), "id": tc.get("id"), "args": tc.get("args")}
-                    for tc in message.tool_calls
-                ]
-                metadata["tool_calls"] = tool_calls_data
-
-            message_payload = MessageCreate(
-                user_id=user_id,
-                assistant_id=assistant_id,
-                role=role,
-                content=content,
-                content_type="text",
-                status="processed",
-                tool_call_id=None,
-                meta_data=metadata if metadata else None,
-            )
-
-        elif isinstance(message, ToolMessage):
-            role = "tool"
-            content = str(message.content)
-            metadata = {"tool_name": message.name}
-            if message.additional_kwargs:
-                metadata.update(message.additional_kwargs)
-
-            message_payload = MessageCreate(
-                user_id=user_id,
-                assistant_id=assistant_id,
-                role=role,
-                content=content,
-                content_type="text",
-                status="processed",
-                tool_call_id=message.tool_call_id,
-                meta_data=metadata if metadata else None,
-            )
-        else:
-            return
+        message_payload = MessageCreate(
+            user_id=user_id,
+            assistant_id=assistant_id,
+            role="assistant",
+            content=content,
+            content_type="text",
+            status="processed",
+            tool_call_id=None,
+            meta_data=None,
+        )
 
         try:
             saved = await self.rest_client.create_message(message_payload)
             if saved and saved.id:
                 logger.info(
-                    f"Successfully saved message to DB (ID: {saved.id}, Role: {role})",
+                    f"Saved assistant response to DB (ID: {saved.id})",
                     extra=log_extra,
                 )
             else:
                 logger.error(
-                    "Failed to save message: No ID returned from API",
+                    "Failed to save response: No ID returned from API",
                     extra=log_extra,
                 )
         except Exception as e:
             logger.error(
-                f"Error saving message (Role: {role}): {str(e)}",
+                f"Error saving assistant response: {str(e)}",
                 extra=log_extra,
                 exc_info=True,
             )
