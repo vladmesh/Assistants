@@ -14,6 +14,7 @@ class AssistantAgentState(AgentState):
     - messages: Annotated[Sequence[BaseMessage], add_messages]
 
     Custom fields for our assistant:
+    - pending_message: Incoming message to process (added to messages by middleware)
     - initial_message: The incoming message that triggered this invocation
     - user_id: User ID for API calls and context
     - assistant_id: Assistant ID for API calls
@@ -26,6 +27,7 @@ class AssistantAgentState(AgentState):
     - relevant_memories: Retrieved memories from RAG service
     """
 
+    pending_message: NotRequired[BaseMessage | None]
     initial_message: NotRequired[BaseMessage | None]
     user_id: NotRequired[str | None]
     assistant_id: NotRequired[str | None]
@@ -37,3 +39,6 @@ class AssistantAgentState(AgentState):
     newly_summarized_message_ids: NotRequired[list[int] | None]
     relevant_memories: NotRequired[list[dict[str, Any]] | None]
     error_occurred: NotRequired[bool | None]
+    # Internal flags for middleware to run only once per invocation
+    _context_loaded: NotRequired[bool | None]
+    _message_saved: NotRequired[bool | None]

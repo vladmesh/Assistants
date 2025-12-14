@@ -14,7 +14,6 @@ from assistants.langgraph.middleware import (
     AssistantAgentState,
     ContextLoaderMiddleware,
     DynamicPromptMiddleware,
-    FinalizerMiddleware,
     MemoryRetrievalMiddleware,
     MessageSaverMiddleware,
     ResponseSaverMiddleware,
@@ -89,8 +88,6 @@ class LangGraphAssistant(BaseAssistant):
         self.rag_client = RagServiceClient(settings=settings)
         # Store initial_message_id for error handling
         self._current_initial_message_id: int | None = None
-        # Store FinalizerMiddleware instance for error handling
-        self._finalizer_middleware: FinalizerMiddleware | None = None
 
         try:
             # Initialize LLM
@@ -156,10 +153,6 @@ class LangGraphAssistant(BaseAssistant):
             def store_message_id(message_id: int) -> None:
                 self._current_initial_message_id = message_id
 
-            # Create FinalizerMiddleware instance and store it for error handling
-            finalizer_middleware = FinalizerMiddleware(rest_client=self.rest_client)
-            self._finalizer_middleware = finalizer_middleware
-
             middleware = [
                 MessageSaverMiddleware(
                     rest_client=self.rest_client, message_id_callback=store_message_id
@@ -180,7 +173,6 @@ class LangGraphAssistant(BaseAssistant):
                     system_prompt_template=self.system_prompt_template
                 ),
                 ResponseSaverMiddleware(rest_client=self.rest_client),
-                finalizer_middleware,
             ]
 
             return create_agent(
@@ -225,8 +217,12 @@ class LangGraphAssistant(BaseAssistant):
 
         try:
             # Prepare initial state with custom fields
+            # Note: messages starts empty, pending_message holds the input.
+            # ContextLoaderMiddleware will load history and append pending_message
+            # to ensure correct chronological order.
             initial_input = {
-                "messages": [message],
+                "messages": [],
+                "pending_message": message,
                 "user_id": user_id,
                 "assistant_id": self.assistant_id,
                 "llm_context_size": self.context_window_size,
@@ -281,40 +277,13 @@ class LangGraphAssistant(BaseAssistant):
                 return ai_response
 
             except Exception as e:
-                # Try to update message status to error using FinalizerMiddleware
+                # Try to update message status to error
                 # Handles cases where MessageSaverMiddleware saved the message
-                # but agent execution failed before FinalizerMiddleware could update
-                # Use instance variable as fallback since result may not be available
+                # but agent execution failed
                 message_id_to_update = (
                     initial_message_id or self._current_initial_message_id
                 )
-                if message_id_to_update and self._finalizer_middleware:
-                    try:
-                        # Create state with error_occurred flag set to True
-                        error_state = {
-                            **initial_input,
-                            "initial_message_id": message_id_to_update,
-                            "error_occurred": True,
-                            "log_extra": combined_log_extra,
-                        }
-                        # Call FinalizerMiddleware directly to update status
-                        await self._finalizer_middleware.aafter_agent(error_state, None)
-                        logger.info(
-                            f"Updated message status to 'error' via "
-                            f"FinalizerMiddleware (ID: {message_id_to_update}) "
-                            f"after agent execution failure",
-                            extra=combined_log_extra,
-                        )
-                    except Exception as update_error:
-                        logger.error(
-                            f"Failed to update message status to 'error' via "
-                            f"FinalizerMiddleware: {update_error}",
-                            extra=combined_log_extra,
-                            exc_info=True,
-                        )
-                elif message_id_to_update:
-                    # Fallback to direct REST API call if FinalizerMiddleware
-                    # not available
+                if message_id_to_update:
                     try:
                         update_data = MessageUpdate(status="error")
                         await self.rest_client.update_message(

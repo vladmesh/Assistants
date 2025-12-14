@@ -2,7 +2,6 @@
 
 from .context_loader import ContextLoaderMiddleware
 from .dynamic_prompt import DynamicPromptMiddleware
-from .finalizer import FinalizerMiddleware
 from .memory_retrieval import MemoryRetrievalMiddleware
 from .message_saver import MessageSaverMiddleware
 from .response_saver import ResponseSaverMiddleware
@@ -13,7 +12,6 @@ __all__ = [
     "AssistantAgentState",
     "ContextLoaderMiddleware",
     "DynamicPromptMiddleware",
-    "FinalizerMiddleware",
     "MemoryRetrievalMiddleware",
     "MessageSaverMiddleware",
     "ResponseSaverMiddleware",
