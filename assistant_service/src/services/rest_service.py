@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+from shared_models import get_logger
 from shared_models.api_schemas import (
     AssistantRead,
     GlobalSettingsBase,
@@ -22,7 +23,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from config.logger import get_logger
 from config.settings import settings
 
 logger = get_logger(__name__)

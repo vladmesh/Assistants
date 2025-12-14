@@ -5,9 +5,9 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from shared_models import get_logger
 from shared_models.api_schemas import CalendarCredentialsRead
 
-from config.logger import get_logger
 from config.settings import Settings
 from schemas.calendar import CreateEventRequest
 

@@ -4,8 +4,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
+from shared_models import get_logger
 
-from config.logger import get_logger
 from tools.base import BaseTool
 from utils.error_handler import ToolExecutionError
 

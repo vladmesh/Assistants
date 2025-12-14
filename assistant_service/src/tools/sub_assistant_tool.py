@@ -1,9 +1,9 @@
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from shared_models import get_logger
 
 from assistants.base_assistant import BaseAssistant
-from config.logger import get_logger
 from config.settings import Settings
 from tools.base import BaseTool, SubAssistantSchema
 

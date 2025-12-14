@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from config.logger import get_logger
+from shared_models import get_logger
 
 logger = get_logger(__name__)
 

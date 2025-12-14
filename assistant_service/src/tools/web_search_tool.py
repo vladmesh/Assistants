@@ -1,9 +1,9 @@
 """Web search tool using Tavily API"""
 
 from pydantic import BaseModel, Field
+from shared_models import get_logger
 from tavily import TavilyClient
 
-from config.logger import get_logger
 from tools.base import BaseTool
 from utils.error_handler import ToolExecutionError
 

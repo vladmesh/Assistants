@@ -4,8 +4,8 @@ import json
 from typing import Any
 
 import redis.asyncio as redis
+from shared_models import get_logger
 
-from config.logger import get_logger
 from config.settings import Settings
 
 logger = get_logger(__name__)
