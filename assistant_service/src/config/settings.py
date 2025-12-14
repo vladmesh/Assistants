@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     # Basic settings
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "DEBUG"
+    LOG_JSON_FORMAT: bool = True
     HTTP_CLIENT_TIMEOUT: float = 60.0
 
     # API Keys (loaded from .env)

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     # Basic settings
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "DEBUG"
+    LOG_JSON_FORMAT: bool = True
 
     # Google OAuth settings
     GOOGLE_CLIENT_ID: str

@@ -1,12 +1,11 @@
 """Main entry point for the admin panel"""
 
-import logging
 from pathlib import Path
 
 import streamlit as st
 import streamlit_authenticator as stauth
-import structlog
 import yaml
+from shared_models import configure_logging, get_logger
 from yaml.loader import SafeLoader
 
 from config.settings import settings
@@ -24,8 +23,12 @@ st.set_page_config(
 )
 
 # Configure logging
-logging.basicConfig(level=settings.LOG_LEVEL)
-logger = structlog.get_logger()
+configure_logging(
+    service_name="admin_service",
+    log_level=settings.LOG_LEVEL,
+    json_format=settings.LOG_JSON_FORMAT,
+)
+logger = get_logger(__name__)
 
 # Load authentication configuration
 config_path = Path(__file__).parent / "config" / "credentials.yaml"

@@ -9,6 +9,7 @@ packages = [{ include = "shared_models", from = "src" }]
 python = "^3.11"
 pydantic = "^2.4.2"
 pydantic-settings = "^2.0.3"
+structlog = "^24.1.0"
 
 
 [tool.poetry.group.dev.dependencies]

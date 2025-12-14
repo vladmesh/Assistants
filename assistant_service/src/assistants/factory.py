@@ -540,9 +540,9 @@ class AssistantFactory:
 
                     if latest_updated_at_aware > loaded_at_aware:
                         logger.info(
-                            "Assistant config for %s (user %s) changed. Reloading.",
-                            assistant_uuid,
-                            user_id,
+                            "Assistant config changed, reloading",
+                            assistant_id=str(assistant_uuid),
+                            user_id=user_id,
                         )
                         # Remove old instance from cache before reloading
                         async with self._cache_lock:

@@ -15,5 +15,10 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 5
     DB_MAX_OVERFLOW: int = 10
 
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_JSON_FORMAT: bool = True
+    ENVIRONMENT: str = "production"
+
 
 settings = Settings()

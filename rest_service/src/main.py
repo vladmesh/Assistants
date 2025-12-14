@@ -4,8 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from shared_models import LogEventType, configure_logging, get_logger
 
+from config import settings
 from database import init_db
+from middleware import CorrelationIdMiddleware
 
 # Import routers from correct locations
 from routers import (
@@ -24,47 +27,56 @@ from routers import (
     users,
 )
 
+# Configure structured logging
+configure_logging(
+    service_name="rest_service",
+    log_level=settings.LOG_LEVEL,
+    json_format=settings.LOG_JSON_FORMAT,
+)
+logger = get_logger(__name__)
+
 
 # Define a filter to exclude /health endpoint logs
 class HealthCheckFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        # Uvicorn access logs typically have scope info in args
-        # Check if the path in the access log record is /health
-        # Example format: ('127.0.0.1:12345', 'GET', '/health', '1.1', 200)
-        # Note: Args positions might vary based on Uvicorn version/config
         try:
             if len(record.args) >= 3 and isinstance(record.args[2], str):
                 return record.args[2] != "/health"
         except IndexError:
-            pass  # Or log a warning if needed
+            pass
         return True
 
 
 # Get the Uvicorn access logger and add the filter
 logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
-# --- End Logging Configuration ---
 
 
 # Инициализация приложения
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manages application lifespan events (startup/shutdown)."""
-    # Startup
+    logger.info("Starting REST service", event_type=LogEventType.STARTUP)
     await init_db()
     yield
-    # Shutdown
+    logger.info("Shutting down REST service", event_type=LogEventType.SHUTDOWN)
 
 
 app = FastAPI(lifespan=lifespan, title="Assistant Service API")
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
+# Add correlation ID middleware
+app.add_middleware(CorrelationIdMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Обработчик ошибок 422 с логированием."""
     errors = exc.errors()
-    logger.error(f"Ошибка валидации: {errors}")
+    logger.error(
+        "Validation error",
+        event_type=LogEventType.ERROR,
+        errors=errors,
+        path=str(request.url.path),
+    )
     return JSONResponse(
         status_code=422,
         content={"detail": errors},

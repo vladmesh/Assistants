@@ -1,19 +1,31 @@
 import asyncio
 
-import structlog
+from shared_models import LogEventType, configure_logging, get_logger
 
-# Import the entry point from the bot lifecycle module
 from bot.lifecycle import run_bot
+from config.settings import settings
 
-# Configure logging here or ensure it's done in run_bot
-# Keep basicConfig for initial setup if run_bot's config is complex
-logger = structlog.get_logger()
+# Configure logging early
+configure_logging(
+    service_name="telegram_bot_service",
+    log_level=settings.log_level,
+    json_format=settings.log_json_format,
+)
+logger = get_logger(__name__)
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(run_bot())
     except KeyboardInterrupt:
-        logger.info("Application stopped by KeyboardInterrupt.")
+        logger.info(
+            "Application stopped by KeyboardInterrupt",
+            event_type=LogEventType.SHUTDOWN,
+        )
     except Exception as e:
-        logger.critical("Application failed to run.", error=str(e), exc_info=True)
+        logger.critical(
+            "Application failed to run",
+            event_type=LogEventType.ERROR,
+            error=str(e),
+            exc_info=True,
+        )

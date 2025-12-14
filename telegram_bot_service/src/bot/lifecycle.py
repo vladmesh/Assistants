@@ -1,22 +1,19 @@
 import asyncio
-import logging
 import signal
 
 import aiohttp
-import structlog
 from redis import asyncio as aioredis
+from shared_models import LogEventType, get_logger
 
 from clients.rest import RestClient
 from clients.telegram import TelegramClient
 from config.settings import settings
 from services.response_processor import handle_assistant_responses
 
-# Импортируем функции, которые будут вызываться из этого модуля
-# (пока они могут быть не реализованы или импорты могут не работать)
 from .dispatcher import dispatch_update
 from .polling import run_polling
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class BotLifecycle:
@@ -184,29 +181,7 @@ class BotLifecycle:
 
 async def run_bot() -> None:
     """Entry point function to run the bot."""
-    # Configure logging (can be moved to a dedicated config function/module)
-    structlog.configure(
-        processors=[
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
-    formatter = structlog.stdlib.ProcessorFormatter(
-        processor=structlog.dev.ConsoleRenderer(),
-    )
-    handler = logging.StreamHandler()
-    handler.setFormatter(formatter)
-    root_logger = logging.getLogger()
-    root_logger.addHandler(handler)
-    # Set level from settings? e.g. settings.log_level
-    root_logger.setLevel(logging.INFO)
-    # Temporary basic config:
-    # import logging
-    # logging.basicConfig(level=logging.INFO)
-
-    logger.info("Starting Telegram Bot Service...")
+    # Logging is already configured in main.py
+    logger.info("Starting Telegram Bot Service", event_type=LogEventType.STARTUP)
     lifecycle = BotLifecycle()
     await lifecycle.run()

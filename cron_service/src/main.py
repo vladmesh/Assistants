@@ -1,12 +1,19 @@
-import logging
+from shared_models import LogEventType, configure_logging, get_logger
 
+from config import settings
 from scheduler import start_scheduler
 
-logger = logging.getLogger(__name__)
+# Configure logging
+configure_logging(
+    service_name="cron_service",
+    log_level=settings.LOG_LEVEL,
+    json_format=settings.LOG_JSON_FORMAT,
+)
+logger = get_logger(__name__)
 
 
 def main():
-    logger.info("Запускаем Cron Service...")
+    logger.info("Starting Cron Service", event_type=LogEventType.STARTUP)
     start_scheduler()
 
 
