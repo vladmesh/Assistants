@@ -1,9 +1,6 @@
 import os
 
-import structlog
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-logger = structlog.get_logger()
 
 
 class Settings(BaseSettings):
@@ -12,6 +9,10 @@ class Settings(BaseSettings):
     # Telegram settings
     telegram_token: str
     telegram_rate_limit: int = 30  # requests per second
+
+    # Logging
+    log_level: str = "INFO"
+    log_json_format: bool = True
 
     # Redis settings
     redis_host: str = "redis"
@@ -57,17 +58,4 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
-try:
-    settings = Settings()
-    logger.info(
-        "Settings loaded",
-        redis_host=settings.redis_host,
-        redis_port=settings.redis_port,
-        rest_service_url=settings.rest_service_url,
-        redis_url=settings.redis_url,
-        input_queue=settings.input_queue,
-        assistant_output_queue=settings.assistant_output_queue,
-    )
-except Exception as e:
-    logger.error("Error loading settings", error=str(e))
-    raise
+settings = Settings()

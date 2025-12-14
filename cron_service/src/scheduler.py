@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import time
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -9,6 +8,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from dateutil.parser import isoparse
 from pytz import timezone as pytz_timezone
 from pytz import utc
+from shared_models import LogEventType, get_logger
 
 from redis_client import send_reminder_trigger
 from rest_client import (
@@ -17,13 +17,7 @@ from rest_client import (
     mark_reminder_completed,
 )
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # секунды
@@ -35,43 +29,54 @@ scheduler = BackgroundScheduler(timezone=utc)
 
 def _job_func(reminder_data):
     """Function executed by the scheduler when a reminder triggers."""
-    logger.info("--- ENTERING _job_func ---")
     reminder_id = reminder_data.get("id", "unknown")
     reminder_type = reminder_data.get("type")
-    logger.info(f"_job_func started for reminder ID: {reminder_id}")
+    user_id = reminder_data.get("user_id")
+
+    logger.info(
+        "Job started",
+        event_type=LogEventType.JOB_START,
+        reminder_id=reminder_id,
+        reminder_type=reminder_type,
+        user_id=user_id,
+    )
     try:
-        logger.info(f"Executing job for reminder ID: {reminder_id}")
-        logger.info(
-            f"--- BEFORE Calling send_reminder_trigger for ID: {reminder_id} ---"
-        )
         send_reminder_trigger(reminder_data)
-        logger.info(f"Successfully sent trigger for reminder ID: {reminder_id}")
+        logger.info(
+            "Reminder trigger sent",
+            event_type=LogEventType.JOB_END,
+            reminder_id=reminder_id,
+        )
 
         # Mark one-time reminders as completed after sending trigger
         if reminder_type == "one_time" and reminder_id != "unknown":
             logger.info(
-                f"Attempting to mark one-time reminder {reminder_id} as completed."
+                "Marking one-time reminder as completed",
+                reminder_id=reminder_id,
             )
             try:
                 success = mark_reminder_completed(reminder_id)
                 if not success:
                     logger.warning(
-                        "Call to mark_reminder_completed for %s returned False.",
-                        reminder_id,
+                        "mark_reminder_completed returned False",
+                        reminder_id=reminder_id,
                     )
             except Exception as api_exc:
                 logger.error(
-                    "Exception calling mark_reminder_completed for %s: %s",
-                    reminder_id,
-                    api_exc,
+                    "Exception calling mark_reminder_completed",
+                    event_type=LogEventType.ERROR,
+                    reminder_id=reminder_id,
+                    error=str(api_exc),
                 )
 
     except Exception as e:
         logger.error(
-            f"Error executing job for reminder ID {reminder_id}: {e}", exc_info=True
+            "Error executing job",
+            event_type=LogEventType.JOB_ERROR,
+            reminder_id=reminder_id,
+            error=str(e),
+            exc_info=True,
         )
-        # Consider adding retry logic here if needed
-    logger.info(f"_job_func finished for reminder ID: {reminder_id}")
 
 
 def schedule_job(reminder):

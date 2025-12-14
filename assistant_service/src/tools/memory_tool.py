@@ -67,7 +67,8 @@ class MemorySaveTool(BaseTool):
             base_url = self.settings.RAG_SERVICE_URL if self.settings else None
             if not base_url:
                 logger.error(
-                    "RAG Service URL not configured in settings for %s", self.name
+                    "RAG Service URL not configured in settings",
+                    tool_name=self.name,
                 )
                 raise ToolError(
                     "RAG Service URL not configured",
@@ -132,9 +133,7 @@ class MemorySaveTool(BaseTool):
 
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
-            logger.info(
-                "Successfully saved memory via %s tool", self.name, extra=log_extra
-            )
+            logger.info("Successfully saved memory", **log_extra)
 
             return "Воспоминание успешно сохранено."
 
@@ -143,7 +142,7 @@ class MemorySaveTool(BaseTool):
             log_extra["duration_ms"] = duration_ms
             log_extra["http_status"] = e.response.status_code
             log_extra["response_text"] = e.response.text
-            logger.error("API call failed for %s: %s", self.name, e, extra=log_extra)
+            logger.error("API call failed", error=str(e), **log_extra)
             raise ToolError(
                 message=(
                     f"Ошибка API при сохранении воспоминания "
@@ -156,9 +155,7 @@ class MemorySaveTool(BaseTool):
         except httpx.RequestError as e:
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
-            logger.error(
-                "Network error during %s execution: %s", self.name, e, extra=log_extra
-            )
+            logger.error("Network error during execution", error=str(e), **log_extra)
             raise ToolError(
                 message=f"Сетевая ошибка при сохранении воспоминания: {e}",
                 tool_name=self.name,
@@ -181,7 +178,8 @@ class MemorySearchTool(BaseTool):
             base_url = self.settings.RAG_SERVICE_URL if self.settings else None
             if not base_url:
                 logger.error(
-                    "RAG Service URL not configured in settings for %s", self.name
+                    "RAG Service URL not configured in settings",
+                    tool_name=self.name,
                 )
                 raise ToolError(
                     "RAG Service URL not configured",
@@ -245,9 +243,7 @@ class MemorySearchTool(BaseTool):
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
             log_extra["results_count"] = len(results)
-            logger.info(
-                "Memory search completed via %s tool", self.name, extra=log_extra
-            )
+            logger.info("Memory search completed", **log_extra)
 
             if not results:
                 return "Релевантных воспоминаний не найдено."
@@ -269,7 +265,7 @@ class MemorySearchTool(BaseTool):
             log_extra["duration_ms"] = duration_ms
             log_extra["http_status"] = e.response.status_code
             log_extra["response_text"] = e.response.text
-            logger.error("API call failed for %s: %s", self.name, e, extra=log_extra)
+            logger.error("API call failed", error=str(e), **log_extra)
             raise ToolError(
                 message=(
                     f"Ошибка API при поиске воспоминаний "
@@ -282,9 +278,7 @@ class MemorySearchTool(BaseTool):
         except httpx.RequestError as e:
             duration_ms = round((time.perf_counter() - start_time) * 1000)
             log_extra["duration_ms"] = duration_ms
-            logger.error(
-                "Network error during %s execution: %s", self.name, e, extra=log_extra
-            )
+            logger.error("Network error during execution", error=str(e), **log_extra)
             raise ToolError(
                 message=f"Сетевая ошибка при поиске воспоминаний: {e}",
                 tool_name=self.name,

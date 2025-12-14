@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "DEBUG"
+    LOG_JSON_FORMAT: bool = True
     API_PORT: int = 8002
     # REST Service for Memory V2
     REST_SERVICE_URL: str = "http://rest_service:8000"

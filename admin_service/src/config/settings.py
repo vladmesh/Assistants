@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # Logging settings
     LOG_LEVEL: str = Field(default="INFO")
+    LOG_JSON_FORMAT: bool = Field(default=True)
 
     # Application settings
     APP_TITLE: str = "Admin Panel"

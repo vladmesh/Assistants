@@ -2,19 +2,24 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from shared_models import LogEventType, configure_logging, get_logger
 
 from api.routes import router
-from config.logger import get_logger
 from config.settings import Settings
 from services.calendar import GoogleCalendarService
 from services.redis_service import RedisService
 from services.rest_service import RestService
 
-# Get configured logger
-logger = get_logger(__name__)
-
 # Create settings instance
 settings = Settings()
+
+# Configure logging
+configure_logging(
+    service_name="google_calendar_service",
+    log_level=settings.LOG_LEVEL,
+    json_format=settings.LOG_JSON_FORMAT,
+)
+logger = get_logger(__name__)
 
 # Create services (can be created outside lifespan if they don't need
 # startup/shutdown logic intrinsically)
@@ -26,20 +31,16 @@ redis_service = RedisService(settings)
 # Lifespan context manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Code to run on startup
-    logger.info("Starting Google Calendar service (using lifespan)")
-    # Add services to app state if they need to be accessed within lifespan
-    # or request handlers
+    logger.info("Starting Google Calendar service", event_type=LogEventType.STARTUP)
     app.state.rest_service = rest_service
     app.state.calendar_service = calendar_service
     app.state.redis_service = redis_service
-    # Any other startup logic like connecting to DB if needed
     yield
-    # Code to run on shutdown
-    logger.info("Shutting down Google Calendar service (using lifespan)")
+    logger.info(
+        "Shutting down Google Calendar service", event_type=LogEventType.SHUTDOWN
+    )
     await rest_service.close()
     await redis_service.close()
-    # Any other shutdown logic
 
 
 # Create FastAPI app with lifespan

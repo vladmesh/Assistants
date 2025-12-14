@@ -1,25 +1,35 @@
 import asyncio
-import signal  # Add signal handling
+import signal
 
 from dotenv import load_dotenv
+from shared_models import LogEventType, configure_logging, get_logger
 
-from config.logger import get_logger
 from config.settings import get_settings
 from orchestrator import AssistantOrchestrator
 
+load_dotenv()
+
+# Configure logging early
+settings = get_settings()
+configure_logging(
+    service_name="assistant_service",
+    log_level=settings.LOG_LEVEL,
+    json_format=settings.LOG_JSON_FORMAT,
+)
 logger = get_logger(__name__)
-load_dotenv()  # Load .env for API keys
 
 
 async def main():
     """Main entry point with preloading, background refresh, and graceful shutdown."""
-    settings = get_settings()
     service = AssistantOrchestrator(settings)
     listen_task = None
     shutdown_event = asyncio.Event()
 
     def _signal_handler(*_):
-        logger.info("Shutdown signal received, initiating graceful shutdown...")
+        logger.info(
+            "Shutdown signal received",
+            event_type=LogEventType.SHUTDOWN,
+        )
         shutdown_event.set()
 
     loop = asyncio.get_running_loop()
@@ -27,7 +37,7 @@ async def main():
         loop.add_signal_handler(sig, _signal_handler)
 
     try:
-        logger.info("Starting assistant service...")
+        logger.info("Starting assistant service", event_type=LogEventType.STARTUP)
         # Preload assignments before starting main loops
         await service.factory._preload_secretaries()
 
@@ -67,17 +77,21 @@ async def main():
                 # Potentially re-raise or handle specific exceptions
 
     except (KeyboardInterrupt, asyncio.CancelledError):
-        logger.info("Service interrupted. Shutting down...")
+        logger.info("Service interrupted", event_type=LogEventType.SHUTDOWN)
     except Exception as e:
-        logger.exception("Service encountered an unhandled error", error=e)
+        logger.exception(
+            "Service encountered an unhandled error",
+            event_type=LogEventType.ERROR,
+            error=str(e),
+        )
     finally:
-        logger.info("Closing resources...")
+        logger.info("Closing resources")
         # Stop background tasks using the new method
         await service.factory.stop_background_tasks()
         await service.factory.close()
         # Close the redis client which is part of the orchestrator
         await service.redis.aclose()
-        logger.info("Assistant service shut down.")
+        logger.info("Assistant service shut down", event_type=LogEventType.SHUTDOWN)
 
 
 if __name__ == "__main__":
