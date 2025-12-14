@@ -7,6 +7,7 @@ packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
+shared-models = { path = "../shared_models" }
 fastapi = "^0.109.2"
 uvicorn = "^0.27.1"
 pydantic = "^2.6.1"
@@ -18,9 +19,11 @@ openai = "^1.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
+shared-models = { path = "../shared_models" }
 mypy = "^1.6.1"
 
 [tool.poetry.group.test.dependencies]
+shared-models = { path = "../shared_models" }
 pytest = "^7.4.3"
 pytest-asyncio = "^0.21.1"
 pytest-cov = "^4.1.0"

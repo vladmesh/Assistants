@@ -1,0 +1,50 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # REST Service metrics
+  - job_name: 'rest_service'
+    static_configs:
+      - targets: ['rest_service:8000']
+    metrics_path: '/metrics'
+
+  # Assistant Service metrics
+  - job_name: 'assistant_service'
+    static_configs:
+      - targets: ['assistant_service:8080']
+    metrics_path: '/metrics'
+
+  # Cron Service metrics
+  - job_name: 'cron_service'
+    static_configs:
+      - targets: ['cron_service:8080']
+    metrics_path: '/metrics'
+
+  # RAG Service metrics
+  - job_name: 'rag_service'
+    static_configs:
+      - targets: ['rag_service:8002']
+    metrics_path: '/metrics'
+
+  # Redis metrics (via redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis_exporter:9121']
+
+  # PostgreSQL metrics (via postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres_exporter:9187']

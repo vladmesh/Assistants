@@ -6,9 +6,8 @@ from uuid import UUID  # Import UUID for reminder_id type hint in delete_reminde
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from shared_models import get_logger
 from shared_models.api_schemas import ReminderCreate  # For ReminderCreateTool
-
-from config.logger import get_logger
 
 # Import RestServiceClient and specific schemas
 from services.rest_service import RestServiceClient

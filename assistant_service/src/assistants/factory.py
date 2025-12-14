@@ -2,6 +2,9 @@ import asyncio  # Add asyncio
 from datetime import UTC, datetime, timedelta  # Add timezone and timedelta
 from uuid import UUID
 
+# Project imports
+from shared_models import get_logger
+
 # Импортируем модели Pydantic для глобальных настроек
 from shared_models.api_schemas.global_settings import (
     GlobalSettingsBase,
@@ -11,9 +14,6 @@ from shared_models.enums import AssistantType
 
 from assistants.base_assistant import BaseAssistant
 from assistants.langgraph.langgraph_assistant import LangGraphAssistant
-
-# Project imports
-from config.logger import get_logger
 from config.settings import Settings
 
 # Import the recommended serializer
@@ -121,7 +121,8 @@ class AssistantFactory:
                 self._global_settings_cache = settings
                 self._global_settings_last_fetched = now
                 self.logger.info(
-                    "Fetched and cached global settings: %s", settings.model_dump()
+                    "Fetched and cached global settings",
+                    settings=settings.model_dump(),
                 )
                 return settings
             else:
@@ -160,8 +161,8 @@ class AssistantFactory:
                 # Do NOT call get_assistant_by_id while holding the lock
             else:
                 logger.info(
-                    "No assignment for user %s in cache, attempting direct fetch.",
-                    user_id,
+                    "No assignment for user in cache, attempting direct fetch.",
+                    user_id=user_id,
                 )
 
         # If found in cache, fetch assistant instance outside the lock
@@ -173,9 +174,9 @@ class AssistantFactory:
                 )
             except Exception as e:
                 logger.exception(
-                    "Failed to get secretary %s for user %s from cache; direct fetch.",
-                    secretary_id_to_fetch,
-                    user_id,
+                    "Failed to get secretary from cache; direct fetch.",
+                    secretary_id=secretary_id_to_fetch,
+                    user_id=user_id,
                     error=str(e),
                     exc_info=True,
                 )
@@ -189,9 +190,9 @@ class AssistantFactory:
             if secretary_data and secretary_data.get("id"):
                 secretary_uuid = UUID(secretary_data["id"])
                 logger.info(
-                    "Fetched secretary assignment for user %s: secretary_id=%s",
-                    user_id,
-                    secretary_uuid,
+                    "Fetched secretary assignment for user",
+                    user_id=user_id,
+                    secretary_id=secretary_uuid,
                 )
                 # Cache update skipped: no timestamp in response payload
 
@@ -201,14 +202,14 @@ class AssistantFactory:
                 )
             else:
                 logger.warning(
-                    "No active secretary found for user %s via direct fetch.", user_id
+                    "No active secretary found via direct fetch.", user_id=user_id
                 )
                 raise ValueError(f"No secretary assigned for user {user_id}")
 
         except Exception as e:
             logger.exception(
-                "Failed to get secretary assignment for user %s via direct fetch",
-                user_id,
+                "Failed to get secretary assignment via direct fetch",
+                user_id=user_id,
                 error=str(e),
                 exc_info=True,
             )
@@ -254,9 +255,9 @@ class AssistantFactory:
                 return instance
 
         self.logger.info(
-            "Assistant %s for user %s not in cache; creating instance",
-            assistant_uuid,
-            user_id,
+            "Assistant not in cache; creating instance",
+            assistant_id=assistant_uuid,
+            user_id=user_id,
         )
 
         try:
@@ -304,9 +305,9 @@ class AssistantFactory:
 
             if assistant_type == AssistantType.LLM:
                 self.logger.debug(
-                    "Creating LangGraphAssistant for %s (user %s)",
-                    assistant_uuid,
-                    user_id,
+                    "Creating LangGraphAssistant",
+                    assistant_id=assistant_uuid,
+                    user_id=user_id,
                 )
                 assistant_instance = LangGraphAssistant(
                     assistant_id=str(assistant_uuid),
@@ -325,9 +326,9 @@ class AssistantFactory:
                 )
                 # Load initial data after creating instance
                 self.logger.info(
-                    "Loading initial data for LangGraphAssistant %s user %s",
-                    assistant_uuid,
-                    user_id,
+                    "Loading initial data for LangGraphAssistant",
+                    assistant_id=assistant_uuid,
+                    user_id=user_id,
                 )
                 await assistant_instance._load_initial_data()
             else:
@@ -344,9 +345,9 @@ class AssistantFactory:
                         datetime.now(UTC),  # Use timezone.utc
                     )
                 self.logger.info(
-                    "Assistant %s for user %s added to cache.",
-                    assistant_uuid,
-                    user_id,
+                    "Assistant added to cache.",
+                    assistant_id=assistant_uuid,
+                    user_id=user_id,
                 )
                 return assistant_instance
             else:
@@ -354,13 +355,10 @@ class AssistantFactory:
 
         except Exception as e:
             logger.exception(
-                "Failed to get or create assistant %s for user %s",
-                assistant_uuid,
-                user_id,
-                error=str(e),
-                exc_info=True,  # Include traceback
-                assistant_id=str(assistant_uuid),
+                "Failed to get or create assistant",
+                assistant_id=assistant_uuid,
                 user_id=user_id,
+                exc_info=True,
             )
             # Re-raise specific error if it was ValueError, otherwise wrap
             if isinstance(e, ValueError):
@@ -471,8 +469,8 @@ class AssistantFactory:
         # Preload assistant instances outside the lock
         # Use asyncio.gather for concurrent preloading
         logger.info(
-            "Attempting to preload %d assistant instances...",
-            len(assignments_to_preload),
+            "Attempting to preload assistant instances",
+            preload_count=len(assignments_to_preload),
         )
         preload_tasks = []
         for user_id, secretary_id in assignments_to_preload:
@@ -489,9 +487,9 @@ class AssistantFactory:
             user_id, secretary_id = assignments_to_preload[i]
             if isinstance(result, BaseAssistant):
                 logger.debug(
-                    "Preloaded assistant %s for user %s",
-                    secretary_id,
-                    user_id,
+                    "Preloaded assistant for user",
+                    assistant_id=secretary_id,
+                    user_id=user_id,
                 )
                 assistants_preloaded += 1
             else:
@@ -508,10 +506,10 @@ class AssistantFactory:
                 assistants_failed += 1
 
         logger.info(
-            "Preloading complete. Loaded: %s, Failed: %s, Cached: %s",
-            assistants_preloaded,
-            assistants_failed,
-            assignments_loaded,
+            "Preloading complete",
+            loaded=assistants_preloaded,
+            failed=assistants_failed,
+            assignments=assignments_loaded,
         )
 
     # Method adjusted for clarity
@@ -529,9 +527,9 @@ class AssistantFactory:
                 if latest_updated_at and loaded_at:
                     if not latest_updated_at.tzinfo or not loaded_at.tzinfo:
                         logger.error(
-                            "Expected tz-aware datetimes for assistant %s user %s",
-                            assistant_uuid,
-                            user_id,
+                            "Expected tz-aware datetimes for assistant",
+                            assistant_id=assistant_uuid,
+                            user_id=user_id,
                         )
                         return
 

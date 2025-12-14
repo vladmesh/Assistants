@@ -1,8 +1,8 @@
 """Tool data validation and transformation from REST service"""
 
 from pydantic import BaseModel
+from shared_models import get_logger
 
-from config.logger import get_logger
 from config.settings import Settings
 
 logger = get_logger(__name__)

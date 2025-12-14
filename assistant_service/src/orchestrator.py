@@ -6,11 +6,15 @@ import time
 import redis.asyncio as redis
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
-from shared_models import AssistantResponseMessage, QueueMessage, QueueTrigger
+from shared_models import (
+    AssistantResponseMessage,
+    QueueMessage,
+    QueueTrigger,
+    get_logger,
+)
 
 from assistants.base_assistant import BaseAssistant
 from assistants.factory import AssistantFactory
-from config.logger import get_logger
 from config.settings import Settings
 from services.redis_stream import RedisStreamClient
 from services.rest_service import RestServiceClient
