@@ -3,11 +3,13 @@ from uuid import UUID
 
 import redis.asyncio as aioredis
 import structlog
+from shared_models import QueueDirection, QueueLogger
 from shared_models.queue import QueueMessage
 
 from config.settings import settings
 
 logger = structlog.get_logger()
+queue_logger = QueueLogger(settings.rest_service_url)
 
 
 async def send_message_to_assistant(
@@ -63,6 +65,22 @@ async def send_message_to_assistant(
             queue=settings.input_queue,
             message_preview=content[:50],
         )
+
+        # Log to REST API for observability
+        try:
+            await queue_logger.log_message(
+                queue_name="to_secretary",
+                direction=QueueDirection.INBOUND,
+                message_type="human",
+                payload=queue_message.model_dump(),
+                user_id=metadata.get("telegram_id"),
+                source="telegram",
+            )
+        except Exception as log_err:
+            logger.warning(
+                "Failed to log queue message to REST API",
+                error=str(log_err),
+            )
     except aioredis.RedisError as e:
         logger.error(
             "Redis error sending message to assistant queue",
