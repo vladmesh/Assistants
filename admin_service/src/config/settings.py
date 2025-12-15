@@ -19,12 +19,22 @@ class Settings(BaseSettings):
     APP_ICON: str = "🔧"
     APP_LAYOUT: str = "wide"
 
+    # Monitoring URLs
+    GRAFANA_URL: str | None = Field(default=None)
+    PROMETHEUS_URL: str | None = Field(default=None)
+    LOKI_URL: str | None = Field(default=None)
+
     # Navigation
     NAV_ITEMS: list[str] = [
         "Пользователи",
         "Ассистенты",
         "Инструменты",
         "Глобальные настройки",
+        "---",
+        "Логи",
+        "Джобы",
+        "Очереди",
+        "Метрики",
     ]
 
     # Database settings (admin UI does not access DB directly)

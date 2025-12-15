@@ -24,6 +24,23 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
+# === Monitoring Schemas ===
+class JobExecutionResponse:
+    """Job execution data."""
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class QueueStatsResponse:
+    """Queue statistics data."""
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
 class RestServiceClient:
     """Client for interacting with the REST service."""
 
@@ -284,3 +301,114 @@ class RestServiceClient:
         except Exception as e:
             logger.error(f"Error getting messages: {e}")
             return []
+
+    # --- Monitoring: Job Executions --- #
+
+    async def get_job_executions(
+        self,
+        job_type: str | None = None,
+        status: str | None = None,
+        user_id: int | None = None,
+        hours: int = 24,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Get job executions with filters."""
+        try:
+            params = {"hours": hours, "limit": limit, "offset": offset}
+            if job_type:
+                params["job_type"] = job_type
+            if status:
+                params["status"] = status
+            if user_id:
+                params["user_id"] = user_id
+
+            response = await self._client.get(
+                f"{self.base_url}/api/job-executions/", params=params
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error getting job executions: {e}")
+            return []
+
+    async def get_job_stats(self, hours: int = 24) -> dict | None:
+        """Get job execution statistics."""
+        try:
+            response = await self._client.get(
+                f"{self.base_url}/api/job-executions/stats", params={"hours": hours}
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error getting job stats: {e}")
+            return None
+
+    # --- Monitoring: Queue Stats --- #
+
+    async def get_queue_stats(self) -> list[dict]:
+        """Get queue statistics."""
+        try:
+            response = await self._client.get(f"{self.base_url}/api/queue-stats/")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error getting queue stats: {e}")
+            return []
+
+    async def get_queue_messages(
+        self,
+        queue_name: str | None = None,
+        user_id: int | None = None,
+        correlation_id: str | None = None,
+        hours: int = 24,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Get queue message logs with filters."""
+        try:
+            params = {"hours": hours, "limit": limit, "offset": offset}
+            if queue_name:
+                params["queue_name"] = queue_name
+            if user_id:
+                params["user_id"] = user_id
+            if correlation_id:
+                params["correlation_id"] = correlation_id
+
+            response = await self._client.get(
+                f"{self.base_url}/api/queue-stats/messages", params=params
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error getting queue messages: {e}")
+            return []
+
+    # --- User Memories --- #
+
+    async def get_user_memories(
+        self, user_id: int, limit: int = 100, offset: int = 0
+    ) -> list[dict]:
+        """Get memories for a user."""
+        try:
+            params = {"limit": limit, "offset": offset}
+            response = await self._client.get(
+                f"{self.base_url}/api/memories/user/{user_id}", params=params
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error getting user memories: {e}")
+            return []
+
+    async def delete_memory(self, memory_id: str) -> bool:
+        """Delete a memory by ID."""
+        try:
+            response = await self._client.delete(
+                f"{self.base_url}/api/memories/{memory_id}"
+            )
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting memory: {e}")
+            return False

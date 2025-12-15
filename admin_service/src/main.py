@@ -10,6 +10,10 @@ from yaml.loader import SafeLoader
 
 from config.settings import settings
 from pages.assistants.assistants import show_assistants_page
+from pages.monitoring.jobs import show_jobs_page
+from pages.monitoring.logs import show_logs_page
+from pages.monitoring.metrics import show_metrics_page
+from pages.monitoring.queues import show_queues_page
 from pages.system_settings.global_settings import show_global_settings_page
 from pages.tools.tools import show_tools_page
 from pages.users.users import show_users_page
@@ -114,15 +118,24 @@ elif auth_status is True:
     st.sidebar.title(f"Welcome *{user_name}*")
     authenticator.logout("Logout", "sidebar")  # Logout button in the sidebar
 
-    # Sidebar navigation
-    page = st.sidebar.radio("Навигация", settings.NAV_ITEMS)
+    # Sidebar navigation (filter out separator)
+    nav_items = [item for item in settings.NAV_ITEMS if item != "---"]
+    page = st.sidebar.radio("Навигация", nav_items)
 
     # Page routing
-    if page == settings.NAV_ITEMS[0]:  # Users
+    if page == "Пользователи":
         show_users_page(rest_client)
-    elif page == settings.NAV_ITEMS[1]:  # Assistants
+    elif page == "Ассистенты":
         show_assistants_page(rest_client)
-    elif page == settings.NAV_ITEMS[2]:  # Tools
+    elif page == "Инструменты":
         show_tools_page(rest_client)
-    elif page == settings.NAV_ITEMS[3]:  # Глобальные настройки
+    elif page == "Глобальные настройки":
         show_global_settings_page(rest_client)
+    elif page == "Логи":
+        show_logs_page()
+    elif page == "Джобы":
+        show_jobs_page(rest_client)
+    elif page == "Очереди":
+        show_queues_page(rest_client)
+    elif page == "Метрики":
+        show_metrics_page()
