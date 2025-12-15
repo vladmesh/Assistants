@@ -51,18 +51,24 @@ Alerts are configured via Grafana Unified Alerting and can send notifications to
 ### Setup Telegram Alerts
 
 1. Create a Telegram bot via [@BotFather](https://t.me/BotFather) or use existing bot
-2. Get the chat ID where alerts should be sent (can be your personal chat or a group)
-3. Add environment variables to `.env`:
+2. **Important:** Send `/start` to your bot first to initialize the chat
+3. Get the chat ID (send any message to bot, then check `https://api.telegram.org/bot<TOKEN>/getUpdates`)
+4. Add environment variables to `.env`:
 
 ```bash
 TELEGRAM_ALERT_BOT_TOKEN=your_bot_token_here
 TELEGRAM_ALERT_CHAT_ID=your_chat_id_here
 ```
 
-4. Restart Grafana:
+5. Start monitoring stack with env file:
 ```bash
-docker compose -f docker-compose.monitoring.yml restart grafana
+cd monitoring
+docker compose -f docker-compose.monitoring.yml --env-file ../.env up -d
 ```
+
+**Note:** Due to Grafana's env var handling, you may need to configure the contact point via UI:
+1. Open Grafana -> Alerting -> Contact points
+2. Edit `telegram-alerts` and set bot token + chat ID manually
 
 ### Alert Rules
 
