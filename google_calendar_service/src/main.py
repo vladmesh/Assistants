@@ -2,10 +2,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from shared_models import LogEventType, configure_logging, get_logger
 
 from api.routes import router
 from config.settings import Settings
+from metrics import PrometheusMiddleware, get_content_type, get_metrics
 from services.calendar import GoogleCalendarService
 from services.redis_service import RedisService
 from services.rest_service import RestService
@@ -51,7 +53,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware
+# Add middleware
+app.add_middleware(PrometheusMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -68,6 +71,12 @@ app.include_router(router)
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(content=get_metrics(), media_type=get_content_type())
 
 
 if __name__ == "__main__":

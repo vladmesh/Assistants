@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     LOG_JSON_FORMAT: bool = True
     HTTP_CLIENT_TIMEOUT: float = 60.0
 
+    # Metrics
+    METRICS_PORT: int = 8080
+
     # API Keys (loaded from .env)
     OPENAI_API_KEY: str
     TAVILY_API_KEY: str | None = None

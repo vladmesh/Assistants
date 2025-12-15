@@ -27,6 +27,7 @@ psycopg = {extras = ["binary"], version = "^3.2.6"}
 aiopg = "^1.4.0"
 sqlalchemy = "^2.0.31"
 alembic = "^1.15.2"
+prometheus-client = "^0.21.0"
 
 [tool.poetry.group.dev.dependencies]
 shared-models = { path = "../shared_models" }

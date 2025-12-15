@@ -1,5 +1,6 @@
 import asyncio
 import signal
+from http.server import HTTPServer
 
 import aiohttp
 from redis import asyncio as aioredis
@@ -8,6 +9,7 @@ from shared_models import LogEventType, get_logger
 from clients.rest import RestClient
 from clients.telegram import TelegramClient
 from config.settings import settings
+from metrics import start_metrics_server
 from services.response_processor import handle_assistant_responses
 
 from .dispatcher import dispatch_update
@@ -23,12 +25,18 @@ class BotLifecycle:
         self._telegram_client: TelegramClient | None = None
         self._rest_client: RestClient | None = None
         self._redis_client: aioredis.Redis | None = None
+        self._metrics_server: HTTPServer | None = None
         self._tasks: list[asyncio.Task] = []
         self._should_stop = asyncio.Event()
 
     async def _initialize_clients(self) -> None:
         """Initialize external service clients and their sessions."""
         logger.info("Initializing clients...")
+
+        # Start metrics server
+        self._metrics_server = start_metrics_server(port=settings.metrics_port)
+        logger.info("Metrics server started", port=settings.metrics_port)
+
         self._telegram_client = TelegramClient()
         self._rest_client = RestClient()
 
@@ -122,6 +130,10 @@ class BotLifecycle:
         if self._redis_client:
             await self._redis_client.close()
             logger.info("Redis client connection closed.")
+
+        if self._metrics_server:
+            self._metrics_server.shutdown()
+            logger.info("Metrics server shut down.")
 
         logger.warning("Shutdown complete.")
 

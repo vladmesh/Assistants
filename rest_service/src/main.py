@@ -3,11 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from shared_models import LogEventType, configure_logging, get_logger
 
 from config import settings
 from database import init_db
+from metrics import PrometheusMiddleware, get_content_type, get_metrics
 from middleware import CorrelationIdMiddleware
 
 # Import routers from correct locations
@@ -65,8 +66,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, title="Assistant Service API")
 
-# Add correlation ID middleware
+# Add middleware
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(PrometheusMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
@@ -107,6 +109,12 @@ app.include_router(queue_stats.router, prefix="/api")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return Response(content=get_metrics(), media_type=get_content_type())
 
 
 if __name__ == "__main__":
