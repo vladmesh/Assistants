@@ -1,5 +1,7 @@
 import asyncio
 import time
+import traceback
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -10,11 +12,16 @@ from pytz import timezone as pytz_timezone
 from pytz import utc
 from shared_models import LogEventType, get_logger
 
+import metrics
 from redis_client import send_reminder_trigger
 from rest_client import (
+    complete_job_execution,
+    create_job_execution,
+    fail_job_execution,
     fetch_active_reminders,
     fetch_global_settings,
     mark_reminder_completed,
+    start_job_execution,
 )
 
 logger = get_logger(__name__)
@@ -32,6 +39,22 @@ def _job_func(reminder_data):
     reminder_id = reminder_data.get("id", "unknown")
     reminder_type = reminder_data.get("type")
     user_id = reminder_data.get("user_id")
+    job_id = f"{JOB_ID_PREFIX}{reminder_id}"
+    start_time = time.perf_counter()
+
+    # Create execution record
+    execution = create_job_execution(
+        job_id=job_id,
+        job_name=f"Reminder {reminder_id}",
+        job_type="reminder",
+        scheduled_at=datetime.now(UTC),
+        user_id=user_id,
+        reminder_id=reminder_id if reminder_id != "unknown" else None,
+    )
+    execution_id = execution.get("id") if execution else None
+
+    if execution_id:
+        start_job_execution(execution_id)
 
     logger.info(
         "Job started",
@@ -39,7 +62,9 @@ def _job_func(reminder_data):
         reminder_id=reminder_id,
         reminder_type=reminder_type,
         user_id=user_id,
+        execution_id=execution_id,
     )
+
     try:
         send_reminder_trigger(reminder_data)
         logger.info(
@@ -69,6 +94,12 @@ def _job_func(reminder_data):
                     error=str(api_exc),
                 )
 
+        # Record success
+        duration = time.perf_counter() - start_time
+        if execution_id:
+            complete_job_execution(execution_id)
+        metrics.record_job_completed("reminder", duration)
+
     except Exception as e:
         logger.error(
             "Error executing job",
@@ -77,6 +108,10 @@ def _job_func(reminder_data):
             error=str(e),
             exc_info=True,
         )
+        # Record failure
+        if execution_id:
+            fail_job_execution(execution_id, str(e), traceback.format_exc())
+        metrics.record_job_failed("reminder")
 
 
 def schedule_job(reminder):
@@ -210,6 +245,12 @@ def update_jobs_from_rest():
             for reminder in reminders:
                 schedule_job(reminder)
 
+            # Update metrics - count scheduled reminder jobs
+            reminder_jobs = [
+                j for j in scheduler.get_jobs() if j.id.startswith(JOB_ID_PREFIX)
+            ]
+            metrics.update_scheduled_jobs_count("reminder", len(reminder_jobs))
+
             logger.info("Finished updating reminders from REST service.")
             break  # Exit loop on success
 
@@ -232,9 +273,30 @@ def update_jobs_from_rest():
 def _run_memory_extraction_sync():
     """Synchronous wrapper to run async memory extraction job."""
     # Lazy import to avoid loading heavy dependencies at module level
+    import json
+
     from jobs.memory_extraction import run_memory_extraction
 
-    logger.info("Starting memory extraction job...")
+    start_time = time.perf_counter()
+
+    # Create execution record
+    execution = create_job_execution(
+        job_id="memory_extraction",
+        job_name="Memory Extraction",
+        job_type="memory_extraction",
+        scheduled_at=datetime.now(UTC),
+    )
+    execution_id = execution.get("id") if execution else None
+
+    if execution_id:
+        start_job_execution(execution_id)
+
+    logger.info(
+        "Starting memory extraction job...",
+        event_type=LogEventType.JOB_START,
+        execution_id=execution_id,
+    )
+
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -244,11 +306,28 @@ def _run_memory_extraction_sync():
                 "Memory extraction completed: %d conversations, %d facts extracted",
                 stats.get("conversations_processed", 0),
                 stats.get("facts_extracted", 0),
+                event_type=LogEventType.JOB_END,
             )
+
+            # Record success
+            duration = time.perf_counter() - start_time
+            if execution_id:
+                complete_job_execution(execution_id, json.dumps(stats))
+            metrics.record_job_completed("memory_extraction", duration)
+
         finally:
             loop.close()
     except Exception as e:
-        logger.error("Memory extraction job failed: %s", e, exc_info=True)
+        logger.error(
+            "Memory extraction job failed: %s",
+            e,
+            exc_info=True,
+            event_type=LogEventType.JOB_ERROR,
+        )
+        # Record failure
+        if execution_id:
+            fail_job_execution(execution_id, str(e), traceback.format_exc())
+        metrics.record_job_failed("memory_extraction")
 
 
 def _get_memory_extraction_interval_hours() -> int:
@@ -258,7 +337,7 @@ def _get_memory_extraction_interval_hours() -> int:
         if settings:
             return settings.get("memory_extraction_interval_hours", 24)
     except Exception as e:
-        logger.warning("Failed to fetch settings for interval: %s", e)
+        logger.warning("Failed to fetch settings for interval", error=str(e))
     return 24
 
 
@@ -285,8 +364,8 @@ def start_scheduler():
             misfire_grace_time=3600,  # 1 hour grace period
         )
         logger.info(
-            "Scheduled memory extraction job to run every %d hours",
-            extraction_interval,
+            "Scheduled memory extraction job",
+            interval_hours=extraction_interval,
         )
 
         # Perform an initial update immediately on start

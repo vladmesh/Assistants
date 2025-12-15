@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_JSON_FORMAT: bool = True
 
+    # Metrics
+    METRICS_PORT: int = 8080
+
     # Redis
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379

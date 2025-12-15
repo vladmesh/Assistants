@@ -116,6 +116,9 @@ services:
       - REDIS_DB=${REDIS_DB}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+      - REST_SERVICE_URL=http://rest_service:8000
+    ports:
+      - "8080:8080"
     volumes:
       - ./cron_service/src:/src # для разработки
     depends_on:
@@ -126,7 +129,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: [ "CMD-SHELL", "pidof python" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 60s
       timeout: 10s
       retries: 3

@@ -10,6 +10,7 @@ from .batch_job import BatchJob
 from .calendar import CalendarCredentials
 from .checkpoint import Checkpoint
 from .global_settings import GlobalSettings
+from .job_execution import JobExecution, JobStatus
 from .memory import Memory
 from .message import Message
 from .reminder import Reminder, ReminderStatus, ReminderType
@@ -34,4 +35,6 @@ __all__ = [
     "Message",
     "Memory",
     "BatchJob",
+    "JobExecution",
+    "JobStatus",
 ]

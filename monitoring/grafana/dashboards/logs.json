@@ -37,7 +37,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service=~\"$service\", level=~\"$level\"} |= `$search` | json",
+          "expr": "{project=\"assistants\", service=~\"$service\", level=~\"$level\"} | json",
           "refId": "A"
         }
       ],
@@ -54,114 +54,51 @@
         "current": {
           "selected": true,
           "text": "All",
-          "value": ".+"
+          "value": "$__all"
         },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "definition": "label_values({project=\"assistants\"}, service)",
         "hide": 0,
         "includeAll": true,
+        "allValue": ".+",
         "label": "Service",
         "multi": false,
         "name": "service",
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": ".+"
-          },
-          {
-            "selected": false,
-            "text": "assistant_service",
-            "value": "assistant_service"
-          },
-          {
-            "selected": false,
-            "text": "rest_service",
-            "value": "rest_service"
-          },
-          {
-            "selected": false,
-            "text": "telegram_bot_service",
-            "value": "telegram_bot_service"
-          },
-          {
-            "selected": false,
-            "text": "cron_service",
-            "value": "cron_service"
-          },
-          {
-            "selected": false,
-            "text": "google_calendar_service",
-            "value": "google_calendar_service"
-          },
-          {
-            "selected": false,
-            "text": "rag_service",
-            "value": "rag_service"
-          },
-          {
-            "selected": false,
-            "text": "admin_service",
-            "value": "admin_service"
-          }
-        ],
-        "query": "",
+        "options": [],
+        "query": "label_values({project=\"assistants\"}, service)",
+        "refresh": 2,
+        "regex": "",
         "skipUrlSync": false,
-        "type": "custom"
+        "sort": 1,
+        "type": "query"
       },
       {
         "current": {
           "selected": true,
           "text": "All",
-          "value": ".+"
+          "value": "$__all"
         },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "definition": "label_values({project=\"assistants\"}, level)",
         "hide": 0,
         "includeAll": true,
+        "allValue": ".+",
         "label": "Level",
         "multi": false,
         "name": "level",
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": ".+"
-          },
-          {
-            "selected": false,
-            "text": "error",
-            "value": "error"
-          },
-          {
-            "selected": false,
-            "text": "warning",
-            "value": "warning"
-          },
-          {
-            "selected": false,
-            "text": "info",
-            "value": "info"
-          },
-          {
-            "selected": false,
-            "text": "debug",
-            "value": "debug"
-          }
-        ],
-        "query": "",
-        "skipUrlSync": false,
-        "type": "custom"
-      },
-      {
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "hide": 0,
-        "label": "Search",
-        "name": "search",
         "options": [],
-        "query": "",
+        "query": "label_values({project=\"assistants\"}, level)",
+        "refresh": 2,
+        "regex": "",
         "skipUrlSync": false,
-        "type": "textbox"
+        "sort": 1,
+        "type": "query"
       }
     ]
   },

@@ -2150,41 +2150,43 @@ class MonitoringSettings(BaseSettings):
 
 ## Чеклист внедрения
 
-### Фаза 1: Стандартизация логирования
-- [ ] Создать `shared_models/src/shared_models/logging.py`
-- [ ] Обновить `shared_models/pyproject.toml` (добавить structlog)
-- [ ] Мигрировать rest_service на новый логгер
-- [ ] Мигрировать assistant_service
-- [ ] Мигрировать telegram_bot_service
-- [ ] Мигрировать cron_service (перейти с logging на structlog)
-- [ ] Мигрировать google_calendar_service
-- [ ] Мигрировать rag_service
-- [ ] Мигрировать admin_service
-- [ ] Удалить старые logger.py файлы
-- [ ] Добавить correlation_id в REST middleware
+### Фаза 1: Стандартизация логирования ✅ ЗАВЕРШЕНО
+- [x] Создать `shared_models/src/shared_models/logging.py`
+- [x] Обновить `shared_models/pyproject.toml` (добавить structlog)
+- [x] Мигрировать rest_service на новый логгер
+- [x] Мигрировать assistant_service
+- [x] Мигрировать telegram_bot_service
+- [x] Мигрировать cron_service (перейти с logging на structlog)
+- [x] Мигрировать google_calendar_service
+- [x] Мигрировать rag_service
+- [x] Мигрировать admin_service
+- [x] Удалить старые logger.py файлы
+- [x] Добавить correlation_id в REST middleware
 - [ ] Тесты логирования
 
-### Фаза 2: Инфраструктура мониторинга
-- [ ] Создать директорию `monitoring/`
-- [ ] Создать `docker-compose.monitoring.yml`
-- [ ] Создать конфиг Loki
-- [ ] Создать конфиг Promtail
-- [ ] Создать конфиг Prometheus
-- [ ] Создать provisioning для Grafana
-- [ ] Добавить redis_exporter в docker-compose.yml
-- [ ] Добавить postgres_exporter в docker-compose.yml
-- [ ] Создать базовые дашборды Grafana
+### Фаза 2: Инфраструктура мониторинга ✅ ЗАВЕРШЕНО
+- [x] Создать директорию `monitoring/`
+- [x] Создать `docker-compose.monitoring.yml`
+- [x] Создать конфиг Loki
+- [x] Создать конфиг Promtail
+- [x] Создать конфиг Prometheus
+- [x] Создать provisioning для Grafana (с uid для datasources)
+- [x] Добавить redis_exporter в docker-compose.yml
+- [x] Добавить postgres_exporter в docker-compose.yml
+- [x] Создать базовые дашборды Grafana (overview.json, logs.json)
+- [x] Создать README для monitoring/
 - [ ] Протестировать сбор логов
 - [ ] Протестировать сбор метрик
 
-### Фаза 3: Инструментирование cron_service
-- [ ] Создать модель JobExecution
-- [ ] Создать миграцию Alembic
-- [ ] Создать CRUD для job_executions
-- [ ] Создать API endpoints
-- [ ] Обновить scheduler.py для записи истории
-- [ ] Добавить Prometheus метрики
-- [ ] Добавить HTTP сервер для метрик
+### Фаза 3: Инструментирование cron_service ✅ ЗАВЕРШЕНО
+- [x] Создать модель JobExecution (`rest_service/src/models/job_execution.py`)
+- [x] Создать миграцию Alembic (`20251214_200000_add_job_executions_table.py`)
+- [x] Создать CRUD для job_executions
+- [x] Создать API endpoints (`/api/job-executions/`)
+- [x] Обновить scheduler.py для записи истории
+- [x] Добавить Prometheus метрики (`cron_service/src/metrics.py`)
+- [x] Добавить HTTP сервер для метрик (порт 8080)
+- [x] Обновить docker-compose.yml (порт 8080, healthcheck)
 - [ ] Тесты
 
 ### Фаза 4: Observability очередей
