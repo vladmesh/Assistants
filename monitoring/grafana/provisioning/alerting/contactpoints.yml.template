@@ -1,0 +1,23 @@
+apiVersion: 1
+
+# Telegram Alerting Configuration
+#
+# Setup:
+# 1. Copy this file: cp contactpoints.yml.template contactpoints.yml
+# 2. Create bot via @BotFather and get token
+# 3. Send /start to your bot
+# 4. Get chat_id: curl https://api.telegram.org/bot<TOKEN>/getUpdates
+# 5. Fill in values below
+
+contactPoints:
+  - orgId: 1
+    name: telegram-alerts
+    receivers:
+      - uid: telegram-alert-receiver
+        type: telegram
+        settings:
+          bottoken: "YOUR_BOT_TOKEN_HERE"
+          chatid: "YOUR_CHAT_ID_HERE"
+          parse_mode: HTML
+          disable_web_page_preview: true
+        disableResolveMessage: false

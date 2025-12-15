@@ -87,6 +87,29 @@ services:
       timeout: 10s
       retries: 3
 
+  # === Database Exporters ===
+  redis_exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis-exporter
+    environment:
+      - REDIS_ADDR=redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+    ports:
+      - "9187:9187"
+    networks:
+      - app_network
+    restart: unless-stopped
+
 volumes:
   loki_data:
   prometheus_data:

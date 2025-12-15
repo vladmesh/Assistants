@@ -9,12 +9,9 @@ docker network create assistants_app_network
 # 2. Start main services (creates logs for Promtail)
 docker compose up -d
 
-# 3. Start monitoring stack
+# 3. Start monitoring stack (includes Prometheus, Loki, Grafana + exporters)
 cd monitoring
-docker compose -f docker-compose.monitoring.yml up -d
-
-# 4. (Optional) Start exporters for Redis/Postgres metrics
-docker compose --profile monitoring up -d redis_exporter postgres_exporter
+docker compose -f docker-compose.monitoring.yml --env-file ../.env up -d
 ```
 
 ## Access
@@ -50,25 +47,23 @@ Alerts are configured via Grafana Unified Alerting and can send notifications to
 
 ### Setup Telegram Alerts
 
-1. Create a Telegram bot via [@BotFather](https://t.me/BotFather) or use existing bot
-2. **Important:** Send `/start` to your bot first to initialize the chat
-3. Get the chat ID (send any message to bot, then check `https://api.telegram.org/bot<TOKEN>/getUpdates`)
-4. Add environment variables to `.env`:
-
-```bash
-TELEGRAM_ALERT_BOT_TOKEN=your_bot_token_here
-TELEGRAM_ALERT_CHAT_ID=your_chat_id_here
-```
-
-5. Start monitoring stack with env file:
-```bash
-cd monitoring
-docker compose -f docker-compose.monitoring.yml --env-file ../.env up -d
-```
-
-**Note:** Due to Grafana's env var handling, you may need to configure the contact point via UI:
-1. Open Grafana -> Alerting -> Contact points
-2. Edit `telegram-alerts` and set bot token + chat ID manually
+1. Create a Telegram bot via [@BotFather](https://t.me/BotFather)
+2. **Important:** Send `/start` to your bot first
+3. Get the chat ID:
+   ```bash
+   curl https://api.telegram.org/bot<TOKEN>/getUpdates
+   ```
+4. Create contact points config:
+   ```bash
+   cd monitoring/grafana/provisioning/alerting
+   cp contactpoints.yml.template contactpoints.yml
+   # Edit contactpoints.yml with your bot token and chat ID
+   ```
+5. Start/restart monitoring stack:
+   ```bash
+   cd monitoring
+   docker compose -f docker-compose.monitoring.yml --env-file ../.env up -d
+   ```
 
 ### Alert Rules
 

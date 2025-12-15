@@ -235,37 +235,6 @@ services:
       retries: 3
       start_period: 30s
 
-  # === Monitoring Exporters ===
-  redis_exporter:
-    image: oliver006/redis_exporter:v1.55.0
-    container_name: redis-exporter
-    environment:
-      - REDIS_ADDR=redis:6379
-    ports:
-      - "9121:9121"
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - app_network
-    profiles:
-      - monitoring
-
-  postgres_exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
-    container_name: postgres-exporter
-    environment:
-      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-    ports:
-      - "9187:9187"
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - app_network
-    profiles:
-      - monitoring
-
 networks:
   app_network:
     driver: bridge
