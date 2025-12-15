@@ -53,5 +53,7 @@ dist/
 
 .repomix-output.txt
 
+# Monitoring - credentials
+monitoring/grafana/provisioning/alerting/contactpoints.yml
 
 .cursorrules
