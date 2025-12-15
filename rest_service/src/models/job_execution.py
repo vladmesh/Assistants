@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import TEXT, Column
+from sqlalchemy import TEXT, TIMESTAMP, Column
 from sqlmodel import Field
 
 from .base import BaseModel
@@ -37,9 +37,18 @@ class JobExecution(BaseModel, table=True):
 
     status: JobStatus = Field(default=JobStatus.SCHEDULED, index=True)
 
-    scheduled_at: datetime = Field(description="When the job was scheduled to run")
-    started_at: datetime | None = Field(default=None, description="When job started")
-    finished_at: datetime | None = Field(default=None, description="When job finished")
+    scheduled_at: datetime = Field(
+        sa_type=TIMESTAMP(timezone=True),
+        description="When the job was scheduled to run",
+    )
+    started_at: datetime | None = Field(
+        default=None, sa_type=TIMESTAMP(timezone=True), description="When job started"
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_type=TIMESTAMP(timezone=True),
+        description="When job finished",
+    )
     duration_ms: int | None = Field(
         default=None, description="Execution duration in milliseconds"
     )
