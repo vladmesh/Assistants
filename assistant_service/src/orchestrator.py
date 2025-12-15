@@ -8,6 +8,8 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 from shared_models import (
     AssistantResponseMessage,
+    QueueDirection,
+    QueueLogger,
     QueueMessage,
     QueueTrigger,
     get_logger,
@@ -36,6 +38,7 @@ class AssistantOrchestrator:
         self.settings = settings
         self.rest_client = RestServiceClient()
         self.factory = AssistantFactory(settings)
+        self.queue_logger = QueueLogger(settings.REST_SERVICE_URL)
         self.input_stream = RedisStreamClient(
             client=self.redis,
             stream=settings.INPUT_QUEUE,
@@ -451,6 +454,43 @@ class AssistantOrchestrator:
                         },
                     )
                     # endregion
+
+                    # Log inbound message to REST API
+                    try:
+                        user_id_int = (
+                            int(str(event_object.user_id).split("-")[0])
+                            if event_object.user_id
+                            else None
+                        )
+                        msg_type = (
+                            "trigger"
+                            if isinstance(event_object, QueueTrigger)
+                            else "human"
+                        )
+                        source_val = (
+                            event_object.source.value
+                            if hasattr(event_object, "source") and event_object.source
+                            else (
+                                event_object.metadata.get("source")
+                                if hasattr(event_object, "metadata")
+                                and event_object.metadata
+                                else "unknown"
+                            )
+                        )
+                        await self.queue_logger.log_message(
+                            queue_name="to_secretary",
+                            direction=QueueDirection.INBOUND,
+                            message_type=msg_type,
+                            payload=message_dict,
+                            user_id=user_id_int,
+                            source=source_val,
+                        )
+                    except Exception as log_err:
+                        logger.warning(
+                            "Failed to log inbound queue message",
+                            error=str(log_err),
+                        )
+
                     response_payload = await self._dispatch_event(event_object)
                 else:
                     # Parsing failed or structure was invalid
@@ -511,6 +551,28 @@ class AssistantOrchestrator:
                             "Response sent to output queue",
                             user_id=response_payload.get("user_id"),
                         )
+
+                        # Log outbound message to REST API
+                        try:
+                            user_id_out = response_payload.get("user_id")
+                            user_id_int_out = (
+                                int(str(user_id_out).split("-")[0])
+                                if user_id_out and user_id_out != "unknown"
+                                else None
+                            )
+                            await self.queue_logger.log_message(
+                                queue_name="to_telegram",
+                                direction=QueueDirection.OUTBOUND,
+                                message_type="response",
+                                payload=response_payload,
+                                user_id=user_id_int_out,
+                                source="assistant",
+                            )
+                        except Exception as log_err:
+                            logger.warning(
+                                "Failed to log outbound queue message",
+                                error=str(log_err),
+                            )
                     except ValidationError as resp_exc:
                         logger.error(
                             f"Failed to validate response payload: {resp_exc}",

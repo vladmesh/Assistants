@@ -39,6 +39,7 @@ from .queue import (
     ToolQueueMessage,
     TriggerType,
 )
+from .queue_logger import QueueDirection, QueueLogger
 
 # Note: LLM providers are available via shared_models.llm_providers
 # but not imported at top level to avoid requiring openai in all services
@@ -66,6 +67,8 @@ __all__ = [
     "QueueTrigger",
     "ToolQueueMessage",
     "TriggerType",
+    "QueueDirection",
+    "QueueLogger",
     # Enums
     "AssistantType",
     "ToolType",

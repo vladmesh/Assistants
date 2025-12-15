@@ -13,6 +13,7 @@ from .global_settings import GlobalSettings
 from .job_execution import JobExecution, JobStatus
 from .memory import Memory
 from .message import Message
+from .queue_message_log import QueueDirection, QueueMessageLog
 from .reminder import Reminder, ReminderStatus, ReminderType
 from .user import TelegramUser
 from .user_secretary import UserSecretaryLink
@@ -37,4 +38,6 @@ __all__ = [
     "BatchJob",
     "JobExecution",
     "JobStatus",
+    "QueueMessageLog",
+    "QueueDirection",
 ]

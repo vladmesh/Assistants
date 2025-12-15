@@ -5,6 +5,7 @@ import structlog
 from pydantic import ValidationError
 from redis import asyncio as aioredis
 from redis.exceptions import ResponseError
+from shared_models import QueueDirection, QueueLogger
 from shared_models.queue import AssistantResponseMessage
 
 from clients.rest import RestClient
@@ -12,6 +13,7 @@ from clients.telegram import TelegramClient
 from config.settings import settings
 
 logger = structlog.get_logger()
+queue_logger = QueueLogger(settings.rest_service_url)
 
 
 async def handle_assistant_responses(
@@ -44,6 +46,25 @@ async def handle_assistant_responses(
                         "Successfully validated AssistantResponseMessage",
                         user_id=response_message.user_id,
                     )
+
+                    # Log to REST API for observability
+                    try:
+                        await queue_logger.log_message(
+                            queue_name="to_telegram",
+                            direction=QueueDirection.OUTBOUND,
+                            message_type="response",
+                            payload=response_message.model_dump(),
+                            user_id=int(str(response_message.user_id).split("-")[0])
+                            if response_message.user_id
+                            else None,
+                            source="assistant",
+                        )
+                    except Exception as log_err:
+                        logger.warning(
+                            "Failed to log queue message to REST API",
+                            error=str(log_err),
+                        )
+
                 except ValidationError as e:
                     logger.error(
                         "Failed to validate assistant response from stream",
