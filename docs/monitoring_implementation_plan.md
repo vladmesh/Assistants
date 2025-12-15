@@ -2209,13 +2209,15 @@ class MonitoringSettings(BaseSettings):
 - [x] Обновить healthcheck в docker-compose.yml для assistant/telegram
 - [ ] Тесты
 
-### Фаза 6: Расширение админки
-- [ ] Создать страницу user_memory.py
-- [ ] Создать страницу jobs.py
-- [ ] Создать страницу queues.py
-- [ ] Создать страницу logs.py (с embed Grafana)
-- [ ] Создать страницу metrics.py
-- [ ] Обновить навигацию
+### Фаза 6: Расширение админки ✅ ЗАВЕРШЕНО
+- [x] Создать страницу user_memory.py
+- [x] Создать страницу jobs.py
+- [x] Создать страницу queues.py
+- [x] Создать страницу logs.py (с embed Grafana)
+- [x] Создать страницу metrics.py
+- [x] Обновить навигацию
+- [x] Добавить REST client методы (get_job_executions, get_job_stats, get_queue_stats, get_queue_messages, get_user_memories, delete_memory)
+- [x] Добавить настройки GRAFANA_URL, PROMETHEUS_URL, LOKI_URL
 - [ ] Настроить Grafana allow_embedding
 - [ ] Тесты
 
