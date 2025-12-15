@@ -44,6 +44,51 @@ curl -s http://localhost:3100/loki/api/v1/labels | jq
 curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.job'
 ```
 
+## Alerting
+
+Alerts are configured via Grafana Unified Alerting and can send notifications to Telegram.
+
+### Setup Telegram Alerts
+
+1. Create a Telegram bot via [@BotFather](https://t.me/BotFather) or use existing bot
+2. Get the chat ID where alerts should be sent (can be your personal chat or a group)
+3. Add environment variables to `.env`:
+
+```bash
+TELEGRAM_ALERT_BOT_TOKEN=your_bot_token_here
+TELEGRAM_ALERT_CHAT_ID=your_chat_id_here
+```
+
+4. Restart Grafana:
+```bash
+docker compose -f docker-compose.monitoring.yml restart grafana
+```
+
+### Alert Rules
+
+Pre-configured alerts in `grafana/provisioning/alerting/rules.yml`:
+
+| Alert | Severity | Condition | For |
+|-------|----------|-----------|-----|
+| Service Down | critical | Any service unreachable | 2m |
+| PostgreSQL Down | critical | Database unreachable | 1m |
+| Redis Down | critical | Redis unreachable | 1m |
+| High Error Rate | critical | >10 errors in 5m | 5m |
+| Cron Job Failures | warning | >5 failures in 1h | 0s |
+| Queue Backlog | warning | >100 messages pending | 10m |
+| LLM API Errors | critical | >10 errors in 5m | 0s |
+| High HTTP Error Rate | warning | >5% 5xx errors | 5m |
+
+### Test Alerts
+
+```bash
+# View alert rules in Grafana
+open http://localhost:3000/alerting/list
+
+# Manually trigger test notification (via Grafana UI)
+# Go to: Alerting -> Contact points -> telegram-alerts -> Test
+```
+
 ## Troubleshooting
 
 **No logs in Loki:**
@@ -53,3 +98,8 @@ curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.
 **Prometheus targets down:**
 - Services need `/metrics` endpoint (Фаза 5)
 - Check network connectivity between containers
+
+**Alerts not sending to Telegram:**
+- Verify `TELEGRAM_ALERT_BOT_TOKEN` and `TELEGRAM_ALERT_CHAT_ID` are set
+- Check Grafana logs: `docker logs grafana`
+- Test contact point in Grafana UI: Alerting -> Contact points -> Test

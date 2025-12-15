@@ -2221,12 +2221,13 @@ class MonitoringSettings(BaseSettings):
 - [ ] Настроить Grafana allow_embedding
 - [ ] Тесты
 
-### Фаза 7: Алертинг
-- [ ] Создать Telegram бот для алертов (или использовать существующий)
-- [ ] Настроить contact points в Grafana
-- [ ] Создать alert rules
-- [ ] Протестировать алерты
-- [ ] Документация по алертам
+### Фаза 7: Алертинг ✅ ЗАВЕРШЕНО
+- [x] Создать contact points конфиг (`monitoring/grafana/provisioning/alerting/contactpoints.yml`)
+- [x] Создать notification policies (`monitoring/grafana/provisioning/alerting/policies.yml`)
+- [x] Создать alert rules (`monitoring/grafana/provisioning/alerting/rules.yml`)
+- [x] Добавить env переменные TELEGRAM_ALERT_BOT_TOKEN, TELEGRAM_ALERT_CHAT_ID
+- [x] Документация по алертам в README
+- [ ] Протестировать алерты (требует настройки Telegram бота)
 
 ---
 

@@ -1,0 +1,262 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Infrastructure Alerts
+    folder: Smart Assistant
+    interval: 1m
+    rules:
+      # Service Health Check
+      - uid: service-down
+        title: Service Down
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'up{job=~"rest_service|assistant_service|cron_service"} == 0'
+              instant: true
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: 'Service {{ $labels.job }} is down'
+          description: 'Service {{ $labels.job }} has been unreachable for more than 2 minutes'
+        labels:
+          severity: critical
+
+      # PostgreSQL Down
+      - uid: postgres-down
+        title: PostgreSQL Down
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'pg_up == 0'
+              instant: true
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: 'PostgreSQL database is down'
+          description: 'Cannot connect to PostgreSQL database'
+        labels:
+          severity: critical
+
+      # Redis Down
+      - uid: redis-down
+        title: Redis Down
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'redis_up == 0'
+              instant: true
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: 'Redis is down'
+          description: 'Cannot connect to Redis server'
+        labels:
+          severity: critical
+
+  - orgId: 1
+    name: Application Alerts
+    folder: Smart Assistant
+    interval: 1m
+    rules:
+      # High Error Rate in Logs
+      - uid: high-error-rate
+        title: High Error Rate
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              expr: 'sum(count_over_time({level="error"}[5m]))'
+              instant: false
+              range: true
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 10
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'High error rate detected'
+          description: 'More than 10 errors in the last 5 minutes'
+        labels:
+          severity: critical
+
+      # Cron Job Failures
+      - uid: job-failures
+        title: Cron Job Failures
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'increase(cron_jobs_total{status="failed"}[1h])'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 5
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: 'Multiple cron job failures'
+          description: 'More than 5 job failures in the last hour'
+        labels:
+          severity: warning
+
+      # Queue Backlog
+      - uid: queue-backlog
+        title: Queue Backlog Growing
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'queue_length{queue_name="to_secretary"}'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 100
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: 'Message queue backlog'
+          description: 'Queue {{ $labels.queue_name }} has more than 100 pending messages for 10+ minutes'
+        labels:
+          severity: warning
+
+      # LLM API Errors
+      - uid: llm-errors
+        title: LLM API Errors
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'increase(llm_requests_total{status="error"}[5m])'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 10
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: 'LLM API errors detected'
+          description: 'More than 10 LLM API errors in the last 5 minutes'
+        labels:
+          severity: critical
+
+      # High HTTP Error Rate
+      - uid: http-errors
+        title: High HTTP Error Rate
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 5
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'High HTTP error rate'
+          description: 'HTTP 5xx error rate is above 5% for 5+ minutes'
+        labels:
+          severity: warning
