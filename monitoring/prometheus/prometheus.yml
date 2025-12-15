@@ -39,6 +39,18 @@ scrape_configs:
       - targets: ['rag_service:8002']
     metrics_path: '/metrics'
 
+  # Telegram Bot Service metrics
+  - job_name: 'telegram_bot_service'
+    static_configs:
+      - targets: ['telegram_bot_service:8080']
+    metrics_path: '/metrics'
+
+  # Google Calendar Service metrics
+  - job_name: 'google_calendar_service'
+    static_configs:
+      - targets: ['google_calendar_service:8000']
+    metrics_path: '/metrics'
+
   # Redis metrics (via redis_exporter)
   - job_name: 'redis'
     static_configs:

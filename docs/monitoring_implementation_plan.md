@@ -2189,22 +2189,24 @@ class MonitoringSettings(BaseSettings):
 - [x] Обновить docker-compose.yml (порт 8080, healthcheck)
 - [ ] Тесты
 
-### Фаза 4: Observability очередей
-- [ ] Создать модель QueueMessageLog
-- [ ] Создать миграцию Alembic
-- [ ] Создать API endpoints для статистики
-- [ ] Добавить логирование в assistant_service
-- [ ] Добавить логирование в telegram_bot_service
+### Фаза 4: Observability очередей ✅ ЗАВЕРШЕНО
+- [x] Создать модель QueueMessageLog
+- [x] Создать миграцию Alembic
+- [x] Создать API endpoints для статистики
+- [x] Добавить логирование в assistant_service
+- [x] Добавить логирование в telegram_bot_service
 - [ ] Тесты
 
-### Фаза 5: Метрики приложений
-- [ ] Создать `shared_models/src/shared_models/metrics.py`
-- [ ] Создать middleware для FastAPI
-- [ ] Добавить /metrics в rest_service
-- [ ] Добавить /metrics в rag_service
-- [ ] Добавить /metrics в google_calendar_service
-- [ ] Добавить метрики в assistant_service
-- [ ] Обновить Prometheus config
+### Фаза 5: Метрики приложений ✅ ЗАВЕРШЕНО
+- [x] Создать локальные metrics.py в каждом сервисе (prometheus-client)
+- [x] Создать middleware для FastAPI (rest_service, rag_service, google_calendar_service)
+- [x] Добавить /metrics в rest_service
+- [x] Добавить /metrics в rag_service
+- [x] Добавить /metrics в google_calendar_service
+- [x] Добавить metrics server в telegram_bot_service (порт 8080)
+- [x] Добавить metrics server в assistant_service (порт 8080)
+- [x] Обновить Prometheus config (добавить telegram_bot_service, google_calendar_service)
+- [x] Обновить healthcheck в docker-compose.yml для assistant/telegram
 - [ ] Тесты
 
 ### Фаза 6: Расширение админки

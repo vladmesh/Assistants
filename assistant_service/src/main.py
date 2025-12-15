@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from shared_models import LogEventType, configure_logging, get_logger
 
 from config.settings import get_settings
+from metrics import start_metrics_server
 from orchestrator import AssistantOrchestrator
 
 load_dotenv()
@@ -21,6 +22,10 @@ logger = get_logger(__name__)
 
 async def main():
     """Main entry point with preloading, background refresh, and graceful shutdown."""
+    # Start metrics server
+    metrics_server = start_metrics_server(port=settings.METRICS_PORT)
+    logger.info("Metrics server started", port=settings.METRICS_PORT)
+
     service = AssistantOrchestrator(settings)
     listen_task = None
     shutdown_event = asyncio.Event()
@@ -91,6 +96,8 @@ async def main():
         await service.factory.close()
         # Close the redis client which is part of the orchestrator
         await service.redis.aclose()
+        # Stop metrics server
+        metrics_server.shutdown()
         logger.info("Assistant service shut down", event_type=LogEventType.SHUTDOWN)
 
 
