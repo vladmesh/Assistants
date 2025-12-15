@@ -68,12 +68,13 @@ async def send_message_to_assistant(
 
         # Log to REST API for observability
         try:
+            user_id_int = int(str(user_id).split("-")[0]) if user_id else None
             await queue_logger.log_message(
                 queue_name="to_secretary",
                 direction=QueueDirection.INBOUND,
                 message_type="human",
                 payload=queue_message.model_dump(),
-                user_id=metadata.get("telegram_id"),
+                user_id=user_id_int,
                 source="telegram",
             )
         except Exception as log_err:
