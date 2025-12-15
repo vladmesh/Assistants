@@ -19,6 +19,7 @@ from routers import (
     checkpoints,
     conversations,
     global_settings,
+    job_executions,
     memory,
     messages,
     reminders,
@@ -97,6 +98,7 @@ app.include_router(checkpoints.router, prefix="/api")
 app.include_router(memory.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(batch_jobs.router, prefix="/api")
+app.include_router(job_executions.router, prefix="/api")
 
 
 @app.get("/health")

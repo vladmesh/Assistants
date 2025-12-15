@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   loki:
-    image: grafana/loki:2.9.4
+    image: grafana/loki:2.9.10
     container_name: loki
     ports:
       - "3100:3100"
@@ -19,7 +17,7 @@ services:
       retries: 3
 
   promtail:
-    image: grafana/promtail:2.9.4
+    image: grafana/promtail:3.0.0
     container_name: promtail
     volumes:
       - ./promtail/config.yml:/etc/promtail/config.yml:ro
@@ -63,7 +61,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PW:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
-      - GF_ALERTING_ENABLED=true
+      - GF_ALERTING_ENABLED=false
       - GF_UNIFIED_ALERTING_ENABLED=true
       # Allow embedding in iframes (for admin_service)
       - GF_SECURITY_ALLOW_EMBEDDING=true

@@ -14,6 +14,7 @@ REMINDER_DETAIL_ENDPOINT_TPL = f"{REST_SERVICE_URL}/api/reminders/{{reminder_id}
 GLOBAL_SETTINGS_ENDPOINT = f"{REST_SERVICE_URL}/api/global-settings/"
 CONVERSATIONS_ENDPOINT = f"{REST_SERVICE_URL}/api/conversations/"
 BATCH_JOBS_ENDPOINT = f"{REST_SERVICE_URL}/api/batch-jobs/"
+JOB_EXECUTIONS_ENDPOINT = f"{REST_SERVICE_URL}/api/job-executions/"
 
 
 def fetch_active_reminders() -> list[dict]:
@@ -179,4 +180,92 @@ def update_batch_job_status(
         return None
     except Exception as e:
         logger.error(f"Unexpected error updating batch job {job_id}: {e}")
+        return None
+
+
+# === Job Execution Tracking ===
+
+
+def create_job_execution(
+    job_id: str,
+    job_name: str,
+    job_type: str,
+    scheduled_at: datetime,
+    user_id: int | None = None,
+    reminder_id: int | None = None,
+) -> dict | None:
+    """Creates a job execution record for tracking."""
+    try:
+        payload: dict[str, Any] = {
+            "job_id": job_id,
+            "job_name": job_name,
+            "job_type": job_type,
+            "scheduled_at": scheduled_at.isoformat(),
+        }
+        if user_id is not None:
+            payload["user_id"] = user_id
+        if reminder_id is not None:
+            payload["reminder_id"] = reminder_id
+
+        response = requests.post(JOB_EXECUTIONS_ENDPOINT, json=payload, timeout=10)
+        response.raise_for_status()
+        execution = response.json()
+        logger.debug(f"Created job execution {execution.get('id')}.")
+        return execution
+    except requests.RequestException as e:
+        logger.error(f"Error creating job execution: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error creating job execution: {e}")
+        return None
+
+
+def start_job_execution(execution_id: str) -> dict | None:
+    """Marks a job execution as started."""
+    try:
+        url = f"{JOB_EXECUTIONS_ENDPOINT}{execution_id}/start"
+        response = requests.patch(url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logger.error(f"Error starting job execution {execution_id}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error starting job execution {execution_id}: {e}")
+        return None
+
+
+def complete_job_execution(execution_id: str, result: str | None = None) -> dict | None:
+    """Marks a job execution as completed."""
+    try:
+        url = f"{JOB_EXECUTIONS_ENDPOINT}{execution_id}/complete"
+        payload = {"result": result} if result else None
+        response = requests.patch(url, json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logger.error(f"Error completing job execution {execution_id}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error completing job execution {execution_id}: {e}")
+        return None
+
+
+def fail_job_execution(
+    execution_id: str, error: str, error_traceback: str | None = None
+) -> dict | None:
+    """Marks a job execution as failed."""
+    try:
+        url = f"{JOB_EXECUTIONS_ENDPOINT}{execution_id}/fail"
+        payload: dict[str, Any] = {"error": error}
+        if error_traceback:
+            payload["error_traceback"] = error_traceback
+        response = requests.patch(url, json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logger.error(f"Error failing job execution {execution_id}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error failing job execution {execution_id}: {e}")
         return None
