@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from shared_models import ServiceClientError
 
 
 @pytest.fixture
@@ -43,13 +44,12 @@ class TestGetOrCreateTelegramUser:
 
     @pytest.mark.asyncio
     async def test_none_response_raises(self, mock_rest_client):
-        """Test that None response raises RestClientError."""
-        from clients.rest import RestClientError
+        """Test that None response raises ServiceClientError."""
         from services.user_service import get_or_create_telegram_user
 
         mock_rest_client.get_or_create_user = AsyncMock(return_value=None)
 
-        with pytest.raises(RestClientError, match="unexpected None response"):
+        with pytest.raises(ServiceClientError, match="unexpected None response"):
             await get_or_create_telegram_user(
                 mock_rest_client, telegram_id=12345, username="test"
             )
@@ -116,26 +116,30 @@ class TestListAvailableSecretaries:
     @pytest.mark.asyncio
     async def test_returns_list(self, mock_rest_client):
         """Test returning list of secretaries."""
+        from shared_models.api_schemas import AssistantRead
 
         from services.user_service import list_available_secretaries
 
-        secretary_data = {
-            "id": str(uuid4()),
-            "name": "Secretary 1",
-            "is_secretary": True,
-            "model": "gpt-4",
-            "assistant_type": "llm",
-            "is_active": True,
-            "created_at": "2025-01-01T00:00:00Z",
-            "updated_at": "2025-01-01T00:00:00Z",
-            "tools": [],
-        }
+        secretary_id = uuid4()
+        # TelegramRestClient.list_secretaries now returns list[AssistantRead]
+        secretary = AssistantRead(
+            id=secretary_id,
+            name="Secretary 1",
+            is_secretary=True,
+            model="gpt-4",
+            assistant_type="llm",
+            is_active=True,
+            created_at="2025-01-01T00:00:00Z",
+            updated_at="2025-01-01T00:00:00Z",
+            tools=[],
+        )
 
-        mock_rest_client.list_secretaries = AsyncMock(return_value=[secretary_data])
+        mock_rest_client.list_secretaries = AsyncMock(return_value=[secretary])
 
         result = await list_available_secretaries(mock_rest_client)
 
         assert len(result) == 1
+        assert result[0].name == "Secretary 1"
         mock_rest_client.list_secretaries.assert_called_once()
 
     @pytest.mark.asyncio
@@ -152,14 +156,13 @@ class TestListAvailableSecretaries:
     @pytest.mark.asyncio
     async def test_rest_error_propagates(self, mock_rest_client):
         """Test REST client error propagates."""
-        from clients.rest import RestClientError
         from services.user_service import list_available_secretaries
 
         mock_rest_client.list_secretaries = AsyncMock(
-            side_effect=RestClientError("Connection failed")
+            side_effect=ServiceClientError("Connection failed")
         )
 
-        with pytest.raises(RestClientError):
+        with pytest.raises(ServiceClientError):
             await list_available_secretaries(mock_rest_client)
 
 
@@ -214,22 +217,21 @@ class TestPromptSecretarySelection:
         from services.user_service import prompt_secretary_selection
 
         secretary_id = uuid4()
-        secretary_data = {
-            "id": str(secretary_id),
-            "name": "Test Secretary",
-            "description": "A test secretary",
-            "is_secretary": True,
-            "model": "gpt-4",
-            "assistant_type": "llm",
-            "is_active": True,
-            "created_at": "2025-01-01T00:00:00Z",
-            "updated_at": "2025-01-01T00:00:00Z",
-            "tools": [],
-        }
-        # Validate that data is parseable (optional sanity check)
-        AssistantRead(**secretary_data)
+        # TelegramRestClient.list_secretaries returns list[AssistantRead]
+        secretary = AssistantRead(
+            id=secretary_id,
+            name="Test Secretary",
+            description="A test secretary",
+            is_secretary=True,
+            model="gpt-4",
+            assistant_type="llm",
+            is_active=True,
+            created_at="2025-01-01T00:00:00Z",
+            updated_at="2025-01-01T00:00:00Z",
+            tools=[],
+        )
 
-        mock_rest_client.list_secretaries = AsyncMock(return_value=[secretary_data])
+        mock_rest_client.list_secretaries = AsyncMock(return_value=[secretary])
 
         # Mock the keyboard creation
         with patch(
@@ -271,11 +273,10 @@ class TestPromptSecretarySelection:
     @pytest.mark.asyncio
     async def test_rest_client_error(self, mock_rest_client, mock_telegram_client):
         """Test handling REST client error."""
-        from clients.rest import RestClientError
         from services.user_service import prompt_secretary_selection
 
         mock_rest_client.list_secretaries = AsyncMock(
-            side_effect=RestClientError("Failed")
+            side_effect=ServiceClientError("Failed")
         )
 
         result = await prompt_secretary_selection(

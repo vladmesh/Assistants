@@ -1,18 +1,21 @@
 import re  # For Markdown escaping
 from uuid import UUID
 
-import structlog
+from shared_models import ServiceClientError, get_logger
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
 
-from clients.rest import RestClient, RestClientError
+from clients.rest import TelegramRestClient
 from clients.telegram import TelegramClient
 from keyboards.secretary_selection import create_secretary_selection_keyboard
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
+
+# Alias for backward compatibility
+RestClientError = ServiceClientError
 
 
 async def get_or_create_telegram_user(
-    rest: RestClient, telegram_id: int, username: str | None
+    rest: TelegramRestClient, telegram_id: int, username: str | None
 ) -> TelegramUserRead:
     """Gets or creates a user via the REST API.
 
@@ -37,7 +40,7 @@ async def get_or_create_telegram_user(
 
 
 async def get_user_by_telegram_id(
-    rest: RestClient, telegram_id: int
+    rest: TelegramRestClient, telegram_id: int
 ) -> TelegramUserRead | None:
     """Retrieve a user by their Telegram ID."""
     logger.info("Getting user by Telegram ID", telegram_id=telegram_id)
@@ -47,7 +50,7 @@ async def get_user_by_telegram_id(
 
 
 async def get_assigned_secretary(
-    rest: RestClient, user_id: UUID
+    rest: TelegramRestClient, user_id: UUID
 ) -> AssistantRead | None:
     """Gets the assigned secretary for a user via the REST API.
 
@@ -63,7 +66,7 @@ async def get_assigned_secretary(
 
 
 async def set_user_secretary(
-    rest: RestClient, user_id: UUID, secretary_id: UUID
+    rest: TelegramRestClient, user_id: UUID, secretary_id: UUID
 ) -> None:
     """Assigns a secretary to a user via the REST API.
 
@@ -83,54 +86,22 @@ async def set_user_secretary(
     )
 
 
-async def list_available_secretaries(rest: RestClient) -> list[AssistantRead]:
+async def list_available_secretaries(rest: TelegramRestClient) -> list[AssistantRead]:
     """Lists available secretaries via REST API."""
     logger.info("Listing available secretaries")
     try:
-        response_data = await rest.list_secretaries()
-        # Assuming response_data is a list of dicts or validated elsewhere
-        # Use parse_obj_as for Pydantic v1 or TypeAdapter for Pydantic v2
-        # For simplicity, assume REST client returns list of AssistantRead or similar
-        # Let's assume it returns a list of dicts that need parsing
-        # from pydantic import parse_obj_as  # Pydantic v1
-        # secretaries = parse_obj_as(List[AssistantRead], response_data)
-        # Handle parsing based on actual RestClient implementation
-        if isinstance(response_data, list):  # Basic check
-            # Assume RestClient returns data parsable by AssistantRead.model_validate
-            try:
-                # Pydantic v2 style validation
-                secretaries = [
-                    AssistantRead.model_validate(item) for item in response_data
-                ]
-            except Exception as pydantic_error:
-                logger.error(
-                    "Pydantic validation error for secretaries list",
-                    data=response_data,
-                    error=pydantic_error,
-                )
-                raise RestClientError(
-                    f"Failed to parse secretaries list: {pydantic_error}"
-                ) from pydantic_error
-
-        else:
-            logger.error(
-                "Unexpected response format for secretaries list", data=response_data
-            )
-            raise RestClientError(
-                f"Unexpected response format from /assistants/: {type(response_data)}"
-            )
-
+        # TelegramRestClient.list_secretaries() returns list[AssistantRead]
+        secretaries = await rest.list_secretaries()
         logger.info("Successfully listed secretaries", count=len(secretaries))
         return secretaries
-    except RestClientError as e:
+    except ServiceClientError as e:
         logger.error("REST Client Error listing secretaries", error=str(e))
-        raise  # Re-raise the original exception
+        raise
     except Exception as e:
         logger.error(
             "Unexpected error listing secretaries", error=str(e), exc_info=True
         )
-        # Wrap unexpected errors in RestClientError or a custom service error
-        raise RestClientError(f"Unexpected error listing secretaries: {e}") from e
+        raise ServiceClientError(f"Unexpected error listing secretaries: {e}") from e
 
 
 def escape_markdown_v2(text: str) -> str:
@@ -144,7 +115,7 @@ def escape_markdown_v2(text: str) -> str:
 
 async def prompt_secretary_selection(
     telegram: TelegramClient,
-    rest: RestClient,
+    rest: TelegramRestClient,
     chat_id: int,
     prompt_message: str,
     user_id_for_log: str | int | None = None,

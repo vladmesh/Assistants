@@ -1,12 +1,9 @@
 from typing import Any
 
-import structlog
+from shared_models import get_logger
 
-from clients.rest import RestClient
+from clients.rest import TelegramRestClient
 from clients.telegram import TelegramClient
-
-# Импортируем обработчики из директории handlers
-# (на данный момент они могут быть не полностью реализованы)
 from handlers import (
     callback_query,
     command_select_secretary,
@@ -14,11 +11,11 @@ from handlers import (
     message_text,
 )
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 async def dispatch_update(
-    update: dict[str, Any], telegram: TelegramClient, rest: RestClient
+    update: dict[str, Any], telegram: TelegramClient, rest: TelegramRestClient
 ) -> None:
     """Determines the type of update and calls the appropriate handler."""
     try:

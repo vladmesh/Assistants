@@ -1,22 +1,13 @@
 from typing import Any
 
-import structlog
-
-# Import shared models if needed for type hints (AssistantRead?)
+from shared_models import ServiceClientError, get_logger
 from shared_models.api_schemas import TelegramUserRead
 
-# Обрати внимание: пути импорта изменились на clients
-from clients.rest import RestClient, RestClientError
+from clients.rest import TelegramRestClient
 from clients.telegram import TelegramClient
-
-# Используем user_service
 from services import user_service
 
-# Импортируем фабрику клавиатур (будет создана позже)
-# from keyboards.secretary_selection import create_secretary_selection_keyboard
-
-
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 async def handle_start(**context: Any) -> None:
@@ -27,7 +18,7 @@ async def handle_start(**context: Any) -> None:
     - Prompts the user to choose a secretary via inline keyboard.
     """
     telegram: TelegramClient = context["telegram"]
-    rest: RestClient = context["rest"]
+    rest: TelegramRestClient = context["rest"]
     chat_id: int = context["chat_id"]
     user_id_str: str = context["user_id_str"]
     username: str | None = context["username"]
@@ -42,7 +33,7 @@ async def handle_start(**context: Any) -> None:
             user = await user_service.get_or_create_telegram_user(
                 rest, telegram_id, username
             )
-        except RestClientError as e:
+        except ServiceClientError as e:
             logger.error(
                 "REST Client Error during get_or_create_user for /start",
                 telegram_id=telegram_id,
