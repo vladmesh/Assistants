@@ -20,6 +20,7 @@ from routers import (
     calendar,
     checkpoints,
     conversations,
+    dlq,
     global_settings,
     job_executions,
     memory,
@@ -142,6 +143,7 @@ app.include_router(conversations.router, prefix="/api")
 app.include_router(batch_jobs.router, prefix="/api")
 app.include_router(job_executions.router, prefix="/api")
 app.include_router(queue_stats.router, prefix="/api")
+app.include_router(dlq.router, prefix="/api")
 
 
 @app.get("/health")
