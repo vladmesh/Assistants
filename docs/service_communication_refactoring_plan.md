@@ -1681,8 +1681,8 @@ class TestCacheInvalidation:
 - [x] Unit-тесты для RedisCache
 
 ### Фаза 4: Мониторинг
-- [ ] Dashboard "Service Communication" создан
-- [ ] Алерты настроены
+- [x] Dashboard "Service Communication" создан
+- [x] Алерты настроены
 - [ ] Метрики проверены в Prometheus
 
 ### Фаза 5: Тестирование

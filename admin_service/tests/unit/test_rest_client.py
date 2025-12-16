@@ -61,9 +61,9 @@ async def test_get_users_success(rest_client, mock_users):
 @pytest.mark.asyncio
 async def test_get_users_error(rest_client):
     """Тест обработки ошибки при получении списка пользователей."""
-    rest_client._mock_request.side_effect = Exception("HTTP Error")
+    rest_client._mock_request.side_effect = RuntimeError("HTTP Error")
 
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError):
         await rest_client.get_users()
 
     rest_client._mock_request.assert_called_once_with("GET", "/api/users/")
