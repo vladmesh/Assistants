@@ -44,7 +44,7 @@ class CronRestClient(BaseServiceClient):
         try:
             result = await self.request("GET", "/api/reminders/scheduled")
             reminders = result if isinstance(result, list) else []
-            logger.info("Fetched %d active reminders", len(reminders))
+            logger.info("Fetched active reminders", count=len(reminders))
             return reminders
         except Exception as e:
             logger.error("Failed to fetch reminders", error=str(e))
@@ -58,7 +58,7 @@ class CronRestClient(BaseServiceClient):
                 f"/api/reminders/{reminder_id}",
                 json={"status": "completed"},
             )
-            logger.info("Marked reminder %s as completed", reminder_id)
+            logger.info("Marked reminder as completed", reminder_id=str(reminder_id))
             return True
         except Exception as e:
             logger.error(
@@ -102,9 +102,9 @@ class CronRestClient(BaseServiceClient):
                 conversations = result.get("conversations", [])
                 total_messages = result.get("total_messages", 0)
                 logger.info(
-                    "Fetched %d conversations (%d messages total)",
-                    len(conversations),
-                    total_messages,
+                    "Fetched conversations",
+                    count=len(conversations),
+                    total_messages=total_messages,
                 )
                 return conversations
             return []
@@ -138,7 +138,7 @@ class CronRestClient(BaseServiceClient):
             result = await self.request("POST", "/api/batch-jobs/", json=payload)
             if result:
                 job_id = result.get("id")
-                logger.info("Created batch job %s for user %d", job_id, user_id)
+                logger.info("Created batch job", job_id=job_id, user_id=user_id)
             return result if isinstance(result, dict) else None
         except Exception as e:
             logger.error("Failed to create batch job", error=str(e))
@@ -155,7 +155,7 @@ class CronRestClient(BaseServiceClient):
                 params={"job_type": job_type},
             )
             jobs = result if isinstance(result, list) else []
-            logger.info("Fetched %d pending batch jobs", len(jobs))
+            logger.info("Fetched pending batch jobs", count=len(jobs))
             return jobs
         except Exception as e:
             logger.error("Failed to fetch pending batch jobs", error=str(e))
@@ -179,7 +179,7 @@ class CronRestClient(BaseServiceClient):
             result = await self.request(
                 "PATCH", f"/api/batch-jobs/{job_id}", json=payload
             )
-            logger.info("Updated batch job %s status to %s", job_id, status)
+            logger.info("Updated batch job status", job_id=str(job_id), status=status)
             return result if isinstance(result, dict) else None
         except Exception as e:
             logger.error("Failed to update batch job", job_id=str(job_id), error=str(e))
@@ -211,7 +211,7 @@ class CronRestClient(BaseServiceClient):
 
             result = await self.request("POST", "/api/job-executions/", json=payload)
             if result:
-                logger.debug("Created job execution %s", result.get("id"))
+                logger.debug("Created job execution", execution_id=result.get("id"))
             return result if isinstance(result, dict) else None
         except Exception as e:
             logger.error("Failed to create job execution", error=str(e))
@@ -305,11 +305,24 @@ async def close_rest_client() -> None:
 
 
 def _run_async(coro):
-    """Run async coroutine from sync context."""
+    """Run async coroutine from sync context.
+
+    Creates a fresh client for each call since we're creating/closing
+    event loops, and httpx.AsyncClient is bound to a specific loop.
+    """
+    global _client
+    # Clear singleton to avoid "Event loop is closed" errors
+    # Each sync call needs a fresh client bound to the new loop
+    _client = None
+
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(coro)
     finally:
+        # Close the client before closing the loop
+        if _client is not None:
+            loop.run_until_complete(_client.close())
+            _client = None
         loop.close()
 
 
