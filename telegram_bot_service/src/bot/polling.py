@@ -2,20 +2,20 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-import structlog
+from shared_models import get_logger
 
-from clients.rest import RestClient
+from clients.rest import TelegramRestClient
 from clients.telegram import TelegramClient
 from config.settings import settings
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 async def run_polling(
     telegram: TelegramClient,
-    rest: RestClient,  # rest нужен диспетчеру/хэндлерам
+    rest: TelegramRestClient,
     stop_event: asyncio.Event,
-    dispatcher_callback: Callable[..., Any],  # Функция диспетчера
+    dispatcher_callback: Callable[..., Any],
 ) -> None:
     """Runs the main polling loop to get updates from Telegram."""
     logger.info("Starting polling loop...")

@@ -1,13 +1,13 @@
 from typing import Any
 
-import structlog
+from shared_models import ServiceClientError, get_logger
 from shared_models.api_schemas import AssistantRead, TelegramUserRead
 
-from clients.rest import RestClient, RestClientError
+from clients.rest import TelegramRestClient
 from clients.telegram import TelegramClient
 from services import message_queue, user_service
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 async def handle_text_message(**context: Any) -> None:
@@ -19,7 +19,7 @@ async def handle_text_message(**context: Any) -> None:
     - Sends the message to the assistant queue if user and secretary are set.
     """
     telegram: TelegramClient = context["telegram"]
-    rest: RestClient = context["rest"]
+    rest: TelegramRestClient = context["rest"]
     chat_id: int = context["chat_id"]
     user_id_str: str = context["user_id_str"]
     username: str | None = context["username"]
@@ -41,9 +41,8 @@ async def handle_text_message(**context: Any) -> None:
         # 1. Check if user exists
         user: TelegramUserRead | None = None
         try:
-            # Вызов user_service
             user = await user_service.get_user_by_telegram_id(rest, telegram_id)
-        except RestClientError as e:
+        except ServiceClientError as e:
             # Handle non-404 errors specifically if needed, otherwise generic message
             logger.error(
                 "REST Client Error getting user by telegram_id",
@@ -77,11 +76,10 @@ async def handle_text_message(**context: Any) -> None:
         # 2. Check if secretary is assigned
         assigned_secretary: AssistantRead | None = None
         try:
-            # Вызов user_service
             assigned_secretary = await user_service.get_assigned_secretary(
                 rest, user_id
             )
-        except RestClientError as e:
+        except ServiceClientError as e:
             # Handle non-404 errors specifically if needed
             logger.error(
                 "REST Client Error getting user secretary",

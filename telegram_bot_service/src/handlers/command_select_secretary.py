@@ -1,25 +1,20 @@
 from typing import Any
 from uuid import UUID
 
-import structlog
-
-# Import shared models if needed for type hints
+from shared_models import ServiceClientError, get_logger
 from shared_models.api_schemas import TelegramUserRead
 
-# Обрати внимание: пути импорта изменились на clients
-from clients.rest import RestClient, RestClientError
+from clients.rest import TelegramRestClient
 from clients.telegram import TelegramClient
-
-# Используем user_service
 from services import user_service
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 async def handle_select_secretary(**context: Any) -> None:
     """Handles the callback query for selecting a secretary."""
     telegram: TelegramClient = context["telegram"]
-    rest: RestClient = context["rest"]
+    rest: TelegramRestClient = context["rest"]
     query_id: str = context["query_id"]
     chat_id: int = context["chat_id"]
     user_id_str: str = context["user_id_str"]
@@ -53,10 +48,8 @@ async def handle_select_secretary(**context: Any) -> None:
         user: TelegramUserRead | None = None
         telegram_id = int(user_id_str)  # Convert here, handle ValueError below
         try:
-            # Вызов user_service
             user = await user_service.get_user_by_telegram_id(rest, telegram_id)
             if not user:
-                # User not found (404), maybe started conversation elsewhere?
                 logger.warning(
                     "Callback query received but user not found",
                     telegram_id=telegram_id,
@@ -66,7 +59,7 @@ async def handle_select_secretary(**context: Any) -> None:
                     text="Ошибка: Пользователь не найден. Попробуйте /start снова.",
                 )
                 return
-        except RestClientError as e:
+        except ServiceClientError as e:
             logger.error(
                 "REST Client Error getting user by telegram_id during callback",
                 telegram_id=telegram_id,
@@ -89,13 +82,10 @@ async def handle_select_secretary(**context: Any) -> None:
 
         # 3. Assign secretary via REST
         try:
-            # Назначаем секретаря через сервис
             await user_service.set_user_secretary(rest, user_id, secretary_id)
 
             # 4. Get assistant details to check for startup_message
-            assistant_details = await rest.get_assistant_by_id(
-                assistant_id=secretary_id
-            )  # Предполагаем, что secretary_id это assistant_id
+            assistant_details = await rest.get_assistant_by_id(secretary_id)
 
             if assistant_details and assistant_details.startup_message:
                 logger.info(
@@ -154,11 +144,11 @@ async def handle_select_secretary(**context: Any) -> None:
                     secretary_id=secretary_id,
                 )
 
-        except RestClientError as e:
+        except ServiceClientError as e:
             logger.error(
                 "REST Client Error setting user secretary during callback",
-                user_id=user_id,
-                secretary_id=secretary_id,
+                user_id=str(user_id),
+                secretary_id=str(secretary_id),
                 error=str(e),
             )
             await telegram.answer_callback_query(

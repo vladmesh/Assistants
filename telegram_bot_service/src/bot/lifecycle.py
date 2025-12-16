@@ -38,40 +38,41 @@ class BotLifecycle:
         logger.info("Metrics server started", port=settings.metrics_port)
 
         self._telegram_client = TelegramClient()
+        # RestClient (TelegramRestClient) now uses BaseServiceClient
+        # which initializes httpx session lazily
         self._rest_client = RestClient()
 
-        # Создаем сессии для клиентов
-        # TODO: Consider a shared session if beneficial
+        # Create session for TelegramClient (still uses aiohttp)
         try:
             self._telegram_client.session = aiohttp.ClientSession()
             logger.info("aiohttp session created for TelegramClient")
-            self._rest_client.session = aiohttp.ClientSession()
-            logger.info("aiohttp session created for RestClient")
         except Exception as e:
             logger.error(
-                "Failed to create aiohttp sessions", error=str(e), exc_info=True
+                "Failed to create aiohttp session for TelegramClient",
+                error=str(e),
+                exc_info=True,
             )
-            raise  # Stop startup if session creation fails
+            raise
 
         self._redis_client = aioredis.from_url(
             settings.redis_url, **settings.redis_settings
         )
-        # Test connections (optional but recommended)
+        # Test connections
         try:
             bot_info = await self._telegram_client._make_request("getMe")
             logger.info(
                 "Telegram connection verified", bot_username=bot_info.get("username")
             )
-            await (
-                self._rest_client.ping()
-            )  # Assuming a ping endpoint exists or implement one
+            # RestClient ping will initialize httpx session lazily
+            await self._rest_client.ping()
+            logger.info("REST service connection verified")
             await self._redis_client.ping()
             logger.info("Clients initialized and connections verified.")
         except Exception as e:
             logger.error(
                 "Failed to initialize or connect clients", error=str(e), exc_info=True
             )
-            raise  # Re-raise to stop startup
+            raise
 
     async def _start_tasks(self) -> None:
         """Create and start background tasks."""
@@ -124,9 +125,9 @@ class BotLifecycle:
         if self._telegram_client and self._telegram_client.session:
             await self._telegram_client.session.close()
             logger.info("Telegram client session closed.")
-        if self._rest_client and self._rest_client.session:
-            await self._rest_client.session.close()
-            logger.info("REST client session closed.")
+        if self._rest_client:
+            await self._rest_client.close()
+            logger.info("REST client closed.")
         if self._redis_client:
             await self._redis_client.close()
             logger.info("Redis client connection closed.")

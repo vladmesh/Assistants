@@ -1,18 +1,17 @@
 import asyncio
 import json
 
-import structlog
 from pydantic import ValidationError
 from redis import asyncio as aioredis
 from redis.exceptions import ResponseError
-from shared_models import QueueDirection, QueueLogger
+from shared_models import QueueDirection, QueueLogger, get_logger
 from shared_models.queue import AssistantResponseMessage
 
-from clients.rest import RestClient
+from clients.rest import TelegramRestClient
 from clients.telegram import TelegramClient
 from config.settings import settings
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 queue_logger = QueueLogger(settings.rest_service_url)
 
 
@@ -30,7 +29,7 @@ async def handle_assistant_responses(
 
     await _ensure_output_group(redis)
 
-    async with RestClient() as rest:
+    async with TelegramRestClient() as rest:
         while True:
             try:
                 message_id, data = await _read_next_response(redis)
