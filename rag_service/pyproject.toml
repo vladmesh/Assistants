@@ -25,8 +25,8 @@ mypy = "^1.6.1"
 
 [tool.poetry.group.test.dependencies]
 shared-models = { path = "../shared_models" }
-pytest = "^7.4.3"
-pytest-asyncio = "^0.21.1"
+pytest = "^8.3.5"
+pytest-asyncio = "^0.23.8"
 pytest-cov = "^4.1.0"
 pytest-mock = "^3.12.0"
 
