@@ -2,14 +2,13 @@ import asyncio
 import time
 import traceback
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from dateutil.parser import isoparse
-from pytz import timezone as pytz_timezone
-from pytz import utc
 from shared_models import LogEventType, get_logger
 
 import metrics
@@ -31,7 +30,7 @@ RETRY_DELAY = 5  # секунды
 JOB_ID_PREFIX = "reminder_"
 
 # Создаем планировщик с явным указанием UTC
-scheduler = BackgroundScheduler(timezone=utc)
+scheduler = BackgroundScheduler(timezone=UTC)
 
 
 def _job_func(reminder_data):
@@ -134,28 +133,28 @@ def schedule_job(reminder):
     }
 
     reminder_timezone = reminder.get("timezone")
-    job_timezone = utc
+    job_timezone = UTC
     if reminder_timezone:
         try:
-            job_timezone = pytz_timezone(reminder_timezone)
+            job_timezone = ZoneInfo(reminder_timezone)
         except Exception:
             logger.warning(
                 "Invalid timezone '%s' for reminder %s. Falling back to UTC.",
                 reminder_timezone,
                 reminder.get("id"),
             )
-            job_timezone = utc
+            job_timezone = UTC
 
     try:
         if reminder["type"] == "one_time" and reminder.get("trigger_at"):
             run_date = isoparse(reminder["trigger_at"])
             # Ensure the datetime is timezone-aware (assuming UTC from API)
             if run_date.tzinfo is None:
-                run_date = utc.localize(run_date)
+                run_date = run_date.replace(tzinfo=UTC)
             else:
-                run_date = run_date.astimezone(utc)
+                run_date = run_date.astimezone(UTC)
 
-            trigger = DateTrigger(run_date=run_date, timezone=utc)
+            trigger = DateTrigger(run_date=run_date, timezone=UTC)
             trigger_args["trigger"] = trigger
             trigger_args["name"] = f"One-time reminder {reminder['id']}"
             trigger_args["misfire_grace_time"] = (
@@ -358,7 +357,7 @@ def start_scheduler():
         extraction_interval = _get_memory_extraction_interval_hours()
         scheduler.add_job(
             _run_memory_extraction_sync,
-            IntervalTrigger(hours=extraction_interval, timezone=utc),
+            IntervalTrigger(hours=extraction_interval, timezone=UTC),
             id="memory_extraction",
             name="Memory Extraction",
             misfire_grace_time=3600,  # 1 hour grace period
