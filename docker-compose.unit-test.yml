@@ -27,8 +27,15 @@ services:
     command: >
       bash -c "
         poetry config virtualenvs.create false &&
-        poetry cache clear pypi --all --no-interaction || true &&
-        poetry install --only main,test --no-interaction --no-ansi --no-root || poetry install --only main,test --no-interaction --no-ansi;
+        LOCK_HASH=$$(md5sum poetry.lock 2>/dev/null | cut -d' ' -f1 || echo 'none') &&
+        MARKER_FILE=\"/tmp/.poetry_installed_$$LOCK_HASH\" &&
+        if [ ! -f \"$$MARKER_FILE\" ]; then
+          echo 'Installing dependencies...' &&
+          poetry install --only main,test --no-interaction --no-ansi --no-root || poetry install --only main,test --no-interaction --no-ansi &&
+          touch \"$$MARKER_FILE\";
+        else
+          echo 'Dependencies already installed (cache hit)';
+        fi &&
         pytest tests/unit/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing --ignore=tests/integration
       "
 
