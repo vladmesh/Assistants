@@ -461,7 +461,6 @@ class AssistantOrchestrator:
                         },
                     )
                     # Invalid message structure - ACK and skip (no point retrying)
-                    await self.input_stream.ack(stream_message_id)
                     should_ack = True
                     continue
 
