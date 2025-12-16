@@ -37,7 +37,8 @@ class AssistantOrchestrator:
 
         self.settings = settings
         self.rest_client = RestServiceClient()
-        self.factory = AssistantFactory(settings)
+        # Pass redis client to factory for distributed caching
+        self.factory = AssistantFactory(settings, redis_client=self.redis)
         self.queue_logger = QueueLogger(settings.REST_SERVICE_URL)
         self.input_stream = RedisStreamClient(
             client=self.redis,

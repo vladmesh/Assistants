@@ -29,6 +29,7 @@ alembic = "^1.13.1"
 pgvector = "^0.2.5"
 shared-models = {path = "../shared_models"}
 prometheus-client = "^0.21.0"
+redis = "^5.0.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.6.1"
