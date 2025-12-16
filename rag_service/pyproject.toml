@@ -6,7 +6,7 @@ authors = ["Your Name <your.email@example.com>"]
 packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 shared-models = { path = "../shared_models" }
 fastapi = "^0.120.0"
 uvicorn = "^0.27.1"
@@ -37,7 +37,7 @@ addopts = "-v --cov=src --cov-report=term-missing"
 asyncio_mode = "auto"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -54,7 +54,7 @@ mypy_path = "src"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 src = ["src"]
 
 [tool.ruff.format]

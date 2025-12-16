@@ -18,7 +18,8 @@ smart-assistant/
 ├── Makefile                  # lint/format/tests (ruff + docker)
 ├── docker-compose.yml        # Основной стенд (dev)
 ├── docker-compose.unit-test.yml / docker-compose.integration.yml
-└── .pre-commit-config.yaml   # hooks: make format, make lint+test-unit
+└── .pre-commit-config.yaml   # hooks: make format, make lint+test-unitUpgrade tornado to fix 1 Dependabot alert in admin_service/poetry.lock
+Upgrade tornado to version 6.5 or later.
 ```
 
 ## Ключевые технологии
