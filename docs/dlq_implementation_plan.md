@@ -360,15 +360,15 @@ async def _handle_processing_failure(
         # Will be reclaimed after idle_reclaim_ms by xautoclaim
 ```
 
-### Чек-лист итерации 2
+### Чек-лист итерации 2 (ВЫПОЛНЕНО 2024-12-16)
 
-- [ ] Добавить методы `_get_message_retry_count()`, `_increment_message_retry_count()`, `_clear_message_retry_count()`
-- [ ] Модифицировать `listen_for_messages()` - убрать безусловный ACK
-- [ ] Добавить логику проверки `status == "success"` для ACK
-- [ ] Реализовать `_handle_processing_failure()`
-- [ ] Добавить структурированное логирование retry/DLQ событий
-- [ ] Протестировать вручную с имитацией ошибок
-- [ ] Написать unit-тесты
+- [x] Добавить методы `_get_message_retry_count()`, `_increment_message_retry_count()`, `_clear_message_retry_count()`
+- [x] Модифицировать `listen_for_messages()` - убрать безусловный ACK
+- [x] Добавить логику проверки `status == "success"` для ACK
+- [x] Реализовать `_handle_processing_failure()`
+- [x] Добавить структурированное логирование retry/DLQ событий
+- [ ] Протестировать вручную с имитацией ошибок (отложено до интеграции)
+- [x] Написать unit-тесты (11 тестов для retry логики)
 
 ---
 

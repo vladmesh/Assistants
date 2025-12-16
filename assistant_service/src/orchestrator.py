@@ -18,8 +18,11 @@ from shared_models import (
 from assistants.base_assistant import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.settings import Settings
-from services.redis_stream import RedisStreamClient
+from services.redis_stream import MAX_RETRIES, RedisStreamClient
 from services.rest_service import RestServiceClient
+
+RETRY_KEY_PREFIX = "msg_retry:"
+RETRY_KEY_TTL = 3600  # 1 hour
 
 logger = get_logger(__name__)
 
@@ -85,6 +88,84 @@ class AssistantOrchestrator:
                 break
             except Exception:
                 continue
+
+    # endregion
+
+    # region retry count management
+    async def _get_message_retry_count(self, message_id: str) -> int:
+        """Get retry count for a message from Redis."""
+        key = f"{RETRY_KEY_PREFIX}{message_id}"
+        count = await self.redis.get(key)
+        return int(count) if count else 0
+
+    async def _increment_message_retry_count(self, message_id: str) -> int:
+        """Increment and return new retry count."""
+        key = f"{RETRY_KEY_PREFIX}{message_id}"
+        new_count = await self.redis.incr(key)
+        await self.redis.expire(key, RETRY_KEY_TTL)
+        return new_count
+
+    async def _clear_message_retry_count(self, message_id: str) -> None:
+        """Clear retry count after successful processing or DLQ."""
+        key = f"{RETRY_KEY_PREFIX}{message_id}"
+        await self.redis.delete(key)
+
+    async def _handle_processing_failure(
+        self,
+        message_id: str,
+        raw_payload: bytes | None,
+        error: Exception,
+        event: QueueMessage | QueueTrigger | None,
+    ) -> None:
+        """Handle message processing failure - retry or send to DLQ."""
+        retry_count = await self._increment_message_retry_count(message_id)
+
+        user_id = getattr(event, "user_id", "unknown") if event else "unknown"
+        error_type = type(error).__name__
+
+        if retry_count >= MAX_RETRIES:
+            logger.warning(
+                "Max retries exceeded, sending to DLQ",
+                message_id=message_id,
+                retry_count=retry_count,
+                error_type=error_type,
+                user_id=user_id,
+            )
+
+            error_info = {
+                "error_type": error_type,
+                "error_message": str(error),
+                "user_id": str(user_id),
+            }
+
+            try:
+                await self.input_stream.send_to_dlq(
+                    original_message_id=message_id,
+                    payload=raw_payload or b"",
+                    error_info=error_info,
+                    retry_count=retry_count,
+                )
+                # After DLQ, ACK original message
+                await self.input_stream.ack(message_id)
+                await self._clear_message_retry_count(message_id)
+            except Exception as dlq_exc:
+                logger.error(
+                    "Failed to send to DLQ",
+                    error=str(dlq_exc),
+                    message_id=message_id,
+                )
+        else:
+            # Will be retried via xautoclaim
+            delay = self.input_stream.get_retry_delay(retry_count - 1)
+            logger.info(
+                "Message will be retried via xautoclaim",
+                message_id=message_id,
+                retry_count=retry_count,
+                next_retry_delay_seconds=delay,
+                error_type=error_type,
+                user_id=user_id,
+            )
+            # Don't ACK - message stays in pending list for xautoclaim
 
     # endregion
 
@@ -329,7 +410,8 @@ class AssistantOrchestrator:
             response_payload = None
             event_object: QueueMessage | QueueTrigger | None = None
             stream_message_id: str | None = None
-            acked: bool = False
+            should_ack: bool = False
+            processing_error: Exception | None = None
 
             try:
                 stream_entry = await self.input_stream.read()
@@ -358,8 +440,9 @@ class AssistantOrchestrator:
                             "message_id": stream_message_id,
                         },
                     )
+                    # Invalid message structure - ACK and skip (no point retrying)
                     await self.input_stream.ack(stream_message_id)
-                    acked = True
+                    should_ack = True
                     continue
 
                 raw_message_json = (
@@ -493,8 +576,18 @@ class AssistantOrchestrator:
                         )
 
                     response_payload = await self._dispatch_event(event_object)
+
+                    # Check if processing was successful
+                    if response_payload and response_payload.get("status") == "success":
+                        should_ack = True
+                        await self._clear_message_retry_count(stream_message_id)
+                    elif response_payload:
+                        # Processing returned error - will be handled in finally
+                        processing_error = Exception(
+                            response_payload.get("error", "Unknown processing error")
+                        )
                 else:
-                    # Parsing failed or structure was invalid
+                    # Parsing failed or structure was invalid - ACK (no point retrying)
                     logger.error(
                         "Failed to parse incoming message or trigger.",
                         raw_message=raw_message_json,
@@ -511,6 +604,8 @@ class AssistantOrchestrator:
                         "type": "error",
                         "metadata": {},
                     }
+                    # Parse errors are not retryable - ACK immediately
+                    should_ack = True
 
                 # Send response if any
                 if response_payload:
@@ -589,8 +684,11 @@ class AssistantOrchestrator:
 
             except ConnectionError as e:
                 logger.error(f"Redis connection error: {e}")
-                await asyncio.sleep(5)  # Wait before retrying connection
+                # Connection errors - don't set processing_error, will retry naturally
+                await asyncio.sleep(5)
+                continue
             except Exception as e:
+                processing_error = e
                 logger.error(
                     f"Error in message listener loop: {e}",
                     exc_info=True,
@@ -601,18 +699,27 @@ class AssistantOrchestrator:
                 # Avoid tight loop on persistent errors
                 await asyncio.sleep(1)
             finally:
-                if stream_message_id and not acked:
-                    try:
-                        await self.input_stream.ack(stream_message_id)
-                        acked = True
-                    except Exception as ack_exc:
-                        logger.error(
-                            "Failed to ACK message",
-                            extra={
-                                "stream": self.settings.INPUT_QUEUE,
-                                "message_id": stream_message_id,
-                                "error": str(ack_exc),
-                            },
+                if stream_message_id:
+                    if should_ack:
+                        # Success or non-retryable error - ACK the message
+                        try:
+                            await self.input_stream.ack(stream_message_id)
+                        except Exception as ack_exc:
+                            logger.error(
+                                "Failed to ACK message",
+                                extra={
+                                    "stream": self.settings.INPUT_QUEUE,
+                                    "message_id": stream_message_id,
+                                    "error": str(ack_exc),
+                                },
+                            )
+                    elif processing_error:
+                        # Failure - handle retry or DLQ
+                        await self._handle_processing_failure(
+                            message_id=stream_message_id,
+                            raw_payload=raw_message_bytes,
+                            error=processing_error,
+                            event=event_object,
                         )
 
     async def close(self):
