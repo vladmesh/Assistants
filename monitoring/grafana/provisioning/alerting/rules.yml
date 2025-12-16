@@ -260,3 +260,183 @@ groups:
           description: 'HTTP 5xx error rate is above 5% for 5+ minutes'
         labels:
           severity: warning
+
+  - orgId: 1
+    name: Service Communication Alerts
+    folder: Smart Assistant
+    interval: 1m
+    rules:
+      # Circuit Breaker Open
+      - uid: circuit-breaker-open
+        title: Circuit Breaker Open
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'http_client_circuit_breaker_state == 1'
+              instant: true
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: 'Circuit breaker OPEN: {{ $labels.service }} → {{ $labels.target_service }}'
+          description: 'Service communication blocked due to repeated failures. Circuit breaker is open.'
+        labels:
+          severity: critical
+
+      # High HTTP Client Error Rate
+      - uid: http-client-errors
+        title: High HTTP Client Error Rate
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (
+                  sum(rate(http_client_requests_total{status!="success"}[5m])) by (service)
+                  / sum(rate(http_client_requests_total[5m])) by (service)
+                ) > 0.1
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'High HTTP client error rate for {{ $labels.service }}'
+          description: 'More than 10% of inter-service HTTP requests are failing'
+        labels:
+          severity: warning
+
+      # High Retry Rate
+      - uid: high-retry-rate
+        title: High Retry Rate
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(rate(http_client_retries_total[5m])) by (service) > 1'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'High retry rate for {{ $labels.service }}'
+          description: 'Service is experiencing connectivity issues with high retry rate'
+        labels:
+          severity: warning
+
+      # Low Cache Hit Rate
+      - uid: low-cache-hit-rate
+        title: Low Cache Hit Rate
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (
+                  sum(rate(redis_cache_hits_total[10m])) 
+                  / (sum(rate(redis_cache_hits_total[10m])) + sum(rate(redis_cache_misses_total[10m])))
+                ) < 0.5
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: 'Low cache hit rate'
+          description: 'Cache hit rate is below 50% - cache may not be utilized effectively'
+        labels:
+          severity: info
+
+      # Slow HTTP Client Requests
+      - uid: slow-http-client-requests
+        title: Slow HTTP Client Requests
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                histogram_quantile(0.95, sum(rate(http_client_request_duration_seconds_bucket[5m])) by (service, le)) > 5
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'Slow HTTP client requests for {{ $labels.service }}'
+          description: 'P95 latency is above 5 seconds for inter-service communication'
+        labels:
+          severity: warning

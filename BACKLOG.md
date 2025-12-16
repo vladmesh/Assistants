@@ -18,3 +18,47 @@
     - Использование часового пояса в `cron_service` при планировании задач APScheduler (например, `CronTrigger(..., timezone=...)`).
     - Обновление `shared_models` для поддержки поля `timezone` в схемах напоминаний.
     - Корректную обработку `timezone` в `ReminderCreateTool` в `assistant_service`.
+- [ ] **Рефакторинг межсервисной коммуникации** (см. `docs/service_communication_refactoring_plan.md`):
+    - Унифицировать HTTP-клиенты через `BaseServiceClient` в `shared_models`
+    - Добавить retry, circuit breaker, метрики во все сервисы
+    - Внедрить Redis Cache для конфигураций (settings, assistants, tools)
+    - Создать Grafana dashboard для мониторинга межсервисных вызовов
+    - **Ожидаемый эффект**: повышение надежности при сетевых сбоях, снижение дублирования кода (~800 строк), улучшение observability
+- [ ] **КРИТИЧНО**: Реализовать Dead Letter Queue (DLQ) и retry-механизм для обработки сообщений в `assistant_service`. Проблема: сообщения теряются при ошибках обработки, так как ACK происходит всегда в `finally` блоке (`orchestrator.py:602-615`). Решение включает:
+    - **Отслеживание попыток обработки**: хранить `retry_count` в метаданных сообщения Redis Stream (использовать поля сообщения для сохранения счетчика попыток).
+    - **Retry-логика с экспоненциальной задержкой**: при ошибке обработки, если `retry_count < MAX_RETRIES` (рекомендуется 3-5), не ACK-ить сообщение, вернуть его в pending через `xautoclaim` с задержкой (1s, 2s, 4s). ACK только при успешной обработке.
+    - **Dead Letter Queue**: после исчерпания `MAX_RETRIES` отправлять сообщение в отдельный Redis Stream `{INPUT_QUEUE}:dlq` с сохранением:
+        - Оригинального payload
+        - Типа ошибки и сообщения об ошибке
+        - Timestamp последней попытки
+        - Количества попыток
+        - User ID и других метаданных для восстановления
+    - **Модификация `orchestrator.py`**: изменить логику в `listen_for_messages()` и `_dispatch_event()`:
+        - ACK только при успешной обработке (`status == "success"`)
+        - При ошибке: увеличить `retry_count`, если не превышен лимит — не ACK (сообщение останется в pending для retry через `xautoclaim`)
+        - При превышении лимита — отправить в DLQ и затем ACK оригинальное сообщение
+    - **Расширение `RedisStreamClient`**: добавить методы для работы с retry-счетчиком и DLQ:
+        - `get_retry_count(message_fields)` — извлечь счетчик из полей сообщения
+        - `increment_retry_count(message_fields)` — увеличить счетчик
+        - `send_to_dlq(original_message_id, payload, error_info, retry_count)` — отправка в DLQ
+    - **Мониторинг и метрики**: добавить Prometheus метрики:
+        - `messages_dlq_total{error_type, queue}` — счетчик сообщений в DLQ по типу ошибки
+        - `message_processing_retries_total{queue}` — общее количество retry-попыток
+        - `message_processing_duration_seconds{status}` — время обработки (success/failure)
+        - Алерт в Grafana при росте DLQ (>10 сообщений за 5 минут)
+    - **REST API для управления DLQ** (в `rest_service`):
+        - `GET /api/v1/dlq/messages` — список сообщений в DLQ с фильтрацией (error_type, user_id, date_range)
+        - `POST /api/v1/dlq/messages/{message_id}/retry` — переотправить сообщение из DLQ обратно в основную очередь
+        - `DELETE /api/v1/dlq/messages/{message_id}` — удалить сообщение из DLQ (после ручного разбора)
+        - Модель `DLQMessage` в БД для хранения метаданных (опционально, для удобства администрирования)
+    - **Логирование**: добавить структурированные логи для всех событий:
+        - Retry попытки с `retry_count`, `error_type`, `delay_before_retry`
+        - Отправка в DLQ с полной информацией об ошибке
+        - Восстановление из DLQ
+    - **Тестирование**: добавить unit и integration тесты:
+        - Тест retry-логики при временных ошибках (ConnectionError, TimeoutError)
+        - Тест отправки в DLQ после исчерпания попыток
+        - Тест восстановления сообщений из DLQ
+        - Тест метрик и мониторинга
+    - **Документация**: обновить `AGENTS.md` с описанием DLQ механизма и добавить раздел в `docs/` с деталями реализации.
+    - **Ожидаемый эффект**: снижение потери сообщений с ~1-5% до <0.1%, улучшение reliability и возможность восстановления потерянных сообщений.
