@@ -1,9 +1,10 @@
 import asyncio  # Add asyncio
 from datetime import UTC, datetime, timedelta  # Add timezone and timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 # Project imports
-from shared_models import get_logger
+from shared_models import RedisCache, get_logger
 
 # Импортируем модели Pydantic для глобальных настроек
 from shared_models.api_schemas.global_settings import (
@@ -22,36 +23,53 @@ from services.rest_service import RestServiceClient
 # Import ToolFactory
 from tools.factory import ToolFactory
 
+if TYPE_CHECKING:
+    import redis.asyncio as redis
+
 logger = get_logger(__name__)
+
+# Cache TTL constants (in seconds)
+GLOBAL_SETTINGS_CACHE_TTL = 300  # 5 minutes
+SECRETARY_CACHE_TTL = 300  # 5 minutes
+ASSISTANT_CONFIG_CACHE_TTL = 300  # 5 minutes
 
 
 class AssistantFactory:
-    def __init__(self, settings: Settings):
-        """Initialize the factory with settings and REST client"""
+    def __init__(self, settings: Settings, redis_client: "redis.Redis | None" = None):
+        """Initialize the factory with settings and REST client.
+
+        Args:
+            settings: Application settings
+            redis_client: Optional Redis client for distributed caching.
+                         If not provided, falls back to in-memory caching.
+        """
         self.settings = settings
         self.rest_client = RestServiceClient()
-        # Cache for user_id -> (secretary_id, assignment_updated_at)
+
+        # Redis cache (optional, for distributed caching)
+        self._redis_cache: RedisCache | None = None
+        if redis_client is not None:
+            self._redis_cache = RedisCache(redis_client, prefix="assistant_factory")
+            logger.info("AssistantFactory using Redis cache")
+        else:
+            logger.info("AssistantFactory using in-memory cache (no Redis)")
+
+        # In-memory cache for user_id -> (secretary_id, assignment_updated_at)
         self._secretary_assignments: dict[int, tuple[UUID, datetime]] = {}
-        # Cache for (assistant_uuid, user_id) -> (instance, config_loaded_at)
+        # In-memory cache for (assistant_uuid, user_id) -> (instance, config_loaded_at)
         self._assistant_cache: dict[
             tuple[UUID, str], tuple[BaseAssistant, datetime]
         ] = {}
         # Lock for cache access
         self._cache_lock = asyncio.Lock()
 
-        # --- Атрибуты кэша для глобальных настроек ---
+        # --- In-memory fallback for global settings ---
         self._global_settings_cache: GlobalSettingsRead | None = None
         self._global_settings_last_fetched: datetime | None = None
-        self._global_settings_cache_ttl = timedelta(
-            minutes=5
-        )  # Время жизни кэша - 5 минут
-        # Удаляем дефолтные значения и кэш
-        # ---------------------------------------------
+        self._global_settings_cache_ttl = timedelta(minutes=5)
 
         # --- Инициализация логгера ---
-        # Убедиться, что logger инициализирован в __init__ или доступен как self.logger
         self.logger = get_logger(__name__)
-        # -----------------------------
 
         # Initialize ToolFactory, passing self (the AssistantFactory instance)
         self.tool_factory = ToolFactory(settings=settings, assistant_factory=self)
@@ -98,7 +116,23 @@ class AssistantFactory:
         return await self._get_cached_global_settings()
 
     async def _get_cached_global_settings(self) -> GlobalSettingsBase:
-        """Fetches global settings from REST or cache without fallback defaults."""
+        """Fetches global settings from Redis cache, in-memory cache, or REST.
+
+        Cache hierarchy:
+        1. Redis cache (distributed, shared across instances)
+        2. In-memory cache (local fallback)
+        3. REST API (source of truth)
+        """
+        cache_key = "global_settings"
+
+        # Try Redis cache first
+        if self._redis_cache is not None:
+            cached = await self._redis_cache.get(cache_key, GlobalSettingsRead)
+            if cached:
+                self.logger.debug("Returning global settings from Redis cache")
+                return cached
+
+        # Fall back to in-memory cache
         now = datetime.now(UTC)
         cache_valid = (
             self._global_settings_cache is not None
@@ -107,19 +141,25 @@ class AssistantFactory:
             < self._global_settings_cache_ttl
         )
 
-        if (
-            cache_valid and self._global_settings_cache is not None
-        ):  # Доп. проверка для mypy
-            self.logger.debug("Returning cached global settings.")
+        if cache_valid and self._global_settings_cache is not None:
+            self.logger.debug("Returning global settings from in-memory cache")
             return self._global_settings_cache
 
+        # Fetch from REST
         self.logger.info("Fetching global settings from REST service...")
         try:
-            # Убедиться, что self.rest_client инициализирован в __init__
             settings = await self.rest_client.get_global_settings()
             if settings:
+                # Update both caches
                 self._global_settings_cache = settings
                 self._global_settings_last_fetched = now
+
+                # Store in Redis cache
+                if self._redis_cache is not None:
+                    await self._redis_cache.set(
+                        cache_key, settings, ttl=GLOBAL_SETTINGS_CACHE_TTL
+                    )
+
                 self.logger.info(
                     "Fetched and cached global settings",
                     settings=settings.model_dump(),

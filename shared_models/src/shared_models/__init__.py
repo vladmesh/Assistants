@@ -2,6 +2,7 @@
 
 # Import HTTP client
 # Import logging utilities
+# Import cache utilities
 # Import specific API schemas
 from .api_schemas import (
     AssistantCreate,
@@ -13,6 +14,10 @@ from .api_schemas import (
 
 # Import Memory schemas
 from .api_schemas.memory import MemoryCreate, MemoryRead, MemoryUpdate
+from .cache import (
+    CachedServiceClient,
+    RedisCache,
+)
 from .enums import AssistantType, ReminderStatus, ReminderType, ToolType
 from .http_client import (
     BaseServiceClient,
@@ -61,6 +66,9 @@ __all__ = [
     "ServiceUnavailableError",
     "ServiceTimeoutError",
     "ServiceResponseError",
+    # Cache
+    "RedisCache",
+    "CachedServiceClient",
     # Logging
     "LogEventType",
     "LogLevel",

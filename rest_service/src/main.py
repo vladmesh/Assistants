@@ -1,15 +1,16 @@
 import logging
 from contextlib import asynccontextmanager
 
+import redis.asyncio as redis_async
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from shared_models import LogEventType, configure_logging, get_logger
+from shared_models import LogEventType, RedisCache, configure_logging, get_logger
 
 from config import settings
 from database import init_db
 from metrics import PrometheusMiddleware, get_content_type, get_metrics
-from middleware import CorrelationIdMiddleware
+from middleware import CacheInvalidationMiddleware, CorrelationIdMiddleware
 
 # Import routers from correct locations
 from routers import (
@@ -60,15 +61,53 @@ async def lifespan(app: FastAPI):
     """Manages application lifespan events (startup/shutdown)."""
     logger.info("Starting REST service", event_type=LogEventType.STARTUP)
     await init_db()
+
+    # Initialize Redis and cache if enabled
+    redis_client = None
+    cache = None
+    if settings.CACHE_ENABLED:
+        try:
+            redis_client = redis_async.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                db=settings.REDIS_DB,
+                decode_responses=True,
+            )
+            # Test connection
+            await redis_client.ping()
+            cache = RedisCache(redis_client, prefix=settings.CACHE_PREFIX)
+            app.state.redis_client = redis_client
+            app.state.cache = cache
+            logger.info(
+                "Redis cache initialized",
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                prefix=settings.CACHE_PREFIX,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to connect to Redis, cache disabled",
+                error=str(e),
+            )
+            redis_client = None
+            cache = None
+
     yield
+
+    # Cleanup Redis connection
+    if redis_client:
+        await redis_client.close()
+        logger.info("Redis connection closed")
+
     logger.info("Shutting down REST service", event_type=LogEventType.SHUTDOWN)
 
 
 app = FastAPI(lifespan=lifespan, title="Assistant Service API")
 
-# Add middleware
-app.add_middleware(CorrelationIdMiddleware)
-app.add_middleware(PrometheusMiddleware)
+# Add middleware (order matters: first added = innermost = runs last)
+app.add_middleware(CacheInvalidationMiddleware)  # Runs after request, invalidates cache
+app.add_middleware(CorrelationIdMiddleware)  # Runs first, sets correlation ID
+app.add_middleware(PrometheusMiddleware)  # Runs around everything, collects metrics
 
 
 @app.exception_handler(RequestValidationError)

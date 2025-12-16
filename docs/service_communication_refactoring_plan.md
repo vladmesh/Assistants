@@ -1675,10 +1675,10 @@ class TestCacheInvalidation:
 - [ ] Старые клиенты удалены
 
 ### Фаза 3: Redis Cache
-- [ ] Создан `shared_models/src/shared_models/cache.py`
-- [ ] Middleware для инвалидации в `rest_service`
-- [ ] Кэширование в `assistant_service`
-- [ ] Unit-тесты для RedisCache
+- [x] Создан `shared_models/src/shared_models/cache.py`
+- [x] Middleware для инвалидации в `rest_service`
+- [x] Кэширование в `assistant_service`
+- [x] Unit-тесты для RedisCache
 
 ### Фаза 4: Мониторинг
 - [ ] Dashboard "Service Communication" создан
