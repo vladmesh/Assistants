@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from dateutil.parser import isoparse
-from pytz import utc
 from src.scheduler import DateTrigger, _job_func, schedule_job
 
 logger = logging.getLogger(__name__)
@@ -93,8 +92,8 @@ def test_schedule_one_time_job(mock_scheduler_global, sample_one_time_reminder):
     assert kwargs["name"] == f"One-time reminder {reminder['id']}"
     assert isinstance(kwargs["trigger"], DateTrigger)
     # Check trigger time (allowing for minor differences)
-    expected_trigger_time = isoparse(reminder["trigger_at"]).astimezone(utc)
-    actual_trigger_time = kwargs["trigger"].run_date.astimezone(utc)
+    expected_trigger_time = isoparse(reminder["trigger_at"]).astimezone(UTC)
+    actual_trigger_time = kwargs["trigger"].run_date.astimezone(UTC)
     assert abs((actual_trigger_time - expected_trigger_time).total_seconds()) < 1
     assert kwargs["args"] == [reminder]
     # Check the positional argument for the function
