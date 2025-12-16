@@ -1021,6 +1021,21 @@ dev = ["pre-commit", "tox"]
 testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
+name = "prometheus-client"
+version = "0.19.0"
+description = "Python client for the Prometheus monitoring system."
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "prometheus_client-0.19.0-py3-none-any.whl", hash = "sha256:c88b1e6ecf6b41cd8fb5731c7ae919bf66df6ec6fafa555cd6c0e16ca169ae92"},
+    {file = "prometheus_client-0.19.0.tar.gz", hash = "sha256:4585b0d1223148c27a225b10dbec5ae9bc4c81a99a3fa80774fa6209935324e1"},
+]
+
+[package.extras]
+twisted = ["twisted"]
+
+[[package]]
 name = "protobuf"
 version = "5.29.4"
 description = ""
@@ -1095,6 +1110,21 @@ files = [
 
 [package.extras]
 test = ["cffi", "hypothesis", "pandas", "pytest", "pytz"]
+
+[[package]]
+name = "pybreaker"
+version = "1.4.1"
+description = "Python implementation of the Circuit Breaker pattern"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "pybreaker-1.4.1-py3-none-any.whl", hash = "sha256:b4dab4a05195b7f2a64a6c1a6c4ba7a96534ef56ea7210e6bcb59f28897160e0"},
+    {file = "pybreaker-1.4.1.tar.gz", hash = "sha256:8df2d245c73ba40c8242c56ffb4f12138fbadc23e296224740c2028ea9dc1178"},
+]
+
+[package.extras]
+test = ["fakeredis", "mock", "pytest", "redis", "tornado", "types-mock", "types-redis"]
 
 [[package]]
 name = "pydantic"
@@ -1645,8 +1675,13 @@ files = []
 develop = false
 
 [package.dependencies]
+httpx = "^0.27.0"
+prometheus-client = "^0.19.0"
+pybreaker = "^1.2.0"
 pydantic = "^2.4.2"
 pydantic-settings = "^2.0.3"
+structlog = "^24.1.0"
+tenacity = "^8.2.3"
 
 [package.source]
 type = "directory"
@@ -1745,14 +1780,14 @@ streamlit = ">=1.25.0"
 
 [[package]]
 name = "structlog"
-version = "25.2.0"
+version = "24.4.0"
 description = "Structured Logging for Python"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "structlog-25.2.0-py3-none-any.whl", hash = "sha256:0fecea2e345d5d491b72f3db2e5fcd6393abfc8cd06a4851f21fcd4d1a99f437"},
-    {file = "structlog-25.2.0.tar.gz", hash = "sha256:d9f9776944207d1035b8b26072b9b140c63702fd7aa57c2f85d28ab701bd8e92"},
+    {file = "structlog-24.4.0-py3-none-any.whl", hash = "sha256:597f61e80a91cc0749a9fd2a098ed76715a1c8a01f73e336b746504d1aad7610"},
+    {file = "structlog-24.4.0.tar.gz", hash = "sha256:b27bfecede327a6d2da5fbc96bd859f114ecc398a6389d664f62085ee7ae6fc4"},
 ]
 
 [package.extras]
@@ -1763,14 +1798,14 @@ typing = ["mypy (>=1.4)", "rich", "twisted"]
 
 [[package]]
 name = "tenacity"
-version = "9.1.2"
+version = "8.5.0"
 description = "Retry code until it succeeds"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "tenacity-9.1.2-py3-none-any.whl", hash = "sha256:f77bf36710d8b73a50b2dd155c97b870017ad21afe6ab300326b0371b3b05138"},
-    {file = "tenacity-9.1.2.tar.gz", hash = "sha256:1169d376c297e7de388d18b4481760d478b0e99a777cad3a9c86e556f4b697cb"},
+    {file = "tenacity-8.5.0-py3-none-any.whl", hash = "sha256:b594c2a5945830c267ce6b79a166228323ed52718f30302c1359836112346687"},
+    {file = "tenacity-8.5.0.tar.gz", hash = "sha256:8bc6c0c8a09b31e6cad13c47afbed1a567518250a9a171418582ed8d9c20ca78"},
 ]
 
 [package.extras]
@@ -1914,4 +1949,4 @@ watchmedo = ["PyYAML (>=3.10)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "acc28809303e1724f46fc6b96753bb70e4468b540580d71d06bef7db718b40c8"
+content-hash = "0de093c2bc8c2f0b5e49f8322adf18bcd3d915f707ffeef0aa42e8e9936d76f1"

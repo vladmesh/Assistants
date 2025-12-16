@@ -504,18 +504,33 @@ testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
 name = "prometheus-client"
-version = "0.21.1"
+version = "0.19.0"
 description = "Python client for the Prometheus monitoring system."
 optional = false
 python-versions = ">=3.8"
-groups = ["main"]
+groups = ["main", "dev", "test"]
 files = [
-    {file = "prometheus_client-0.21.1-py3-none-any.whl", hash = "sha256:594b45c410d6f4f8888940fe80b5cc2521b305a1fafe1c58609ef715a001f301"},
-    {file = "prometheus_client-0.21.1.tar.gz", hash = "sha256:252505a722ac04b0456be05c05f75f45d760c2911ffc45f2a06bcaed9f3ae3fb"},
+    {file = "prometheus_client-0.19.0-py3-none-any.whl", hash = "sha256:c88b1e6ecf6b41cd8fb5731c7ae919bf66df6ec6fafa555cd6c0e16ca169ae92"},
+    {file = "prometheus_client-0.19.0.tar.gz", hash = "sha256:4585b0d1223148c27a225b10dbec5ae9bc4c81a99a3fa80774fa6209935324e1"},
 ]
 
 [package.extras]
 twisted = ["twisted"]
+
+[[package]]
+name = "pybreaker"
+version = "1.4.1"
+description = "Python implementation of the Circuit Breaker pattern"
+optional = false
+python-versions = ">=3.9"
+groups = ["main", "dev", "test"]
+files = [
+    {file = "pybreaker-1.4.1-py3-none-any.whl", hash = "sha256:b4dab4a05195b7f2a64a6c1a6c4ba7a96534ef56ea7210e6bcb59f28897160e0"},
+    {file = "pybreaker-1.4.1.tar.gz", hash = "sha256:8df2d245c73ba40c8242c56ffb4f12138fbadc23e296224740c2028ea9dc1178"},
+]
+
+[package.extras]
+test = ["fakeredis", "mock", "pytest", "redis", "tornado", "types-mock", "types-redis"]
 
 [[package]]
 name = "pydantic"
@@ -776,9 +791,12 @@ develop = false
 
 [package.dependencies]
 httpx = "^0.27.0"
+prometheus-client = "^0.19.0"
+pybreaker = "^1.2.0"
 pydantic = "^2.4.2"
 pydantic-settings = "^2.0.3"
 structlog = "^24.1.0"
+tenacity = "^8.2.3"
 
 [package.source]
 type = "directory"
@@ -831,6 +849,22 @@ dev = ["freezegun (>=0.2.8)", "mypy (>=1.4)", "pretend", "pytest (>=6.0)", "pyte
 docs = ["cogapp", "furo", "myst-parser", "sphinx", "sphinx-notfound-page", "sphinxcontrib-mermaid", "sphinxext-opengraph", "twisted"]
 tests = ["freezegun (>=0.2.8)", "pretend", "pytest (>=6.0)", "pytest-asyncio (>=0.17)", "simplejson"]
 typing = ["mypy (>=1.4)", "rich", "twisted"]
+
+[[package]]
+name = "tenacity"
+version = "8.5.0"
+description = "Retry code until it succeeds"
+optional = false
+python-versions = ">=3.8"
+groups = ["main", "dev", "test"]
+files = [
+    {file = "tenacity-8.5.0-py3-none-any.whl", hash = "sha256:b594c2a5945830c267ce6b79a166228323ed52718f30302c1359836112346687"},
+    {file = "tenacity-8.5.0.tar.gz", hash = "sha256:8bc6c0c8a09b31e6cad13c47afbed1a567518250a9a171418582ed8d9c20ca78"},
+]
+
+[package.extras]
+doc = ["reno", "sphinx"]
+test = ["pytest", "tornado (>=4.5)", "typeguard"]
 
 [[package]]
 name = "tqdm"
@@ -903,4 +937,4 @@ standard = ["colorama (>=0.4) ; sys_platform == \"win32\"", "httptools (>=0.5.0)
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "06bfddf8fb909ef4016718ce2dc2aa05e7bc6d49c03167f9644674ef16d63e6e"
+content-hash = "fa6ccd717fffe99d5160df9e995a80514d86f4d0c7b3184f3b96d921ffc3b5ef"

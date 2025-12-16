@@ -2,22 +2,22 @@
 
 from uuid import UUID
 
-import httpx
-import structlog
 from openai import OpenAI
+from shared_models import get_logger
 
 from config.settings import settings
+from services.rest_client import get_rest_client
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class MemoryService:
     """Service for Memory V2 operations via rest_service."""
 
     def __init__(self) -> None:
-        self.base_url = settings.REST_SERVICE_URL
         self.openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.embedding_model = settings.EMBEDDING_MODEL
+        self._rest_client = get_rest_client()
 
     async def generate_embedding(self, text: str) -> list[float]:
         """Generate embedding for text using OpenAI."""
@@ -46,40 +46,20 @@ class MemoryService:
         2. Call rest_service /memories/search
         3. Return results
         """
-        # Generate embedding
         embedding = await self.generate_embedding(query)
 
-        # Call rest_service
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/api/memories/search",
-                    json={
-                        "embedding": embedding,
-                        "user_id": user_id,
-                        "limit": limit,
-                        "threshold": threshold,
-                    },
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                results = response.json()
-                logger.info(
-                    "Memory search completed",
-                    query_length=len(query),
-                    results_count=len(results),
-                )
-                return results
-            except httpx.HTTPStatusError as e:
-                logger.error(
-                    "REST service error",
-                    status_code=e.response.status_code,
-                    detail=e.response.text,
-                )
-                raise
-            except Exception as e:
-                logger.error("Error searching memories", error=str(e))
-                raise
+        results = await self._rest_client.search_memories(
+            embedding=embedding,
+            user_id=user_id,
+            limit=limit,
+            threshold=threshold,
+        )
+        logger.info(
+            "Memory search completed",
+            query_length=len(query),
+            results_count=len(results),
+        )
+        return results
 
     async def create_memory(
         self,
@@ -95,42 +75,14 @@ class MemoryService:
         2. Call rest_service POST /memories
         3. Return created memory
         """
-        # Generate embedding
         embedding = await self.generate_embedding(text)
 
-        # Call rest_service
-        async with httpx.AsyncClient() as client:
-            try:
-                payload = {
-                    "user_id": user_id,
-                    "text": text,
-                    "memory_type": memory_type,
-                    "embedding": embedding,
-                    "importance": importance,
-                }
-                if assistant_id:
-                    payload["assistant_id"] = str(assistant_id)
-
-                response = await client.post(
-                    f"{self.base_url}/api/memories/",
-                    json=payload,
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                memory = response.json()
-                logger.info(
-                    "Memory created",
-                    memory_id=memory.get("id"),
-                    memory_type=memory_type,
-                )
-                return memory
-            except httpx.HTTPStatusError as e:
-                logger.error(
-                    "REST service error",
-                    status_code=e.response.status_code,
-                    detail=e.response.text,
-                )
-                raise
-            except Exception as e:
-                logger.error("Error creating memory", error=str(e))
-                raise
+        memory = await self._rest_client.create_memory(
+            user_id=user_id,
+            text=text,
+            memory_type=memory_type,
+            embedding=embedding,
+            assistant_id=assistant_id,
+            importance=importance,
+        )
+        return memory
