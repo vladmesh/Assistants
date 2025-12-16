@@ -23,6 +23,7 @@ shared-models = {path = "../shared_models"}
 prometheus-client = "^0.19.0"
 urllib3 = "^2.6.0"
 starlette = ">=0.47.2"
+protobuf = ">=6.31.1"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.6.1"
