@@ -3,7 +3,7 @@
 # Build: docker build -f Dockerfile.test-base -t assistants-test-base .
 # Rebuild when: shared_models changes, pytest versions update
 
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Install test tooling (pinned versions for reproducibility)
 RUN pip install --no-cache-dir \

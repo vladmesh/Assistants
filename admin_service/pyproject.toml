@@ -6,7 +6,7 @@ authors = ["Your Name <your.email@example.com>"]
 packages = [{ include = "admin_service/src" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 streamlit = "^1.32.0"
 streamlit-authenticator = "^0.3.2"
 PyYAML = "^6.0"
@@ -35,7 +35,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 src = ["src"]
 extend-exclude = ["alembic/versions"]
 

@@ -6,7 +6,7 @@ authors = ["Your Name <your.email@example.com>"]
 packages = [{ include = "shared_models", from = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 pydantic = "^2.4.2"
 pydantic-settings = "^2.0.3"
 structlog = "^24.1.0"
@@ -30,7 +30,7 @@ pytest-asyncio = "^0.23.0"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 src = ["src"]
 
 [tool.ruff.format]
@@ -44,7 +44,7 @@ fixable = ["ALL"]
 per-file-ignores = {"*/__init__.py" = ["F401"]}
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

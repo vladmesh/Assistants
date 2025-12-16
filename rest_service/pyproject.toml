@@ -6,7 +6,7 @@ authors = ["Your Name <your.email@example.com>"]
 packages = [{ include = "rest_service/src" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 fastapi = "^0.120.0"
 uvicorn = "^0.27.1"
 sqlmodel = "^0.0.23"
@@ -48,7 +48,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 src = ["src"]
 extend-exclude = ["alembic/versions"]
 
