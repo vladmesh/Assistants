@@ -440,3 +440,116 @@ groups:
           description: 'P95 latency is above 5 seconds for inter-service communication'
         labels:
           severity: warning
+
+  - orgId: 1
+    name: DLQ Alerts
+    folder: Smart Assistant
+    interval: 1m
+    rules:
+      # DLQ Size High
+      - uid: dlq-size-high
+        title: DLQ Size High
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'dlq_size'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 10
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'DLQ size is high: {{ $labels.queue }}'
+          description: 'Dead Letter Queue {{ $labels.queue }} has {{ $value }} messages waiting for review'
+        labels:
+          severity: warning
+
+      # DLQ Rapid Growth
+      - uid: dlq-growth-rapid
+        title: DLQ Rapid Growth
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'increase(messages_dlq_total[5m])'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 10
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: 'Rapid DLQ growth detected'
+          description: '{{ $value }} messages sent to DLQ in last 5 minutes. Check assistant_service logs for errors.'
+        labels:
+          severity: critical
+
+      # High Message Retry Rate
+      - uid: high-message-retry-rate
+        title: High Message Retry Rate
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'rate(message_processing_retries_total[5m]) * 60'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 10
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: 'High message retry rate'
+          description: 'More than 10 message retries per minute. Possible connectivity or processing issues.'
+        labels:
+          severity: warning

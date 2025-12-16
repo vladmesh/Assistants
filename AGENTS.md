@@ -80,6 +80,44 @@ Upgrade tornado to version 6.5 or later.
 - Алерты: Telegram-уведомления при критических проблемах (сервис недоступен, высокий уровень ошибок).
 - Админка: страницы мониторинга в `admin_service` (logs, metrics, queues, jobs).
 
+## Dead Letter Queue (DLQ)
+
+### Механизм обработки ошибок
+
+При ошибке обработки сообщения в `assistant_service`:
+1. Счетчик retry увеличивается (хранится в Redis ключе `msg_retry:{message_id}`)
+2. Если `retry_count < MAX_RETRIES` (3):
+   - Сообщение НЕ ACK-ается
+   - Остается в pending для повторной обработки через xautoclaim (60s idle)
+   - Exponential backoff: 1s, 2s, 4s
+3. Если `retry_count >= MAX_RETRIES`:
+   - Сообщение отправляется в DLQ stream `{queue}:dlq`
+   - Оригинальное сообщение ACK-ается
+   - Retry count очищается
+
+### DLQ REST API (`rest_service`)
+
+- `GET /api/dlq/messages?queue=...&error_type=...&user_id=...` — список сообщений в DLQ
+- `GET /api/dlq/stats?queue=...` — статистика DLQ (total, by_error_type, timestamps)
+- `POST /api/dlq/messages/{id}/retry?queue=...` — переотправить сообщение в основную очередь
+- `DELETE /api/dlq/messages/{id}?queue=...` — удалить сообщение после разбора
+- `DELETE /api/dlq/messages?queue=...&error_type=...` — очистить DLQ (опционально по типу ошибки)
+
+### Prometheus метрики
+
+- `messages_dlq_total{error_type, queue}` — счетчик сообщений в DLQ
+- `message_processing_retries_total{queue}` — количество retry попыток
+- `dlq_size{queue}` — текущий размер DLQ
+- `message_retry_count{queue, outcome}` — histogram распределения retry до success/dlq
+
+### Операционные процедуры
+
+См. `docs/dlq_operations_guide.md` для:
+- Мониторинга и алертов
+- Разбора ошибок
+- Восстановления сообщений
+- Очистки DLQ
+
 ## Прочее
 - Миграции rest_service: `make migrate MESSAGE="..."` создаёт alembic revision внутри контейнера; цели upgrade/history пока заглушки в Makefile.
 - Дополнительные планы/идеи — каталог `docs/` (memory/RAG/refactoring/testing/monitoring и др.).
