@@ -1,5 +1,6 @@
 # Import models/schemas that should be accessible directly from shared_models
 
+# Import HTTP client
 # Import logging utilities
 # Import specific API schemas
 from .api_schemas import (
@@ -13,6 +14,14 @@ from .api_schemas import (
 # Import Memory schemas
 from .api_schemas.memory import MemoryCreate, MemoryRead, MemoryUpdate
 from .enums import AssistantType, ReminderStatus, ReminderType, ToolType
+from .http_client import (
+    BaseServiceClient,
+    ClientConfig,
+    ServiceClientError,
+    ServiceResponseError,
+    ServiceTimeoutError,
+    ServiceUnavailableError,
+)
 from .logging import (
     LogEventType,
     LogLevel,
@@ -45,6 +54,13 @@ from .queue_logger import QueueDirection, QueueLogger
 # but not imported at top level to avoid requiring openai in all services
 
 __all__ = [
+    # HTTP Client
+    "BaseServiceClient",
+    "ClientConfig",
+    "ServiceClientError",
+    "ServiceUnavailableError",
+    "ServiceTimeoutError",
+    "ServiceResponseError",
     # Logging
     "LogEventType",
     "LogLevel",
