@@ -11,7 +11,8 @@ smart-assistant/
 ├── cron_service/             # APScheduler, триггеры напоминаний → Redis
 ├── telegram_bot_service/     # Telegram-бот, мост к Redis/REST
 ├── rag_service/              # RAG API, OpenAI embeddings
-├── admin_service/            # Streamlit-панель поверх REST
+├── admin_service/            # Streamlit-панель поверх REST (мониторинг)
+├── monitoring/               # Grafana + Prometheus + Loki
 ├── shared_models/            # Общие схемы/enum
 ├── scripts/, docs/           # Утилиты и дизайн-доки
 ├── Makefile                  # lint/format/tests (ruff + docker)
@@ -28,6 +29,7 @@ smart-assistant/
 - RAG: без внешней векторной БД (in-memory реализация).
 - OpenAI (chat + embeddings), Tavily web-search (опционально).
 - Линт/формат: Ruff (format + check). Тесты: Pytest. Логи: structlog.
+- Мониторинг: Grafana + Prometheus + Loki (в `monitoring/`).
 - CI/CD: GitHub Actions (lint, unit, integration, GHCR build/push, deploy).
 
 ## Сервисы (кратко)
@@ -41,9 +43,10 @@ smart-assistant/
 - `shared_models`: общие Pydantic-схемы/enum для всех сервисов.
 
 ## Локальный запуск
-- Подготовить `.env`: `POSTGRES_*`, `ASYNC_DATABASE_URL`, `REDIS_HOST/PORT/DB`, `REDIS_QUEUE_TO_TELEGRAM`, `REDIS_QUEUE_TO_SECRETARY`, `OPENAI_API_KEY`, `TELEGRAM_TOKEN`, `REST_SERVICE_URL`, `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`, при использовании RAG — `QDRANT_HOST/PORT/COLLECTION`.
+- Подготовить `.env`: `POSTGRES_*`, `ASYNC_DATABASE_URL`, `REDIS_HOST/PORT/DB`, `REDIS_QUEUE_TO_TELEGRAM`, `REDIS_QUEUE_TO_SECRETARY`, `OPENAI_API_KEY`, `TELEGRAM_TOKEN`, `REST_SERVICE_URL`, `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`.
 - Запуск dev-стенда: `docker compose up --build -d`. Код монтируется как volume, healthcheck-и включены.
 - Управление: `docker compose ps`, `docker compose logs -f <service>`, `docker compose restart <service>`.
+- Мониторинг (опционально): `cd monitoring && docker compose -f docker-compose.monitoring.yml --env-file ../.env up -d`. Grafana: http://localhost:3000.
 
 ## Makefile workflow (dockerized Ruff/Pytest)
 - `make format [SERVICE=...]` — ruff format + ruff check --fix.
@@ -69,9 +72,16 @@ smart-assistant/
 - `docker-compose.unit-test.yml`: монтирует `${SERVICE}`, `shared_models`, использует env из `tests/.env.test`, ставит зависимости Poetry без venv, запускает `pytest tests/unit`.
 - `docker-compose.integration.yml`: поднимает pgvector и redis, переменные `ASYNC_DATABASE_URL`, `REDIS_URL`, тестовые очереди; команда pytest для `tests/integration` либо fallback на все тесты.
 
+## Мониторинг
+- Инфраструктура: Grafana (дашборды), Prometheus (метрики), Loki (логи), Promtail (сбор логов).
+- Метрики: HTTP запросы, ошибки, размеры очередей, выполнение джобов (cron_service).
+- Логи: структурированные (structlog), с correlation_id, собираются из Docker контейнеров.
+- Алерты: Telegram-уведомления при критических проблемах (сервис недоступен, высокий уровень ошибок).
+- Админка: страницы мониторинга в `admin_service` (logs, metrics, queues, jobs).
+
 ## Прочее
 - Миграции rest_service: `make migrate MESSAGE="..."` создаёт alembic revision внутри контейнера; цели upgrade/history пока заглушки в Makefile.
-- Дополнительные планы/идеи — каталог `docs/` (memory/RAG/refactoring/testing и др.).
+- Дополнительные планы/идеи — каталог `docs/` (memory/RAG/refactoring/testing/monitoring и др.).
 
 ## Architecture Decision Records
 

@@ -2,7 +2,10 @@ SERVICES := admin_service assistant_service cron_service google_calendar_service
 RUFF_IMAGE := ghcr.io/astral-sh/ruff:0.14.8
 PWD_DIR := $(shell pwd)
 
-.PHONY: help lint format format-check test-unit test-integration test-all build-test-base migrate upgrade history
+# Services that have unit tests
+TESTABLE_SERVICES := $(SERVICES)
+
+.PHONY: help lint lint-fast format format-check test-unit test-unit-changed test-integration test-all build-test-base migrate upgrade history changed-services
 
 help:
 	@echo "Targets: lint, format, format-check, test-unit, test-integration, test-all, build-test-base"
@@ -38,9 +41,16 @@ endif
 %:
 	@:
 
+# Fast lint - single docker container for all services (used by pre-push hook)
+lint-fast:
+	@echo "Running lint for all services in single container..."
+	@docker run --rm -v $(PWD_DIR):/workspace -w /workspace $(RUFF_IMAGE) check \
+		admin_service assistant_service cron_service google_calendar_service \
+		rag_service rest_service telegram_bot_service shared_models
+
 lint:
 ifeq ($(SERVICE),all)
-	@set -e; for s in $(SERVICES) shared_models; do echo "started linter for $$s"; $(MAKE) lint SERVICE=$$s; done
+	@$(MAKE) lint-fast
 else
 	@echo "started linter for $(SERVICE)"
 	@$(MAKE) _ruff SERVICE=$(SERVICE) ARGS="check"
@@ -77,6 +87,16 @@ build-test-base:
 	@docker build -f Dockerfile.test-base -t assistants-test-base .
 	@echo "Base test image built: assistants-test-base:latest"
 
+# Detect changed services (compares to origin/main or HEAD~1)
+changed-services:
+	@CHANGED=$$(git diff --name-only $${BASE_REF:-origin/main}...HEAD 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo ""); \
+	if [ -z "$$CHANGED" ]; then echo ""; exit 0; fi; \
+	echo "$$CHANGED" | cut -d/ -f1 | sort -u | while read dir; do \
+		for svc in $(TESTABLE_SERVICES) shared_models; do \
+			if [ "$$dir" = "$$svc" ]; then echo "$$svc"; fi; \
+		done; \
+	done
+
 test-unit:
 ifeq ($(SERVICE),all)
 	@docker image inspect assistants-test-base:latest >/dev/null 2>&1 || $(MAKE) build-test-base
@@ -91,6 +111,28 @@ else
 	@echo "=== Unit tests: $(SERVICE) ==="
 	@SERVICE=$(SERVICE) docker compose -f docker-compose.unit-test.yml run --rm unit-test
 endif
+
+# Run unit tests only for changed services (used by pre-push hook)
+test-unit-changed:
+	@docker image inspect assistants-test-base:latest >/dev/null 2>&1 || $(MAKE) build-test-base
+	@CHANGED=$$($(MAKE) -s changed-services); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No service changes detected, skipping unit tests."; \
+		exit 0; \
+	fi; \
+	echo "Changed services: $$CHANGED"; \
+	for svc in $$CHANGED; do \
+		if [ "$$svc" = "shared_models" ]; then \
+			echo "shared_models changed - running all unit tests"; \
+			$(MAKE) test-unit SERVICE=all; \
+			exit $$?; \
+		fi; \
+	done; \
+	for svc in $$CHANGED; do \
+		echo ""; \
+		echo "=== Unit tests: $$svc ==="; \
+		SERVICE=$$svc docker compose -f docker-compose.unit-test.yml run --rm unit-test || exit 1; \
+	done
 
 # Integration tests - with DB/Redis, uses base test image + shared infra
 INTEGRATION_SERVICES := rest_service assistant_service telegram_bot_service

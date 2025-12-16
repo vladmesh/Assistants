@@ -8,8 +8,8 @@ repos:
         stages: [commit]
         pass_filenames: false
       - id: make-lint-test-unit
-        name: make lint && make test-unit
-        entry: bash -c "make lint && make test-unit"
+        name: make lint-fast && make test-unit-changed
+        entry: bash -c "make lint-fast && make test-unit-changed"
         language: system
         stages: [push]
         always_run: true
