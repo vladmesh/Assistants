@@ -12,7 +12,6 @@ services:
       - ./shared_models:/shared_models
       - ./.coveragerc:/svc/.coveragerc:ro
       - poetry-cache:/root/.cache/pypoetry
-      - test-tmp:/tmp
     working_dir: /svc
     env_file:
       - ./${SERVICE:-rest_service}/tests/.env.test
@@ -27,18 +26,10 @@ services:
     command: >
       bash -c "
         poetry config virtualenvs.create false &&
-        LOCK_HASH=$$(md5sum poetry.lock 2>/dev/null | cut -d' ' -f1 || echo 'none') &&
-        MARKER_FILE=\"/tmp/.poetry_installed_$$LOCK_HASH\" &&
-        if [ ! -f \"$$MARKER_FILE\" ]; then
-          echo 'Installing dependencies...' &&
-          poetry install --only main,test --no-interaction --no-ansi --no-root || poetry install --only main,test --no-interaction --no-ansi &&
-          touch \"$$MARKER_FILE\";
-        else
-          echo 'Dependencies already installed (cache hit)';
-        fi &&
+        echo 'Installing dependencies (using poetry cache for downloads)...' &&
+        poetry install --only main,test --no-interaction --no-ansi --no-root 2>/dev/null || poetry install --only main,test --no-interaction --no-ansi &&
         pytest tests/unit/ -v --cov=src --cov-config=.coveragerc --cov-report=term-missing --ignore=tests/integration
       "
 
 volumes:
   poetry-cache:
-  test-tmp:
