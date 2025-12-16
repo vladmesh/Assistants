@@ -1,11 +1,17 @@
 """Prometheus metrics for assistant_service."""
 
+import asyncio
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from services.redis_stream import RedisStreamClient
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
+    Gauge,
     Histogram,
     generate_latest,
 )
@@ -51,6 +57,32 @@ message_processing_duration_seconds = Histogram(
     buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0],
 )
 
+# DLQ metrics
+messages_dlq_total = Counter(
+    "messages_dlq_total",
+    "Total messages sent to Dead Letter Queue",
+    ["error_type", "queue"],
+)
+
+message_processing_retries_total = Counter(
+    "message_processing_retries_total",
+    "Total message processing retry attempts",
+    ["queue"],
+)
+
+dlq_size = Gauge(
+    "dlq_size",
+    "Current number of messages in Dead Letter Queue",
+    ["queue"],
+)
+
+message_retry_count_histogram = Histogram(
+    "message_retry_count",
+    "Distribution of retry counts before success or DLQ",
+    ["queue", "outcome"],
+    buckets=[0, 1, 2, 3, 4, 5],
+)
+
 
 def get_metrics() -> bytes:
     """Return metrics in Prometheus format."""
@@ -90,3 +122,26 @@ def start_metrics_server(port: int = 8080) -> HTTPServer:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
+
+
+async def update_dlq_metrics(
+    input_stream: "RedisStreamClient",
+    interval: int = 60,
+) -> None:
+    """Periodically update DLQ size gauge.
+
+    Args:
+        input_stream: Redis stream client with DLQ methods.
+        interval: Update interval in seconds (default: 60).
+    """
+    from shared_models import get_logger
+
+    logger = get_logger(__name__)
+
+    while True:
+        try:
+            size = await input_stream.get_dlq_length()
+            dlq_size.labels(queue=input_stream.stream).set(size)
+        except Exception as e:
+            logger.warning("Failed to update DLQ metrics", error=str(e))
+        await asyncio.sleep(interval)

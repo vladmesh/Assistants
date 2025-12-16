@@ -429,15 +429,16 @@ async def update_dlq_metrics(input_stream: RedisStreamClient, interval: int = 60
         await asyncio.sleep(interval)
 ```
 
-### Чек-лист итерации 3
+### Чек-лист итерации 3 (ВЫПОЛНЕНО 2024-12-16)
 
-- [ ] Добавить `messages_dlq_total` Counter
-- [ ] Добавить `message_processing_retries_total` Counter
-- [ ] Добавить `dlq_size` Gauge
-- [ ] Добавить `message_retry_count_histogram` Histogram
-- [ ] Реализовать `update_dlq_metrics()` корутину
-- [ ] Запустить корутину в `main.py`
-- [ ] Проверить метрики в Prometheus/Grafana
+- [x] Добавить `messages_dlq_total` Counter
+- [x] Добавить `message_processing_retries_total` Counter
+- [x] Добавить `dlq_size` Gauge
+- [x] Добавить `message_retry_count_histogram` Histogram
+- [x] Реализовать `update_dlq_metrics()` корутину
+- [x] Запустить корутину в `main.py`
+- [x] Интегрировать метрики в orchestrator._handle_processing_failure()
+- [ ] Проверить метрики в Prometheus/Grafana (отложено до деплоя)
 
 ---
 

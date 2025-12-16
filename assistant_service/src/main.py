@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from shared_models import LogEventType, configure_logging, get_logger
 
 from config.settings import get_settings
-from metrics import start_metrics_server
+from metrics import start_metrics_server, update_dlq_metrics
 from orchestrator import AssistantOrchestrator
 
 load_dotenv()
@@ -52,9 +52,15 @@ async def main():
         # Start main message listening task
         listen_task = asyncio.create_task(service.listen_for_messages())
 
+        # Start DLQ metrics update task
+        dlq_metrics_task = asyncio.create_task(
+            update_dlq_metrics(service.input_stream, interval=60)
+        )
+
         # Wait for any task to complete or shutdown signal
         tasks_to_wait = {
             listen_task,
+            dlq_metrics_task,
             asyncio.create_task(shutdown_event.wait()),
         }
         done, pending = await asyncio.wait(

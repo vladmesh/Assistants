@@ -18,6 +18,11 @@ from shared_models import (
 from assistants.base_assistant import BaseAssistant
 from assistants.factory import AssistantFactory
 from config.settings import Settings
+from metrics import (
+    message_processing_retries_total,
+    message_retry_count_histogram,
+    messages_dlq_total,
+)
 from services.redis_stream import MAX_RETRIES, RedisStreamClient
 from services.rest_service import RestServiceClient
 
@@ -148,6 +153,16 @@ class AssistantOrchestrator:
                 # After DLQ, ACK original message
                 await self.input_stream.ack(message_id)
                 await self._clear_message_retry_count(message_id)
+
+                # Update DLQ metrics
+                messages_dlq_total.labels(
+                    error_type=error_type,
+                    queue=self.settings.INPUT_QUEUE,
+                ).inc()
+                message_retry_count_histogram.labels(
+                    queue=self.settings.INPUT_QUEUE,
+                    outcome="dlq",
+                ).observe(retry_count)
             except Exception as dlq_exc:
                 logger.error(
                     "Failed to send to DLQ",
@@ -166,6 +181,11 @@ class AssistantOrchestrator:
                 user_id=user_id,
             )
             # Don't ACK - message stays in pending list for xautoclaim
+
+            # Update retry metric
+            message_processing_retries_total.labels(
+                queue=self.settings.INPUT_QUEUE,
+            ).inc()
 
     # endregion
 
