@@ -1671,7 +1671,7 @@ class TestCacheInvalidation:
 - [x] `google_calendar_service` мигрирован
 - [x] `admin_service` мигрирован
 - [x] `telegram_bot_service` мигрирован
-- [ ] `assistant_service` мигрирован
+- [x] `assistant_service` мигрирован
 - [ ] Старые клиенты удалены
 
 ### Фаза 3: Redis Cache
