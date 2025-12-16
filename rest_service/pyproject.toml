@@ -7,7 +7,7 @@ packages = [{ include = "rest_service/src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.109.2"
+fastapi = "^0.116.0"
 uvicorn = "^0.27.1"
 sqlmodel = "^0.0.23"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
@@ -21,7 +21,7 @@ croniter = "^2.0.1"
 openai = "^1.12.0"
 python-dotenv = "^1.0.1"
 httpx = "^0.27.0"
-starlette = ">=0.36.3,<0.37.0"
+starlette = ">=0.47.2"
 structlog = ">=24.1.0"
 pydantic = "^2.6.1"
 trio = "^0.24.0"
