@@ -32,13 +32,6 @@ def mock_redis(mocker):
 
 
 @pytest.fixture
-def mock_rest_client():
-    """Fixture to mock the REST client requests."""
-    with patch("src.rest_client.requests.get") as mock_get:
-        yield mock_get
-
-
-@pytest.fixture
 def sample_one_time_reminder():
     """Sample one-time reminder data from REST API."""
     # Make trigger_at slightly in the future for testing scheduling

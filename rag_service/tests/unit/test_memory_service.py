@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-import httpx
 import pytest
 
 from services.memory_service import MemoryService
@@ -22,8 +21,19 @@ def mock_openai_client():
 
 
 @pytest.fixture
-def memory_service(mock_openai_client):
-    """Create MemoryService with mocked OpenAI."""
+def mock_rest_client():
+    """Mock REST client for memory operations."""
+    with patch("services.memory_service.get_rest_client") as mock:
+        mock_client = MagicMock()
+        mock_client.search_memories = AsyncMock()
+        mock_client.create_memory = AsyncMock()
+        mock.return_value = mock_client
+        yield mock_client
+
+
+@pytest.fixture
+def memory_service(mock_openai_client, mock_rest_client):
+    """Create MemoryService with mocked dependencies."""
     return MemoryService()
 
 
@@ -40,7 +50,7 @@ async def test_generate_embedding(memory_service, mock_openai_client):
 
 
 @pytest.mark.asyncio
-async def test_search_memories(memory_service, mock_openai_client):
+async def test_search_memories(memory_service, mock_openai_client, mock_rest_client):
     """Test memory search."""
     query = "What do I like?"
     user_id = 123
@@ -54,29 +64,21 @@ async def test_search_memories(memory_service, mock_openai_client):
             "importance": 5,
         }
     ]
+    mock_rest_client.search_memories.return_value = mock_response_data
 
-    mock_response = MagicMock(spec=httpx.Response)
-    mock_response.json.return_value = mock_response_data
-    mock_response.raise_for_status = MagicMock()
+    results = await memory_service.search_memories(
+        query=query,
+        user_id=user_id,
+        limit=10,
+    )
 
-    with patch("httpx.AsyncClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.post = AsyncMock(return_value=mock_response)
-        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        results = await memory_service.search_memories(
-            query=query,
-            user_id=user_id,
-            limit=10,
-        )
-
-        assert len(results) == 1
-        assert results[0]["text"] == "User likes pizza"
+    assert len(results) == 1
+    assert results[0]["text"] == "User likes pizza"
+    mock_rest_client.search_memories.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_create_memory(memory_service, mock_openai_client):
+async def test_create_memory(memory_service, mock_openai_client, mock_rest_client):
     """Test memory creation."""
     user_id = 123
     text = "User prefers dark mode"
@@ -89,22 +91,14 @@ async def test_create_memory(memory_service, mock_openai_client):
         "memory_type": memory_type,
         "importance": 1,
     }
+    mock_rest_client.create_memory.return_value = mock_response_data
 
-    mock_response = MagicMock(spec=httpx.Response)
-    mock_response.json.return_value = mock_response_data
-    mock_response.raise_for_status = MagicMock()
+    memory = await memory_service.create_memory(
+        user_id=user_id,
+        text=text,
+        memory_type=memory_type,
+    )
 
-    with patch("httpx.AsyncClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.post = AsyncMock(return_value=mock_response)
-        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        memory = await memory_service.create_memory(
-            user_id=user_id,
-            text=text,
-            memory_type=memory_type,
-        )
-
-        assert memory["text"] == text
-        assert memory["memory_type"] == memory_type
+    assert memory["text"] == text
+    assert memory["memory_type"] == memory_type
+    mock_rest_client.create_memory.assert_called_once()

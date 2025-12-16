@@ -1,11 +1,13 @@
+"""
+REST client for google_calendar_service using BaseServiceClient.
+
+Provides unified HTTP communication with rest_service.
+"""
+
 from datetime import datetime
-from typing import Any
 
-import httpx
-import structlog
-
-# Import new schemas and validation error
 from pydantic import ValidationError
+from shared_models import BaseServiceClient, ClientConfig, get_logger
 from shared_models.api_schemas import (
     CalendarCredentialsCreate,
     CalendarCredentialsRead,
@@ -14,111 +16,82 @@ from shared_models.api_schemas import (
 
 from config.settings import Settings
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class RestServiceError(Exception):
     """Custom exception for google_calendar_service REST client errors."""
 
 
-class RestService:
-    def __init__(self, settings: Settings):
-        self.base_url = settings.REST_SERVICE_URL
-        # Add /api prefix check/ensure
-        if not self.base_url.endswith("/api"):
-            if self.base_url.endswith("/"):
-                self.base_url += "api"
-            else:
-                self.base_url += "/api"
-        self.client = httpx.AsyncClient(timeout=30.0)  # Add timeout
+class RestService(BaseServiceClient):
+    """REST client for google_calendar_service."""
 
-    async def _request(self, method: str, endpoint: str, **kwargs) -> Any | None:
-        """Helper method for making requests and handling common errors/responses."""
-        url = f"{self.base_url}{endpoint}"  # Assumes endpoint starts with /
-        try:
-            response = await self.client.request(method, url, **kwargs)
-            if response.status_code == 404:
-                return None
-            response.raise_for_status()  # Raise for other 4xx/5xx errors
-            if response.status_code == 204:
-                return {}  # Success, no content
-            # Handle potential empty response body for non-204 success codes
-            if not response.content:
-                return {}  # Or perhaps raise an error if content was expected
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                f"HTTP error from REST service: {e.response.status_code}",
-                url=url,
-                method=method,
-                response_text=e.response.text[:200],
-            )
-            raise RestServiceError(
-                f"HTTP Error {e.response.status_code}: {e.response.text}"
-            ) from e
-        except httpx.RequestError as e:
-            logger.error(
-                "Request error connecting to REST service",
-                url=url,
-                method=method,
-                error=str(e),
-            )
-            raise RestServiceError(f"Request failed for {url}: {e}") from e
-        except Exception as e:  # Includes JSONDecodeError
-            logger.error(
-                "Unexpected error during REST request or JSON parsing",
-                url=url,
-                method=method,
-                error=str(e),
-                exc_info=True,
-            )
-            raise RestServiceError(f"Unexpected error for {url}: {e}") from e
+    def __init__(self, settings: Settings):
+        base_url = settings.REST_SERVICE_URL
+        # Add /api prefix if not present
+        if not base_url.endswith("/api"):
+            if base_url.endswith("/"):
+                base_url += "api"
+            else:
+                base_url += "/api"
+
+        config = ClientConfig(
+            timeout=30.0,
+            connect_timeout=5.0,
+            max_retries=3,
+            retry_min_wait=1.0,
+            retry_max_wait=10.0,
+            circuit_breaker_fail_max=5,
+            circuit_breaker_reset_timeout=60.0,
+        )
+        super().__init__(
+            base_url=base_url,
+            service_name="google_calendar_service",
+            target_service="rest_service",
+            config=config,
+        )
 
     async def get_user(self, user_id: int) -> TelegramUserRead | None:
-        """Get user from REST service by user_id. Returns parsed model or None."""
+        """Get user from REST service by user_id."""
         try:
-            response_data = await self._request("GET", f"/users/{user_id}")
+            response_data = await self.request("GET", f"/users/{user_id}")
             if response_data is None:
-                return None  # 404
+                return None
             return TelegramUserRead(**response_data)
         except ValidationError as e:
             logger.error(
                 "Failed to validate get_user response",
                 user_id=user_id,
                 errors=e.errors(),
-                data=response_data,
             )
             raise RestServiceError(
                 f"REST API response validation failed for get_user: {e}"
             ) from e
-        # Allow RestServiceError from _request to propagate
+        except Exception as e:
+            logger.error("Failed to get user", user_id=user_id, error=str(e))
+            raise RestServiceError(f"Failed to get user {user_id}: {e}") from e
 
     async def get_calendar_token(self, user_id: int) -> CalendarCredentialsRead | None:
-        """Get calendar token for user from REST service.
-
-        Returns parsed model or None.
-        """
+        """Get calendar token for user from REST service."""
         try:
-            # Endpoint seems to be /calendar/user/{user_id}/token based on update
-            # method? If this fails, it might just be /calendar/{user_id}.
-            # TODO: Verify the correct GET endpoint in rest_service routes/calendar.py
-            response_data = await self._request(
-                "GET", f"/calendar/user/{user_id}/token"
-            )
+            response_data = await self.request("GET", f"/calendar/user/{user_id}/token")
             if response_data is None:
-                return None  # 404
+                return None
             return CalendarCredentialsRead(**response_data)
         except ValidationError as e:
             logger.error(
                 "Failed to validate get_calendar_token response",
                 user_id=user_id,
                 errors=e.errors(),
-                data=response_data,
             )
             raise RestServiceError(
                 f"REST API response validation failed for get_calendar_token: {e}"
             ) from e
-        # Allow RestServiceError from _request to propagate
+        except Exception as e:
+            logger.error("Failed to get calendar token", user_id=user_id, error=str(e))
+            raise RestServiceError(
+                f"Failed to get calendar token for user {user_id}: {e}"
+            ) from e
 
     async def update_calendar_token(
         self,
@@ -127,47 +100,31 @@ class RestService:
         refresh_token: str,
         token_expiry: datetime,
     ) -> bool:
-        """Update calendar token for user in REST service via request body."""
+        """Update calendar token for user in REST service."""
         try:
-            # Create Pydantic model for the request body
             payload = CalendarCredentialsCreate(
-                user_id=user_id,  # Schema might not need user_id if it's in path
+                user_id=user_id,
                 access_token=access_token,
                 refresh_token=refresh_token,
                 token_expiry=token_expiry,
             )
-            # Send data in JSON body, not params
-            response_data = await self._request(
+            response_data = await self.request(
                 "PUT",
                 f"/calendar/user/{user_id}/token",
-                json=payload.model_dump(
-                    mode="json"
-                ),  # Use Pydantic v2 dump with mode='json'
+                json=payload.model_dump(mode="json"),
             )
-            # Successful request (200 OK or maybe 204 No Content handled by _request)
-            # _request returns None on 404, dict/list on success
-            # We just need to know if it succeeded (didn't raise error and wasn't 404)
             return response_data is not None
-
         except (RestServiceError, ValidationError) as e:
-            # Log errors originating from _request or local validation
             logger.error(
                 "Failed to update calendar token",
                 error=str(e),
                 user_id=user_id,
-                exc_info=True,
             )
             return False
-        except Exception as e:  # Catch any other unexpected error
+        except Exception as e:
             logger.error(
                 "Unexpected error during update_calendar_token",
                 error=str(e),
                 user_id=user_id,
-                exc_info=True,
             )
             return False
-
-    async def close(self):
-        """Close HTTP client"""
-        await self.client.aclose()
-        logger.info("Google Calendar REST client session closed.")

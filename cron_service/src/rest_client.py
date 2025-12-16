@@ -1,73 +1,334 @@
-import logging
+"""
+Async REST client for cron_service using BaseServiceClient.
+
+Provides unified HTTP communication with retry, circuit breaker, and metrics.
+"""
+
+import asyncio
 import os
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-import requests
+from shared_models import BaseServiceClient, ClientConfig, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 REST_SERVICE_URL = os.getenv("REST_SERVICE_URL", "http://rest_service:8000")
-REMINDERS_ENDPOINT = f"{REST_SERVICE_URL}/api/reminders/scheduled"
-REMINDER_DETAIL_ENDPOINT_TPL = f"{REST_SERVICE_URL}/api/reminders/{{reminder_id}}"
-GLOBAL_SETTINGS_ENDPOINT = f"{REST_SERVICE_URL}/api/global-settings/"
-CONVERSATIONS_ENDPOINT = f"{REST_SERVICE_URL}/api/conversations/"
-BATCH_JOBS_ENDPOINT = f"{REST_SERVICE_URL}/api/batch-jobs/"
-JOB_EXECUTIONS_ENDPOINT = f"{REST_SERVICE_URL}/api/job-executions/"
+
+
+class CronRestClient(BaseServiceClient):
+    """Async REST client for cron_service."""
+
+    def __init__(self, base_url: str | None = None):
+        config = ClientConfig(
+            timeout=30.0,
+            connect_timeout=5.0,
+            max_retries=3,
+            retry_min_wait=1.0,
+            retry_max_wait=10.0,
+            circuit_breaker_fail_max=5,
+            circuit_breaker_reset_timeout=60.0,
+        )
+        super().__init__(
+            base_url=base_url or REST_SERVICE_URL,
+            service_name="cron_service",
+            target_service="rest_service",
+            config=config,
+        )
+
+    # === Reminders ===
+
+    async def fetch_active_reminders(self) -> list[dict]:
+        """Fetch active reminders for scheduling."""
+        try:
+            result = await self.request("GET", "/api/reminders/scheduled")
+            reminders = result if isinstance(result, list) else []
+            logger.info("Fetched %d active reminders", len(reminders))
+            return reminders
+        except Exception as e:
+            logger.error("Failed to fetch reminders", error=str(e))
+            return []
+
+    async def mark_reminder_completed(self, reminder_id: UUID | str) -> bool:
+        """Mark reminder as completed."""
+        try:
+            await self.request(
+                "PATCH",
+                f"/api/reminders/{reminder_id}",
+                json={"status": "completed"},
+            )
+            logger.info("Marked reminder %s as completed", reminder_id)
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to mark reminder completed",
+                reminder_id=str(reminder_id),
+                error=str(e),
+            )
+            return False
+
+    # === Global Settings ===
+
+    async def fetch_global_settings(self) -> dict[str, Any] | None:
+        """Fetch global settings."""
+        try:
+            result = await self.request("GET", "/api/global-settings/")
+            logger.info("Fetched global settings")
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            logger.error("Failed to fetch global settings", error=str(e))
+            return None
+
+    # === Conversations ===
+
+    async def fetch_conversations(
+        self,
+        since: datetime | None = None,
+        user_id: int | None = None,
+        min_messages: int = 2,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Fetch conversations for memory extraction."""
+        try:
+            params: dict[str, Any] = {"min_messages": min_messages, "limit": limit}
+            if since:
+                params["since"] = since.isoformat()
+            if user_id:
+                params["user_id"] = user_id
+
+            result = await self.request("GET", "/api/conversations/", params=params)
+            if isinstance(result, dict):
+                conversations = result.get("conversations", [])
+                total_messages = result.get("total_messages", 0)
+                logger.info(
+                    "Fetched %d conversations (%d messages total)",
+                    len(conversations),
+                    total_messages,
+                )
+                return conversations
+            return []
+        except Exception as e:
+            logger.error("Failed to fetch conversations", error=str(e))
+            return []
+
+    # === Batch Jobs ===
+
+    async def create_batch_job(
+        self,
+        batch_id: str,
+        user_id: int,
+        assistant_id: UUID | str | None = None,
+        provider: str = "openai",
+        model: str = "gpt-4o-mini",
+        messages_processed: int = 0,
+    ) -> dict | None:
+        """Create batch job record."""
+        try:
+            payload: dict[str, Any] = {
+                "batch_id": batch_id,
+                "user_id": user_id,
+                "provider": provider,
+                "model": model,
+                "messages_processed": messages_processed,
+            }
+            if assistant_id:
+                payload["assistant_id"] = str(assistant_id)
+
+            result = await self.request("POST", "/api/batch-jobs/", json=payload)
+            if result:
+                job_id = result.get("id")
+                logger.info("Created batch job %s for user %d", job_id, user_id)
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            logger.error("Failed to create batch job", error=str(e))
+            return None
+
+    async def fetch_pending_batch_jobs(
+        self, job_type: str = "memory_extraction"
+    ) -> list[dict]:
+        """Fetch pending batch jobs."""
+        try:
+            result = await self.request(
+                "GET",
+                "/api/batch-jobs/pending",
+                params={"job_type": job_type},
+            )
+            jobs = result if isinstance(result, list) else []
+            logger.info("Fetched %d pending batch jobs", len(jobs))
+            return jobs
+        except Exception as e:
+            logger.error("Failed to fetch pending batch jobs", error=str(e))
+            return []
+
+    async def update_batch_job_status(
+        self,
+        job_id: UUID | str,
+        status: str,
+        facts_extracted: int | None = None,
+        error_message: str | None = None,
+    ) -> dict | None:
+        """Update batch job status."""
+        try:
+            payload: dict[str, Any] = {"status": status}
+            if facts_extracted is not None:
+                payload["facts_extracted"] = facts_extracted
+            if error_message is not None:
+                payload["error_message"] = error_message
+
+            result = await self.request(
+                "PATCH", f"/api/batch-jobs/{job_id}", json=payload
+            )
+            logger.info("Updated batch job %s status to %s", job_id, status)
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            logger.error("Failed to update batch job", job_id=str(job_id), error=str(e))
+            return None
+
+    # === Job Executions ===
+
+    async def create_job_execution(
+        self,
+        job_id: str,
+        job_name: str,
+        job_type: str,
+        scheduled_at: datetime,
+        user_id: int | None = None,
+        reminder_id: int | str | None = None,
+    ) -> dict | None:
+        """Create job execution record."""
+        try:
+            payload: dict[str, Any] = {
+                "job_id": job_id,
+                "job_name": job_name,
+                "job_type": job_type,
+                "scheduled_at": scheduled_at.isoformat(),
+            }
+            if user_id is not None:
+                payload["user_id"] = user_id
+            if reminder_id is not None:
+                payload["reminder_id"] = reminder_id
+
+            result = await self.request("POST", "/api/job-executions/", json=payload)
+            if result:
+                logger.debug("Created job execution %s", result.get("id"))
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            logger.error("Failed to create job execution", error=str(e))
+            return None
+
+    async def start_job_execution(self, execution_id: str) -> dict | None:
+        """Mark job execution as started."""
+        try:
+            result = await self.request(
+                "PATCH", f"/api/job-executions/{execution_id}/start"
+            )
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            logger.error(
+                "Failed to start job execution",
+                execution_id=execution_id,
+                error=str(e),
+            )
+            return None
+
+    async def complete_job_execution(
+        self, execution_id: str, result: str | None = None
+    ) -> dict | None:
+        """Mark job execution as completed."""
+        try:
+            payload = {"result": result} if result else None
+            response = await self.request(
+                "PATCH",
+                f"/api/job-executions/{execution_id}/complete",
+                json=payload,
+            )
+            return response if isinstance(response, dict) else None
+        except Exception as e:
+            logger.error(
+                "Failed to complete job execution",
+                execution_id=execution_id,
+                error=str(e),
+            )
+            return None
+
+    async def fail_job_execution(
+        self,
+        execution_id: str,
+        error: str,
+        error_traceback: str | None = None,
+    ) -> dict | None:
+        """Mark job execution as failed."""
+        try:
+            payload: dict[str, Any] = {"error": error}
+            if error_traceback:
+                payload["error_traceback"] = error_traceback
+
+            result = await self.request(
+                "PATCH",
+                f"/api/job-executions/{execution_id}/fail",
+                json=payload,
+            )
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            logger.error(
+                "Failed to fail job execution",
+                execution_id=execution_id,
+                error=str(e),
+            )
+            return None
+
+
+# Singleton instance
+_client: CronRestClient | None = None
+
+
+def get_rest_client() -> CronRestClient:
+    """Get or create REST client singleton."""
+    global _client
+    if _client is None:
+        _client = CronRestClient()
+    return _client
+
+
+async def close_rest_client() -> None:
+    """Close the REST client."""
+    global _client
+    if _client is not None:
+        await _client.close()
+        _client = None
+
+
+# === Synchronous wrappers for APScheduler compatibility ===
+# APScheduler's BackgroundScheduler runs jobs in threads, not async.
+# These wrappers allow calling async methods from sync scheduler jobs.
+
+
+def _run_async(coro):
+    """Run async coroutine from sync context."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 def fetch_active_reminders() -> list[dict]:
-    """Fetches the list of active reminders from the REST service."""
-    try:
-        response = requests.get(REMINDERS_ENDPOINT, timeout=10)
-        response.raise_for_status()
-        reminders = response.json()
-        logger.info(f"Fetched {len(reminders)} active reminders.")
-        return reminders
-    except requests.RequestException as e:
-        logger.error(f"Error fetching reminders from {REMINDERS_ENDPOINT}: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"An unexpected error occurred while fetching reminders: {e}")
-        return []
+    """Sync wrapper: Fetch active reminders."""
+    client = get_rest_client()
+    return _run_async(client.fetch_active_reminders())
 
 
-def mark_reminder_completed(reminder_id: UUID) -> bool:
-    """Marks a reminder as completed by sending a PATCH request to the REST service."""
-    url = REMINDER_DETAIL_ENDPOINT_TPL.format(reminder_id=reminder_id)
-    payload = {"status": "completed"}
-    try:
-        response = requests.patch(url, json=payload, timeout=10)
-        response.raise_for_status()
-        logger.info(f"Successfully marked reminder {reminder_id} as completed.")
-        return True
-    except requests.RequestException as e:
-        logger.error(f"Error updating reminder {reminder_id} status to completed: {e}")
-        return False
-    except Exception as e:
-        logger.error(
-            "An unexpected error occurred while marking reminder %s as completed: %s",
-            reminder_id,
-            e,
-        )
-        return False
+def mark_reminder_completed(reminder_id: UUID | str) -> bool:
+    """Sync wrapper: Mark reminder as completed."""
+    client = get_rest_client()
+    return _run_async(client.mark_reminder_completed(reminder_id))
 
 
 def fetch_global_settings() -> dict[str, Any] | None:
-    """Fetches global settings from the REST service."""
-    try:
-        response = requests.get(GLOBAL_SETTINGS_ENDPOINT, timeout=10)
-        response.raise_for_status()
-        settings = response.json()
-        logger.info("Fetched global settings.")
-        return settings
-    except requests.RequestException as e:
-        logger.error(f"Error fetching global settings: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error fetching global settings: {e}")
-        return None
+    """Sync wrapper: Fetch global settings."""
+    client = get_rest_client()
+    return _run_async(client.fetch_global_settings())
 
 
 def fetch_conversations(
@@ -76,114 +337,59 @@ def fetch_conversations(
     min_messages: int = 2,
     limit: int = 50,
 ) -> list[dict]:
-    """Fetches conversations grouped by user/assistant for fact extraction."""
-    try:
-        params: dict[str, Any] = {
-            "min_messages": min_messages,
-            "limit": limit,
-        }
-        if since:
-            params["since"] = since.isoformat()
-        if user_id:
-            params["user_id"] = user_id
-
-        response = requests.get(CONVERSATIONS_ENDPOINT, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        conversations = data.get("conversations", [])
-        logger.info(
-            f"Fetched {len(conversations)} conversations "
-            f"({data.get('total_messages', 0)} messages total)."
+    """Sync wrapper: Fetch conversations."""
+    client = get_rest_client()
+    return _run_async(
+        client.fetch_conversations(
+            since=since, user_id=user_id, min_messages=min_messages, limit=limit
         )
-        return conversations
-    except requests.RequestException as e:
-        logger.error(f"Error fetching conversations: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error fetching conversations: {e}")
-        return []
+    )
 
 
 def create_batch_job(
     batch_id: str,
     user_id: int,
-    assistant_id: UUID | None = None,
+    assistant_id: UUID | str | None = None,
     provider: str = "openai",
     model: str = "gpt-4o-mini",
     messages_processed: int = 0,
 ) -> dict | None:
-    """Creates a batch job record for tracking."""
-    try:
-        payload = {
-            "batch_id": batch_id,
-            "user_id": user_id,
-            "provider": provider,
-            "model": model,
-            "messages_processed": messages_processed,
-        }
-        if assistant_id:
-            payload["assistant_id"] = str(assistant_id)
-
-        response = requests.post(BATCH_JOBS_ENDPOINT, json=payload, timeout=10)
-        response.raise_for_status()
-        job = response.json()
-        logger.info(f"Created batch job {job.get('id')} for user {user_id}.")
-        return job
-    except requests.RequestException as e:
-        logger.error(f"Error creating batch job: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error creating batch job: {e}")
-        return None
+    """Sync wrapper: Create batch job."""
+    client = get_rest_client()
+    return _run_async(
+        client.create_batch_job(
+            batch_id=batch_id,
+            user_id=user_id,
+            assistant_id=assistant_id,
+            provider=provider,
+            model=model,
+            messages_processed=messages_processed,
+        )
+    )
 
 
 def fetch_pending_batch_jobs(job_type: str = "memory_extraction") -> list[dict]:
-    """Fetches pending batch jobs for processing."""
-    try:
-        url = f"{BATCH_JOBS_ENDPOINT}pending"
-        params = {"job_type": job_type}
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        jobs = response.json()
-        logger.info(f"Fetched {len(jobs)} pending batch jobs.")
-        return jobs
-    except requests.RequestException as e:
-        logger.error(f"Error fetching pending batch jobs: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error fetching pending batch jobs: {e}")
-        return []
+    """Sync wrapper: Fetch pending batch jobs."""
+    client = get_rest_client()
+    return _run_async(client.fetch_pending_batch_jobs(job_type))
 
 
 def update_batch_job_status(
-    job_id: UUID,
+    job_id: UUID | str,
     status: str,
     facts_extracted: int | None = None,
     error_message: str | None = None,
 ) -> dict | None:
-    """Updates a batch job status."""
-    try:
-        url = f"{BATCH_JOBS_ENDPOINT}{job_id}"
-        payload: dict[str, Any] = {"status": status}
-        if facts_extracted is not None:
-            payload["facts_extracted"] = facts_extracted
-        if error_message is not None:
-            payload["error_message"] = error_message
-
-        response = requests.patch(url, json=payload, timeout=10)
-        response.raise_for_status()
-        job = response.json()
-        logger.info(f"Updated batch job {job_id} status to {status}.")
-        return job
-    except requests.RequestException as e:
-        logger.error(f"Error updating batch job {job_id}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error updating batch job {job_id}: {e}")
-        return None
-
-
-# === Job Execution Tracking ===
+    """Sync wrapper: Update batch job status."""
+    client = get_rest_client()
+    return _run_async(
+        client.update_batch_job_status(
+            job_id=job_id,
+            status=status,
+            facts_extracted=facts_extracted,
+            error_message=error_message,
+        )
+    )
 
 
 def create_job_execution(
@@ -192,80 +398,37 @@ def create_job_execution(
     job_type: str,
     scheduled_at: datetime,
     user_id: int | None = None,
-    reminder_id: int | None = None,
+    reminder_id: int | str | None = None,
 ) -> dict | None:
-    """Creates a job execution record for tracking."""
-    try:
-        payload: dict[str, Any] = {
-            "job_id": job_id,
-            "job_name": job_name,
-            "job_type": job_type,
-            "scheduled_at": scheduled_at.isoformat(),
-        }
-        if user_id is not None:
-            payload["user_id"] = user_id
-        if reminder_id is not None:
-            payload["reminder_id"] = reminder_id
-
-        response = requests.post(JOB_EXECUTIONS_ENDPOINT, json=payload, timeout=10)
-        response.raise_for_status()
-        execution = response.json()
-        logger.debug(f"Created job execution {execution.get('id')}.")
-        return execution
-    except requests.RequestException as e:
-        logger.error(f"Error creating job execution: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error creating job execution: {e}")
-        return None
+    """Sync wrapper: Create job execution."""
+    client = get_rest_client()
+    return _run_async(
+        client.create_job_execution(
+            job_id=job_id,
+            job_name=job_name,
+            job_type=job_type,
+            scheduled_at=scheduled_at,
+            user_id=user_id,
+            reminder_id=reminder_id,
+        )
+    )
 
 
 def start_job_execution(execution_id: str) -> dict | None:
-    """Marks a job execution as started."""
-    try:
-        url = f"{JOB_EXECUTIONS_ENDPOINT}{execution_id}/start"
-        response = requests.patch(url, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        logger.error(f"Error starting job execution {execution_id}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error starting job execution {execution_id}: {e}")
-        return None
+    """Sync wrapper: Start job execution."""
+    client = get_rest_client()
+    return _run_async(client.start_job_execution(execution_id))
 
 
 def complete_job_execution(execution_id: str, result: str | None = None) -> dict | None:
-    """Marks a job execution as completed."""
-    try:
-        url = f"{JOB_EXECUTIONS_ENDPOINT}{execution_id}/complete"
-        payload = {"result": result} if result else None
-        response = requests.patch(url, json=payload, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        logger.error(f"Error completing job execution {execution_id}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error completing job execution {execution_id}: {e}")
-        return None
+    """Sync wrapper: Complete job execution."""
+    client = get_rest_client()
+    return _run_async(client.complete_job_execution(execution_id, result))
 
 
 def fail_job_execution(
     execution_id: str, error: str, error_traceback: str | None = None
 ) -> dict | None:
-    """Marks a job execution as failed."""
-    try:
-        url = f"{JOB_EXECUTIONS_ENDPOINT}{execution_id}/fail"
-        payload: dict[str, Any] = {"error": error}
-        if error_traceback:
-            payload["error_traceback"] = error_traceback
-        response = requests.patch(url, json=payload, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        logger.error(f"Error failing job execution {execution_id}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error failing job execution {execution_id}: {e}")
-        return None
+    """Sync wrapper: Fail job execution."""
+    client = get_rest_client()
+    return _run_async(client.fail_job_execution(execution_id, error, error_traceback))
