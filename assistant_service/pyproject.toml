@@ -23,8 +23,6 @@ pytz = "^2024.1"
 typing-extensions = "^4.9.0"
 tavily-python = "^0.5.4"
 asyncpg = "^0.29.0"
-psycopg = {extras = ["binary"], version = "^3.2.6"}
-aiopg = "^1.4.0"
 sqlalchemy = "^2.0.31"
 alembic = "^1.15.2"
 prometheus-client = "^0.19.0"
@@ -33,10 +31,8 @@ tenacity = "^8.2.3"
 pybreaker = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
-shared-models = { path = "../shared_models" }
 
 [tool.poetry.group.test.dependencies]
-shared-models = { path = "../shared_models" }
 pytest = "^8.0.0"
 pytest-asyncio = "^0.23.5"
 pytest-cov = "^4.1.0"
