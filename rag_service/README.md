@@ -1,74 +1,74 @@
 # RAG Service
 
-Сервис для Retrieval-Augmented Generation (RAG), предоставляющий функциональность для хранения и поиска векторных эмбеддингов текстовых данных.
+A service for Retrieval-Augmented Generation (RAG) that provides functionality for storing and searching vector embeddings of text data.
 
-## Возможности
+## Features
 
-- Хранение векторных эмбеддингов текстовых данных
-- Поиск по векторным эмбеддингам с использованием ChromaDB
-- Поддержка различных типов данных (общие правила, пользовательская история, заметки ассистентов)
-- Фильтрация по типу данных, пользователю и ассистенту
-- REST API для добавления и поиска данных
+- Store vector embeddings of text data
+- Search vector embeddings using ChromaDB
+- Support for various data types (shared rules, user history, assistant notes)
+- Filtering by data type, user, and assistant
+- REST API for adding and searching data
 
-## Требования
+## Requirements
 
 - Python 3.11+
-- Poetry для управления зависимостями
-- Docker и Docker Compose (опционально)
+- Poetry for dependency management
+- Docker and Docker Compose (optional)
 
-## Установка
+## Installation
 
-### Локальная установка
+### Local Installation
 
-1. Клонируйте репозиторий:
+1. Clone the repository:
    ```bash
    git clone <repository-url>
    cd rag_service
    ```
 
-2. Установите зависимости с помощью Poetry:
+2. Install dependencies with Poetry:
    ```bash
    poetry install
    ```
 
-3. Создайте файл `.env` на основе примера:
+3. Create a `.env` file based on the example:
    ```bash
    cp .env.example .env
    ```
 
-4. Запустите сервис:
+4. Start the service:
    ```bash
    poetry run python -m src.main
    ```
 
-### Установка с использованием Docker
+### Installation with Docker
 
-1. Соберите образ:
+1. Build the image:
    ```bash
    docker build -t rag-service .
    ```
 
-2. Запустите контейнер:
+2. Run the container:
    ```bash
    docker run -p 8002:8002 rag-service
    ```
 
-## Использование
+## Usage
 
-### API Эндпоинты
+### API Endpoints
 
-#### Добавление данных
+#### Adding Data
 
 ```
 POST /api/data/add
 ```
 
-Добавляет новые данные в векторную базу данных.
+Adds new data to the vector database.
 
-**Тело запроса:**
+**Request body:**
 ```json
 {
-  "text": "Текстовое содержимое",
+  "text": "Text content",
   "embedding": [0.1, 0.2, 0.3, ...],
   "data_type": "shared_rule",
   "user_id": 123,
@@ -76,15 +76,15 @@ POST /api/data/add
 }
 ```
 
-#### Поиск данных
+#### Searching Data
 
 ```
 POST /api/data/search
 ```
 
-Ищет данные в векторной базе данных по эмбеддингу запроса.
+Searches the vector database by query embedding.
 
-**Тело запроса:**
+**Request body:**
 ```json
 {
   "query_embedding": [0.1, 0.2, 0.3, ...],
@@ -95,32 +95,32 @@ POST /api/data/search
 }
 ```
 
-#### Проверка работоспособности
+#### Health Check
 
 ```
 GET /health
 ```
 
-Проверяет работоспособность сервиса.
+Checks the health of the service.
 
-### Интеграция с Assistant Service
+### Integration with the Assistant Service
 
-RAG сервис интегрируется с Assistant Service через инструмент `RAGTool`, который позволяет ассистентам использовать функциональность RAG для генерации ответов с учетом контекста из векторной базы данных.
+The RAG service integrates with the Assistant Service via the `RAGTool` tool, which lets assistants use RAG functionality to generate responses that take context from the vector database into account.
 
-## Тестирование
+## Testing
 
-### Локальное тестирование
+### Local Testing
 
 ```bash
 poetry run pytest
 ```
 
-### Тестирование с использованием Docker
+### Testing with Docker
 
 ```bash
 docker compose -f docker-compose.test.yml up --build
 ```
 
-## Лицензия
+## License
 
-MIT 
+MIT
