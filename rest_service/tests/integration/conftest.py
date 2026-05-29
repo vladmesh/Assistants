@@ -1,11 +1,9 @@
-import asyncio
 import os
 import random
 import sys
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator
 from uuid import UUID
 
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import text
@@ -31,18 +29,9 @@ if not DATABASE_URL:
     sys.exit(1)
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create an instance of the default event loop for each test case."""
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_engine():
-    """Create a test engine once per session."""
+    """Create a test engine for each test (shares the per-test event loop)."""
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
