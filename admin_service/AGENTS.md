@@ -1,107 +1,107 @@
-# Админ-панель Smart Assistant
+# Smart Assistant Admin Panel
 
-## Общее описание
-Админ-панель представляет собой веб-интерфейс на Streamlit для управления всеми аспектами Smart Assistant. Панель обеспечивает удобный доступ к управлению пользователями, ассистентами, инструментами и настройками системы.
+## Overview
+The admin panel is a Streamlit web interface for managing every aspect of Smart Assistant. It provides convenient access to managing users, assistants, tools, and system settings.
 
-## Основные разделы
+## Main Sections
 
-### 1. Управление пользователями
-- Просмотр списка всех пользователей
-- Фильтрация и поиск пользователей
-- Детальная информация о пользователе:
-  - Основные данные (ID, Telegram ID, username)
-  - История взаимодействий
-  - Назначенные ассистенты
-  - Статистика использования
-- Возможность блокировки/разблокировки пользователей
-- Управление правами доступа
+### 1. User Management
+- View the list of all users
+- Filter and search users
+- Detailed user information:
+  - Core data (ID, Telegram ID, username)
+  - Interaction history
+  - Assigned assistants
+  - Usage statistics
+- Ability to block/unblock users
+- Access-rights management
 
-### 2. Управление ассистентами
-- Создание новых ассистентов
-- Редактирование существующих ассистентов:
-  - Название и описание
-  - Модель OpenAI
-  - Инструкции
-  - Тип ассистента
-  - Статус активности
-- Назначение инструментов ассистентам
-- Просмотр статистики использования
-- Тестирование ассистентов в реальном времени
+### 2. Assistant Management
+- Create new assistants
+- Edit existing assistants:
+  - Name and description
+  - OpenAI model
+  - Instructions
+  - Assistant type
+  - Active status
+- Assign tools to assistants
+- View usage statistics
+- Test assistants in real time
 
-### 3. Управление инструментами
-- Создание новых инструментов
-- Редактирование существующих инструментов:
-  - Название и описание
-  - Схема входных данных
-  - Тип инструмента
-  - Статус активности
-- Назначение инструментов ассистентам
-- Тестирование инструментов
+### 3. Tool Management
+- Create new tools
+- Edit existing tools:
+  - Name and description
+  - Input schema
+  - Tool type
+  - Active status
+- Assign tools to assistants
+- Test tools
 
-### 4. Мониторинг системы
-- Статистика использования:
-  - Количество активных пользователей
-  - Количество сообщений
-  - Время отклика
-  - Использование ресурсов
-- Логи системы
-- Статус всех сервисов
-- Ошибки и предупреждения
+### 4. System Monitoring
+- Usage statistics:
+  - Number of active users
+  - Number of messages
+  - Response time
+  - Resource usage
+- System logs
+- Status of all services
+- Errors and warnings
 
-### 5. Настройки системы
-- Конфигурация OpenAI:
-  - API ключи
-  - Модели
-  - Лимиты
-- Настройки Redis
-- Настройки базы данных
-- Общие настройки системы
+### 5. System Settings
+- OpenAI configuration:
+  - API keys
+  - Models
+  - Limits
+- Redis settings
+- Database settings
+- General system settings
 
-### 6. Глобальные настройки системы
-- Управление общими параметрами работы ассистентов:
-  - **Промпт суммаризации:** Редактирование промпта, используемого для создания саммари истории диалога.
-  - **Размер контекстного окна:** Установка максимального количества токенов, передаваемых в LLM.
+### 6. Global System Settings
+- Manage shared assistant behavior parameters:
+  - **Summarization prompt:** Edit the prompt used to summarize dialog history.
+  - **Context window size:** Set the maximum number of tokens passed to the LLM.
 
-### 7. Управление задачами
-- Просмотр запланированных задач
-- Создание новых задач
-- Редактирование существующих задач
-- Мониторинг выполнения задач
-- История выполнения
+### 7. Task Management
+- View scheduled tasks
+- Create new tasks
+- Edit existing tasks
+- Monitor task execution
+- Execution history
 
-## Технические требования
+## Technical Requirements
 
-### Безопасность
-- Аутентификация администраторов
-- Разграничение прав доступа
-- Логирование действий администраторов
-- Защита от CSRF и XSS атак
+### Security
+- Administrator authentication
+- Access-rights segregation
+- Logging of administrator actions
+- Protection against CSRF and XSS attacks
 
-### Производительность
-- Кэширование данных
-- Пагинация для больших списков
-- Асинхронная загрузка данных
-- Оптимизация запросов к базе данных
+### Performance
+- Data caching
+- Pagination for large lists
+- Asynchronous data loading
+- Database query optimization
 
-### Интерфейс
-- Адаптивный дизайн
-- Темная/светлая тема
-- Интуитивно понятная навигация
-- Информативные сообщения об ошибках
-- Подтверждение важных действий
+### Interface
+- Responsive design
+- Dark/light theme
+- Intuitive navigation
+- Informative error messages
+- Confirmation of important actions
 
-## Интеграция
-- REST API для всех операций
-- WebSocket для real-time обновлений
-- Интеграция с системой логирования
-- Экспорт данных в различные форматы
+## Integration
+- REST API for all operations
+- WebSocket for real-time updates
+- Integration with the logging system
+- Data export to various formats
 
-## Дополнительные функции
-- Резервное копирование данных
-- Восстановление из резервной копии
-- Экспорт/импорт конфигураций
-- Массовые операции с данными
-- Система уведомлений для администраторов
+## Additional Features
+- Data backup
+- Restore from backup
+- Configuration export/import
+- Bulk data operations
+- Notification system for administrators
 
 ```bash
 # Start the service
@@ -147,4 +147,4 @@ Admin Service interacts with the REST Service to obtain data about users, assist
 The service uses the following environment variables:
 
 - `REST_SERVICE_URL`: REST API URL (default: http://rest_service:8000)
-- `LOG_LEVEL`: Logging level (default: INFO) 
+- `LOG_LEVEL`: Logging level (default: INFO)

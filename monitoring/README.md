@@ -97,7 +97,7 @@ open http://localhost:3000/alerting/list
 - Check project label filter matches: `com.docker.compose.project=assistants`
 
 **Prometheus targets down:**
-- Services need `/metrics` endpoint (Фаза 5)
+- Services need `/metrics` endpoint (Phase 5)
 - Check network connectivity between containers
 
 **Alerts not sending to Telegram:**
