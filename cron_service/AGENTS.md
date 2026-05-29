@@ -34,7 +34,7 @@ cron_service/
 scheduler = BackgroundScheduler(timezone=utc)
 
 def start_scheduler():
-    """Запускает планировщик задач."""
+    """Start the task scheduler."""
     try:
         scheduler.add_job(
             update_jobs_from_rest, # Renamed from update_jobs_from_rest

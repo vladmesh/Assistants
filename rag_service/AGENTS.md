@@ -1,10 +1,10 @@
 # RAG Service
 
-## Обзор
+## Overview
 
-RAG сервис сейчас работает поверх `rest_service` (pgvector) через Memory API и не содержит собственной векторной БД.
+The RAG service currently runs on top of `rest_service` (pgvector) via the Memory API and does not contain its own vector database.
 
-## Структура директорий
+## Directory Structure
 
 ```
 rag_service/
@@ -18,7 +18,7 @@ rag_service/
 │   │   └── settings.py
 │   ├── services/
 │   │   ├── __init__.py
-│   │   └── memory_service.py  # работает через rest_service
+│   │   └── memory_service.py  # works through rest_service
 │   ├── scripts/
 │   │   └── __init__.py
 │   ├── __init__.py
@@ -32,21 +32,21 @@ rag_service/
 └── llm_context_rag.md
 ```
 
-## API Эндпоинты
+## API Endpoints
 
-### Memory API (через rest_service)
+### Memory API (through rest_service)
 
-- `POST /api/memory/search` — генерирует embedding в RAG, ищет в `rest_service` (pgvector).
-- `POST /api/memory/` — генерирует embedding и создаёт память через `rest_service`.
-- `GET /api/health` и корневой `/health` — проверки.
+- `POST /api/memory/search` — generates an embedding in RAG, searches in `rest_service` (pgvector).
+- `POST /api/memory/` — generates an embedding and creates a memory via `rest_service`.
+- `GET /api/health` and root `/health` — health checks.
 
-## Интеграция с Assistant Service
+## Integration with the Assistant Service
 
-Ассистент использует REST эндпоинты `rest_service` для хранения/поиска памяти; RAG сервис лишь генерирует embedding и проксирует вызовы.
+The assistant uses the `rest_service` REST endpoints to store/search memory; the RAG service only generates the embedding and proxies the calls.
 
-## Запуск и тестирование
+## Running and Testing
 
-### Запуск сервиса
+### Running the Service
 
 ```bash
 cd rag_service
@@ -54,7 +54,7 @@ poetry install
 poetry run python -m src.main
 ```
 
-### Запуск тестов
+### Running Tests
 
 ```bash
 cd rag_service
@@ -62,7 +62,7 @@ poetry install
 poetry run pytest
 ```
 
-### Запуск в Docker
+### Running in Docker
 
 ```bash
 cd rag_service
@@ -70,7 +70,7 @@ docker build -t rag-service .
 docker run -p 8002:8002 rag-service
 ```
 
-### Запуск тестов в Docker
+### Running Tests in Docker
 
 ```bash
 cd rag_service
