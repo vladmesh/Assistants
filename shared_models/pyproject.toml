@@ -18,15 +18,15 @@ redis = "^5.2.1"
 
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.3.5"
-pytest-cov = "^4.1.0"
-pytest-asyncio = "^0.23.8"
+pytest = "^9.0.3"
+pytest-cov = "^7.1.0"
+pytest-asyncio = "^1.4.0"
 mypy = "^1.6.1"
 
 [tool.poetry.group.test.dependencies]
-pytest = "^8.3.5"
-pytest-cov = "^4.1.0"
-pytest-asyncio = "^0.23.8"
+pytest = "^9.0.3"
+pytest-cov = "^7.1.0"
+pytest-asyncio = "^1.4.0"
 
 [tool.ruff]
 line-length = 88
