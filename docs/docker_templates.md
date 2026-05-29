@@ -1,8 +1,8 @@
 # Docker Templates and Checklist
 
-## Шаблоны файлов
+## File Templates
 
-### 1. Dockerfile (продакшн)
+### 1. Dockerfile (production)
 ```dockerfile
 # Build stage
 FROM python:3.11-slim as builder
@@ -45,10 +45,10 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY shared_models/ ./shared_models/
 COPY service_name/src/ /src/
 
-# Копирование дополнительных файлов (если есть)
-# COPY service_name/alembic/ ./alembic/  # если есть миграции
-# COPY service_name/manage.py ./manage.py  # если есть manage.py
-# COPY service_name/alembic.ini ./alembic.ini  # если есть alembic.ini
+# Copy additional files (if any)
+# COPY service_name/alembic/ ./alembic/  # if there are migrations
+# COPY service_name/manage.py ./manage.py  # if there is a manage.py
+# COPY service_name/alembic.ini ./alembic.ini  # if there is an alembic.ini
 
 CMD ["python", "src/main.py"]
 ```
@@ -101,7 +101,7 @@ COPY service_name/tests/ /tests/
 CMD ["pytest", "-v", "--cov=src", "--cov-report=term-missing", "/tests/"]
 ```
 
-### 3. docker-compose.yml (сервис в общем компоузе)
+### 3. docker-compose.yml (service in the shared compose)
 ```yaml
 service_name:
   build:
@@ -114,9 +114,9 @@ service_name:
   env_file:
     - .env
   ports:
-    - "8000:8000"  # если нужно
+    - "8000:8000"  # if needed
   volumes:
-    - ./service_name/src:/src  # для разработки
+    - ./service_name/src:/src  # for development
   depends_on:
     - redis:
       condition: service_healthy
@@ -143,7 +143,7 @@ services:
       - PYTHONPATH=/src
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      # Специфичные для сервиса переменные
+      # Service-specific variables
       - SERVICE_VAR1=test_value1
       - SERVICE_VAR2=test_value2
     env_file:
@@ -180,45 +180,45 @@ volumes:
   test_db_data:
 ```
 
-## Чек-лист проверки сервисов
-### Общие
-- [x] В корне есть актуальный `.dockerignore` для всех сборок
-- [x] В Dockerfile порядок: pyproject/lock → shared_models (pyproject+src) → install → код/тесты
+## Service Review Checklist
+### General
+- [x] An up-to-date `.dockerignore` for all builds exists at the repo root
+- [x] Dockerfile order: pyproject/lock → shared_models (pyproject+src) → install → code/tests
 
 ### assistant_service
-- [x] Dockerfile соответствует шаблону
-- [x] Dockerfile.test соответствует шаблону
-- [x] Блок в общем docker-compose.yml соответствует шаблону
-- [x] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile matches the template
+- [x] Dockerfile.test matches the template
+- [x] The block in the shared docker-compose.yml matches the template
+- [x] docker-compose.test.yml matches the template
 
 ### rest_service
-- [x] Dockerfile соответствует шаблону
-- [x] Dockerfile.test соответствует шаблону
-- [x] Блок в общем docker-compose.yml соответствует шаблону
-- [x] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile matches the template
+- [x] Dockerfile.test matches the template
+- [x] The block in the shared docker-compose.yml matches the template
+- [x] docker-compose.test.yml matches the template
 
 ### google_calendar_service
-- [x] Dockerfile соответствует шаблону
-- [x] Dockerfile.test соответствует шаблону
-- [x] Блок в общем docker-compose.yml соответствует шаблону
-- [x] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile matches the template
+- [x] Dockerfile.test matches the template
+- [x] The block in the shared docker-compose.yml matches the template
+- [x] docker-compose.test.yml matches the template
 
 ### cron_service
-- [x] Dockerfile соответствует шаблону
-- [x] Dockerfile.test соответствует шаблону
-- [x] Блок в общем docker-compose.yml соответствует шаблону
-- [x] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile matches the template
+- [x] Dockerfile.test matches the template
+- [x] The block in the shared docker-compose.yml matches the template
+- [x] docker-compose.test.yml matches the template
 
 ### telegram_bot_service
-- [x] Dockerfile соответствует шаблону
-- [x] Dockerfile.test соответствует шаблону
-- [x] Блок в общем docker-compose.yml соответствует шаблону
-- [x] docker-compose.test.yml соответствует шаблону
+- [x] Dockerfile matches the template
+- [x] Dockerfile.test matches the template
+- [x] The block in the shared docker-compose.yml matches the template
+- [x] docker-compose.test.yml matches the template
 
-## Примечания
-1. При проверке каждого файла нужно учитывать специфику сервиса
-2. Некоторые сервисы могут не требовать всех компонентов (например, не все нуждаются в базе данных)
-3. Порты и переменные окружения должны быть адаптированы под конкретный сервис
-4. Healthcheck должен быть настроен в соответствии с API сервиса
-5. При использовании Poetry необходимо убедиться, что poetry.lock актуален
-6. Для локальных зависимостей (например, shared_models) не использовать флаг develop=true в pyproject.toml 
+## Notes
+1. When reviewing each file, account for the specifics of the service.
+2. Some services may not require all components (e.g., not all of them need a database).
+3. Ports and environment variables must be adapted to the specific service.
+4. The healthcheck must be configured to match the service's API.
+5. When using Poetry, make sure `poetry.lock` is up to date.
+6. For local dependencies (e.g., shared_models), do not use the `develop=true` flag in `pyproject.toml`. 

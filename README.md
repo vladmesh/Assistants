@@ -107,15 +107,15 @@ docker compose -f docker-compose.monitoring.yml --env-file ../.env up -d
 All development is done in Docker containers to ensure consistency across environments. The project uses Docker Compose for service orchestration and development.
 
 ### Code Quality
-- Форматирование и линт: Ruff (format + check) в контейнерах через Makefile
-- Pre-commit hooks: `pre-commit install` (на commit: `make format`, на push: `make lint && make test-unit`)
-- Запуск для конкретного сервиса:
+- Formatting and linting: Ruff (format + check) inside containers via the Makefile
+- Pre-commit hooks: `pre-commit install` (on commit: `make format`, on push: `make lint && make test-unit`)
+- Run for a specific service:
 ```bash
 make format SERVICE=rest_service      # ruff format + ruff check --fix
 make lint SERVICE=rest_service        # ruff check
 make format-check SERVICE=rest_service # ruff format --check (CI)
 ```
-- Все сервисы сразу:
+- All services at once:
 ```bash
 make format
 make lint
@@ -144,13 +144,13 @@ make format-check
 - **`docker-publish.yml`**: Build and push images to GHCR on push to main (tags: `sha` and `latest`)
 - **`deploy-prod.yml`**: Manual dispatch or `v*` tag; SSH to production and `docker compose pull && up -d` with `IMAGE_TAG`/`REGISTRY` variables
 
-### Миграции (rest_service)
+### Migrations (rest_service)
 ```bash
-# создать миграцию (MESSAGE="..."):
+# create a migration (MESSAGE="..."):
 make migrate MESSAGE="add new table"
-# применить все:
+# apply all:
 make upgrade
-# история:
+# history:
 make history
 ```
 

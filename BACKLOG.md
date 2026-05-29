@@ -3,68 +3,68 @@
 ## Tasks
 
 - [x] Remove milliseconds from timestamps in assistant messages to save tokens. 
-- [ ] Убрать обязательность поля startup_message в схеме shared_models.api_schemas.AssistantCreate (сделать Optional[str] = None). Рассмотреть изменение shared_models.api_schemas.AssistantBase, чтобы поле startup_message стало Optional[str] = None.
-- [ ] Настроить кэширование при деплое на сервер 
-- [ ] Продумать поддержку Markdown в сообщениях ассистента: обеспечить корректное форматирование текста (например, списки, жирный шрифт) и корректное отображение URL-адресов, содержащих спецсимволы (например, подчеркивания), без их преобразования в элементы разметки. 
-- [ ] Пофиксить уязвимости безопасности, на которые указывает GitHub. 
-- [x] Реализовать индикацию процесса обработки запроса ассистентом (например, сообщение "Ассистент думает..." или анимация) для улучшения UX. 
-- [x] Исправить timezone awareness в REST API: модели должны возвращать aware datetime (с tzinfo=UTC) вместо naive datetime. Затронутые места:
-    - `rest_service`: модели `Assistant`, `Message` и другие с полями `created_at`, `updated_at` должны возвращать timezone-aware datetime.
-    - `shared_models`: схемы API должны корректно сериализовать datetime с timezone.
-    - После исправления можно удалить defensive code в `assistant_service/src/assistants/factory.py` (`_check_and_update_assistant_cache`).
-- [x] Реализовать полную поддержку часовых поясов для регулярных напоминаний. Это включает:
-    - Сохранение часового пояса вместе с CRON-выражением в `rest_service` (потребуется миграция БД).
-    - Передачу часового пояса из `rest_service` в `cron_service`.
-    - Использование часового пояса в `cron_service` при планировании задач APScheduler (например, `CronTrigger(..., timezone=...)`).
-    - Обновление `shared_models` для поддержки поля `timezone` в схемах напоминаний.
-    - Корректную обработку `timezone` в `ReminderCreateTool` в `assistant_service`.
-- [ ] **Рефакторинг межсервисной коммуникации** (см. `docs/service_communication_refactoring_plan.md`):
-    - Унифицировать HTTP-клиенты через `BaseServiceClient` в `shared_models`
-    - Добавить retry, circuit breaker, метрики во все сервисы
-    - Внедрить Redis Cache для конфигураций (settings, assistants, tools)
-    - Создать Grafana dashboard для мониторинга межсервисных вызовов
-    - **Ожидаемый эффект**: повышение надежности при сетевых сбоях, снижение дублирования кода (~800 строк), улучшение observability
-- [x] **КРИТИЧНО**: Реализовать Dead Letter Queue (DLQ) и retry-механизм для обработки сообщений в `assistant_service`. Проблема: сообщения теряются при ошибках обработки, так как ACK происходит всегда в `finally` блоке (`orchestrator.py:602-615`). Решение включает:
-    - **Отслеживание попыток обработки**: хранить `retry_count` в метаданных сообщения Redis Stream (использовать поля сообщения для сохранения счетчика попыток).
-    - **Retry-логика с экспоненциальной задержкой**: при ошибке обработки, если `retry_count < MAX_RETRIES` (рекомендуется 3-5), не ACK-ить сообщение, вернуть его в pending через `xautoclaim` с задержкой (1s, 2s, 4s). ACK только при успешной обработке.
-    - **Dead Letter Queue**: после исчерпания `MAX_RETRIES` отправлять сообщение в отдельный Redis Stream `{INPUT_QUEUE}:dlq` с сохранением:
-        - Оригинального payload
-        - Типа ошибки и сообщения об ошибке
-        - Timestamp последней попытки
-        - Количества попыток
-        - User ID и других метаданных для восстановления
-    - **Модификация `orchestrator.py`**: изменить логику в `listen_for_messages()` и `_dispatch_event()`:
-        - ACK только при успешной обработке (`status == "success"`)
-        - При ошибке: увеличить `retry_count`, если не превышен лимит — не ACK (сообщение останется в pending для retry через `xautoclaim`)
-        - При превышении лимита — отправить в DLQ и затем ACK оригинальное сообщение
-    - **Расширение `RedisStreamClient`**: добавить методы для работы с retry-счетчиком и DLQ:
-        - `get_retry_count(message_fields)` — извлечь счетчик из полей сообщения
-        - `increment_retry_count(message_fields)` — увеличить счетчик
-        - `send_to_dlq(original_message_id, payload, error_info, retry_count)` — отправка в DLQ
-    - **Мониторинг и метрики**: добавить Prometheus метрики:
-        - `messages_dlq_total{error_type, queue}` — счетчик сообщений в DLQ по типу ошибки
-        - `message_processing_retries_total{queue}` — общее количество retry-попыток
-        - `message_processing_duration_seconds{status}` — время обработки (success/failure)
-        - Алерт в Grafana при росте DLQ (>10 сообщений за 5 минут)
-    - **REST API для управления DLQ** (в `rest_service`):
-        - `GET /api/v1/dlq/messages` — список сообщений в DLQ с фильтрацией (error_type, user_id, date_range)
-        - `POST /api/v1/dlq/messages/{message_id}/retry` — переотправить сообщение из DLQ обратно в основную очередь
-        - `DELETE /api/v1/dlq/messages/{message_id}` — удалить сообщение из DLQ (после ручного разбора)
-        - Модель `DLQMessage` в БД для хранения метаданных (опционально, для удобства администрирования)
-    - **Логирование**: добавить структурированные логи для всех событий:
-        - Retry попытки с `retry_count`, `error_type`, `delay_before_retry`
-        - Отправка в DLQ с полной информацией об ошибке
-        - Восстановление из DLQ
-    - **Тестирование**: добавить unit и integration тесты:
-        - Тест retry-логики при временных ошибках (ConnectionError, TimeoutError)
-        - Тест отправки в DLQ после исчерпания попыток
-        - Тест восстановления сообщений из DLQ
-        - Тест метрик и мониторинга
-    - **Документация**: обновить `AGENTS.md` с описанием DLQ механизма и добавить раздел в `docs/` с деталями реализации.
-    - **Ожидаемый эффект**: снижение потери сообщений с ~1-5% до <0.1%, улучшение reliability и возможность восстановления потерянных сообщений.
-- [ ] **Миграция pyproject.toml на PEP 621 формат**: обновить все сервисы для использования стандарта PEP 621 вместо устаревшего формата `[tool.poetry]`. Затронутые файлы:
-    - Все `pyproject.toml` файлы в сервисах (rest_service, assistant_service, telegram_bot_service, google_calendar_service, cron_service, rag_service, admin_service, shared_models)
-    - Перенести метаданные (name, version, description, authors) из `[tool.poetry]` в секцию `[project]`
-    - Обновить формат authors на новый формат PEP 621: `[{name = "...", email = "..."}]`
-    - Проверить, что `poetry check` не выдаёт предупреждений после миграции
-    - **Ожидаемый эффект**: соответствие современным стандартам Python, устранение предупреждений Poetry, улучшение совместимости с будущими версиями Poetry
+- [ ] Make the `startup_message` field optional in the `shared_models.api_schemas.AssistantCreate` schema (set it to `Optional[str] = None`). Consider changing `shared_models.api_schemas.AssistantBase` so that `startup_message` becomes `Optional[str] = None`.
+- [ ] Set up caching when deploying to the server.
+- [ ] Design Markdown support in assistant messages: ensure correct text formatting (e.g., lists, bold) and correct rendering of URLs containing special characters (e.g., underscores) without converting them into markup elements.
+- [ ] Fix the security vulnerabilities flagged by GitHub.
+- [x] Add an indication that the assistant is processing a request (e.g., an "Assistant is thinking..." message or an animation) to improve UX. 
+- [x] Fix timezone awareness in the REST API: models must return aware datetimes (with `tzinfo=UTC`) instead of naive datetimes. Affected areas:
+    - `rest_service`: models `Assistant`, `Message`, and others with `created_at`/`updated_at` fields must return timezone-aware datetimes.
+    - `shared_models`: API schemas must correctly serialize datetimes with timezone.
+    - After the fix, the defensive code in `assistant_service/src/assistants/factory.py` (`_check_and_update_assistant_cache`) can be removed.
+- [x] Implement full timezone support for recurring reminders. This includes:
+    - Storing the timezone alongside the CRON expression in `rest_service` (requires a DB migration).
+    - Passing the timezone from `rest_service` to `cron_service`.
+    - Using the timezone in `cron_service` when scheduling APScheduler jobs (e.g., `CronTrigger(..., timezone=...)`).
+    - Updating `shared_models` to support the `timezone` field in reminder schemas.
+    - Handling `timezone` correctly in `ReminderCreateTool` in `assistant_service`.
+- [ ] **Refactor inter-service communication** (see `docs/service_communication_refactoring_plan.md`):
+    - Unify HTTP clients via `BaseServiceClient` in `shared_models`.
+    - Add retry, circuit breaker, and metrics to all services.
+    - Introduce a Redis cache for configurations (settings, assistants, tools).
+    - Create a Grafana dashboard to monitor inter-service calls.
+    - **Expected impact**: improved reliability during network failures, less code duplication (~800 lines), better observability.
+- [x] **CRITICAL**: Implement a Dead Letter Queue (DLQ) and a retry mechanism for message processing in `assistant_service`. Problem: messages are lost on processing errors because the ACK always happens in the `finally` block (`orchestrator.py:602-615`). The solution includes:
+    - **Tracking processing attempts**: store `retry_count` in the Redis Stream message metadata (use message fields to persist the attempt counter).
+    - **Retry logic with exponential backoff**: on a processing error, if `retry_count < MAX_RETRIES` (3-5 recommended), do not ACK the message; return it to pending via `xautoclaim` with a delay (1s, 2s, 4s). ACK only on successful processing.
+    - **Dead Letter Queue**: after exhausting `MAX_RETRIES`, send the message to a separate Redis Stream `{INPUT_QUEUE}:dlq`, preserving:
+        - The original payload
+        - The error type and error message
+        - The timestamp of the last attempt
+        - The number of attempts
+        - The user ID and other metadata for recovery
+    - **Modify `orchestrator.py`**: change the logic in `listen_for_messages()` and `_dispatch_event()`:
+        - ACK only on successful processing (`status == "success"`).
+        - On error: increment `retry_count`; if the limit is not exceeded, do not ACK (the message stays in pending for retry via `xautoclaim`).
+        - When the limit is exceeded, send to the DLQ and then ACK the original message.
+    - **Extend `RedisStreamClient`**: add methods for working with the retry counter and the DLQ:
+        - `get_retry_count(message_fields)` — extract the counter from the message fields.
+        - `increment_retry_count(message_fields)` — increment the counter.
+        - `send_to_dlq(original_message_id, payload, error_info, retry_count)` — send to the DLQ.
+    - **Monitoring and metrics**: add Prometheus metrics:
+        - `messages_dlq_total{error_type, queue}` — counter of DLQ messages by error type.
+        - `message_processing_retries_total{queue}` — total number of retry attempts.
+        - `message_processing_duration_seconds{status}` — processing time (success/failure).
+        - A Grafana alert when the DLQ grows (>10 messages in 5 minutes).
+    - **REST API to manage the DLQ** (in `rest_service`):
+        - `GET /api/v1/dlq/messages` — list DLQ messages with filtering (error_type, user_id, date_range).
+        - `POST /api/v1/dlq/messages/{message_id}/retry` — resend a message from the DLQ back to the main queue.
+        - `DELETE /api/v1/dlq/messages/{message_id}` — delete a message from the DLQ (after manual triage).
+        - A `DLQMessage` DB model to store metadata (optional, for easier administration).
+    - **Logging**: add structured logs for all events:
+        - Retry attempts with `retry_count`, `error_type`, `delay_before_retry`.
+        - Sending to the DLQ with full error information.
+        - Recovery from the DLQ.
+    - **Testing**: add unit and integration tests:
+        - Test the retry logic on transient errors (ConnectionError, TimeoutError).
+        - Test sending to the DLQ after attempts are exhausted.
+        - Test recovery of messages from the DLQ.
+        - Test the metrics and monitoring.
+    - **Documentation**: update `AGENTS.md` with a description of the DLQ mechanism and add a section to `docs/` with implementation details.
+    - **Expected impact**: reduce message loss from ~1-5% to <0.1%, improve reliability, and enable recovery of lost messages.
+- [ ] **Migrate pyproject.toml to the PEP 621 format**: update all services to use the PEP 621 standard instead of the deprecated `[tool.poetry]` format. Affected files:
+    - All `pyproject.toml` files in the services (rest_service, assistant_service, telegram_bot_service, google_calendar_service, cron_service, rag_service, admin_service, shared_models).
+    - Move metadata (name, version, description, authors) from `[tool.poetry]` into the `[project]` section.
+    - Update the authors format to the new PEP 621 format: `[{name = "...", email = "..."}]`.
+    - Verify that `poetry check` reports no warnings after the migration.
+    - **Expected impact**: compliance with modern Python standards, removal of Poetry warnings, better compatibility with future Poetry versions.
