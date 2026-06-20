@@ -26,7 +26,7 @@ smart-assistant/
 - FastAPI (rest/rag/calendar), Streamlit (admin).
 - LangChain 1.x + LangGraph 1.x in `assistant_service` (middleware architecture).
 - Postgres (pgvector), Redis.
-- RAG: no external vector DB (in-memory implementation).
+- RAG: embeddings persisted in Postgres via rest_service (pgvector, HNSW + cosine).
 - OpenAI (chat + embeddings), Tavily web search (optional).
 - Lint/format: Ruff (format + check). Tests: Pytest. Logs: structlog.
 - Monitoring: Grafana + Prometheus + Loki (in `monitoring/`).
