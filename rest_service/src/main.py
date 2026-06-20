@@ -1,4 +1,5 @@
 import logging
+import secrets
 from contextlib import asynccontextmanager
 
 import redis.asyncio as redis_async
@@ -109,6 +110,29 @@ app = FastAPI(lifespan=lifespan, title="Assistant Service API")
 app.add_middleware(CacheInvalidationMiddleware)  # Runs after request, invalidates cache
 app.add_middleware(CorrelationIdMiddleware)  # Runs first, sets correlation ID
 app.add_middleware(PrometheusMiddleware)  # Runs around everything, collects metrics
+
+
+@app.middleware("http")
+async def require_internal_token(request: Request, call_next):
+    """Reject /api/* requests without a valid internal service token.
+
+    Service-to-service calls must send X-Internal-Token matching
+    settings.INTERNAL_API_TOKEN. /health and /metrics stay open for probes.
+    When the token is unset the service fails closed (rejects everything).
+    """
+    if request.url.path.startswith("/api"):
+        expected = settings.INTERNAL_API_TOKEN
+        provided = request.headers.get("X-Internal-Token", "")
+        if not (expected and provided and secrets.compare_digest(provided, expected)):
+            logger.warning(
+                "Rejected internal request without valid token",
+                path=str(request.url.path),
+            )
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing or invalid internal API token"},
+            )
+    return await call_next(request)
 
 
 @app.exception_handler(RequestValidationError)

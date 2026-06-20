@@ -37,6 +37,7 @@ services:
       dockerfile: rag_service/Dockerfile
     environment:
       - REST_SERVICE_URL=http://test-rest-service:8000
+      - INTERNAL_API_TOKEN=integration-test-internal-token
       - OPENAI_API_KEY=${TEST_OPENAI_KEY:-test-openai-key-placeholder}
       - EMBEDDING_MODEL=text-embedding-3-small
       - LOG_LEVEL=DEBUG
@@ -59,6 +60,7 @@ services:
     environment:
       - ASYNC_DATABASE_URL=postgresql+asyncpg://${TEST_DB_USER:-test_user}:${TEST_DB_PASSWORD:-testpass123}@test-db:5432/${TEST_DB_NAME:-test_db}
       - DATABASE_URL=postgresql://${TEST_DB_USER:-test_user}:${TEST_DB_PASSWORD:-testpass123}@test-db:5432/${TEST_DB_NAME:-test_db}
+      - INTERNAL_API_TOKEN=integration-test-internal-token
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
@@ -100,6 +102,7 @@ services:
       # Services
       - REST_SERVICE_URL=http://localhost:8000
       - RAG_SERVICE_URL=http://test-rag-service:8002
+      - INTERNAL_API_TOKEN=integration-test-internal-token
       # Test keys (mocked in tests, use env vars or defaults)
       - OPENAI_API_KEY=${TEST_OPENAI_KEY:-test-openai-key-placeholder}
       - TELEGRAM_BOT_TOKEN=${TEST_TELEGRAM_TOKEN:-test-telegram-token}

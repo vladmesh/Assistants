@@ -34,6 +34,7 @@ services:
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REST_SERVICE_URL=http://rest_service:8000
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
     depends_on:
       redis:
@@ -95,6 +96,7 @@ services:
       - REDIS_DB=${REDIS_DB}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     depends_on:
       redis:
         condition: service_healthy

@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from config import Settings
+from config import Settings, settings
 from database import get_session
 from main import app  # Assuming your FastAPI app is defined in main.py
 from models.assistant import Assistant
@@ -18,6 +18,13 @@ from models.user import TelegramUser
 
 # Load test settings
 TEST_SETTINGS = Settings(_env_file=".env.test")
+
+# Internal service-to-service auth: pin a known token on the app and send the
+# matching header from the test client so the auth middleware lets requests in.
+INTERNAL_TEST_TOKEN = (
+    os.environ.get("INTERNAL_API_TOKEN") or "integration-test-internal-token"
+)
+settings.INTERNAL_API_TOKEN = INTERNAL_TEST_TOKEN
 
 # Проверка наличия переменной ASYNC_DATABASE_URL
 DATABASE_URL = os.environ.get("ASYNC_DATABASE_URL")
@@ -92,7 +99,11 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = get_session_override
 
     # Create a new client for each test
-    async with AsyncClient(app=app, base_url="http://test") as async_client:
+    async with AsyncClient(
+        app=app,
+        base_url="http://test",
+        headers={"X-Internal-Token": INTERNAL_TEST_TOKEN},
+    ) as async_client:
         yield async_client
 
     # Clear dependency overrides after test
