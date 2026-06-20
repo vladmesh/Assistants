@@ -9,6 +9,7 @@ import pytest_asyncio
 import redis.asyncio as redis
 from httpx import AsyncClient
 
+from config import settings
 from main import app
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -36,7 +37,11 @@ async def dlq_client(redis_client: redis.Redis) -> AsyncGenerator[AsyncClient, N
     """Provide AsyncClient with Redis in app state."""
     app.state.redis_client = redis_client
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(
+        app=app,
+        base_url="http://test",
+        headers={"X-Internal-Token": settings.INTERNAL_API_TOKEN},
+    ) as client:
         yield client
 
     if hasattr(app.state, "redis_client"):
@@ -273,7 +278,11 @@ class TestRedisUnavailable:
         if hasattr(app.state, "redis_client"):
             delattr(app.state, "redis_client")
 
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(
+            app=app,
+            base_url="http://test",
+            headers={"X-Internal-Token": settings.INTERNAL_API_TOKEN},
+        ) as client:
             response = await client.get(f"/api/dlq/messages?queue={TEST_QUEUE}")
             assert response.status_code == 503
             assert "Redis not available" in response.json()["detail"]
