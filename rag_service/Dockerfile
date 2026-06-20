@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.12-slim as builder
+FROM python:3.12-slim@sha256:d764629ce0ddd8c71fd371e9901efb324a95789d2315a47db7e4d27e78f1b0e9 as builder
 
 WORKDIR /
 
@@ -17,7 +17,7 @@ RUN poetry config virtualenvs.create false && \
     poetry install --only main --no-interaction --no-ansi --no-root
 
 # Production stage
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:d764629ce0ddd8c71fd371e9901efb324a95789d2315a47db7e4d27e78f1b0e9
 
 WORKDIR /
 
