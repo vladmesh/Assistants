@@ -1,0 +1,11 @@
+# gitleaks config. Keep the full default ruleset; allowlist only the
+# known-safe false positives confirmed during the 2026-06 audit.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Audited false positives: dependency lockfile hashes"
+paths = [
+  '''poetry\.lock$''', # PyPI wheel sha256 hashes collide with the square-access-token regex
+  '''uv\.lock$''',
+]
