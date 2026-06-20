@@ -36,7 +36,7 @@ A comprehensive intelligent assistant system built on LangChain and LangGraph, d
 - **rag_service** - Retrieval-Augmented Generation service
   - REST API for adding/searching embeddings
   - Uses OpenAI embeddings
-  - In-memory storage (no external vector DB)
+  - Persists/searches embeddings in PostgreSQL via rest_service (pgvector, HNSW + cosine)
   - Integration with assistant service
 
 ### Technology Stack

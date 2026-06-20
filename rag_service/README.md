@@ -1,11 +1,11 @@
 # RAG Service
 
-A service for Retrieval-Augmented Generation (RAG) that provides functionality for storing and searching vector embeddings of text data.
+A service for Retrieval-Augmented Generation (RAG): it generates OpenAI embeddings for text and stores/searches them in PostgreSQL (pgvector, HNSW + cosine) via the REST service.
 
 ## Features
 
 - Store vector embeddings of text data
-- Search vector embeddings using ChromaDB
+- Search embeddings by cosine similarity (PostgreSQL + pgvector, HNSW index)
 - Support for various data types (shared rules, user history, assistant notes)
 - Filtering by data type, user, and assistant
 - REST API for adding and searching data
