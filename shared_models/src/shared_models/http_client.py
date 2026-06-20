@@ -9,6 +9,7 @@
 - Настраиваемые таймауты
 """
 
+import os
 import re
 import time
 from typing import Any, TypeVar
@@ -266,6 +267,12 @@ class BaseServiceClient:
         headers = kwargs.pop("headers", {})
         if correlation_id:
             headers["X-Correlation-ID"] = correlation_id
+        # Service-to-service auth: attach the shared internal token so the
+        # target service accepts the request. Read from env so every caller
+        # gets it without per-client wiring.
+        internal_token = os.getenv("INTERNAL_API_TOKEN")
+        if internal_token:
+            headers.setdefault("X-Internal-Token", internal_token)
         kwargs["headers"] = headers
 
         # Check circuit breaker

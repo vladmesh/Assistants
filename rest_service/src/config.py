@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     CACHE_ENABLED: bool = os.getenv("CACHE_ENABLED", "true").lower() == "true"
     CACHE_PREFIX: str = os.getenv("CACHE_PREFIX", "rest_api")
 
+    # Internal service-to-service auth (shared secret).
+    # When empty the service rejects all /api/* requests (fail closed).
+    INTERNAL_API_TOKEN: str = os.getenv("INTERNAL_API_TOKEN", "")
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_JSON_FORMAT: bool = True

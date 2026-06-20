@@ -42,6 +42,7 @@ services:
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REST_SERVICE_URL=http://rest_service:8000
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
     volumes:
       - ./telegram_bot_service/src:/src # для разработки
@@ -116,6 +117,7 @@ services:
       - REDIS_QUEUE_TO_TELEGRAM=${REDIS_QUEUE_TO_TELEGRAM}
       - REDIS_QUEUE_TO_SECRETARY=${REDIS_QUEUE_TO_SECRETARY}
       - REST_SERVICE_URL=http://rest_service:8000
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     ports:
       - "8080:8080"
     volumes:
@@ -216,6 +218,7 @@ services:
     container_name: rag-service
     environment:
       - REST_SERVICE_URL=http://rest_service:8000
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - EMBEDDING_MODEL=text-embedding-3-small
       - LOG_LEVEL=DEBUG
