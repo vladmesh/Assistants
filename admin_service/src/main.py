@@ -1,12 +1,8 @@
 """Main entry point for the admin panel"""
 
-from pathlib import Path
-
 import streamlit as st
 import streamlit_authenticator as stauth
-import yaml
 from shared_models import configure_logging, get_logger
-from yaml.loader import SafeLoader
 
 from config.settings import settings
 from pages.assistants.assistants import show_assistants_page
@@ -34,59 +30,32 @@ configure_logging(
 )
 logger = get_logger(__name__)
 
-# Load authentication configuration
-config_path = Path(__file__).parent / "config" / "credentials.yaml"
-try:
-    with config_path.open() as file:
-        config = yaml.load(file, Loader=SafeLoader)
-    # Ensure config is a dictionary
-    if not isinstance(config, dict):
-        config = {}
-        st.error("Credentials configuration is invalid.")
-        logger.error("Credentials configuration is not a valid dictionary.")
-        st.stop()
-
-except FileNotFoundError:
-    st.error(f"Credentials file not found at {config_path}")
-    logger.error(f"Credentials file not found at {config_path}")
-    st.stop()  # Stop execution if config is missing
-except yaml.YAMLError as e:
-    st.error(f"Error parsing credentials configuration file: {e}")
-    logger.exception("Error parsing credentials YAML file")
-    st.stop()
-except Exception as e:
-    st.error(f"Error loading credentials configuration: {e}")
-    logger.exception("Error loading credentials configuration")
+# Build authentication configuration from the environment.
+# Secrets (cookie key, bcrypt password hash) never live in the repo; they are
+# injected via env vars. The app refuses to start if either is missing.
+if not settings.ADMIN_COOKIE_KEY or not settings.ADMIN_PASSWORD_HASH:
+    st.error("ADMIN_COOKIE_KEY and ADMIN_PASSWORD_HASH must be set in the environment.")
+    logger.error("Missing admin auth secrets; refusing to start.")
     st.stop()
 
+credentials = {
+    "usernames": {
+        settings.ADMIN_USERNAME: {
+            "email": settings.ADMIN_EMAIL,
+            "name": settings.ADMIN_NAME,
+            "password": settings.ADMIN_PASSWORD_HASH,
+        }
+    }
+}
 
-# Initialize authenticator
 try:
-    # Use .get for safer access and provide defaults
-    credentials = config.get("credentials", {})
-    cookie_config = config.get("cookie", {})
-    preauthorized_config = config.get("preauthorized", {})
-
     authenticator = stauth.Authenticate(
         credentials,
-        cookie_config.get("name", "admin_cookie"),  # Default name
-        cookie_config.get(
-            "key", "default_secret_key"
-        ),  # Default key (consider logging a warning if default is used)
-        cookie_config.get("expiry_days", 30),
-        preauthorized_config.get("emails", []),
+        settings.ADMIN_COOKIE_NAME,
+        settings.ADMIN_COOKIE_KEY,
+        settings.ADMIN_COOKIE_EXPIRY_DAYS,
+        [],
     )
-    # Log a warning if the default cookie key is used
-    if cookie_config.get("key") == "default_secret_key":
-        logger.warning(
-            "Using default cookie secret key. "
-            "Please set a secure key in credentials.yaml."
-        )
-
-except KeyError as e:
-    st.error(f"Missing key in credentials configuration: {e}")
-    logger.exception(f"Missing key in credentials configuration: {e}")
-    st.stop()
 except Exception as e:
     st.error(f"Error initializing authenticator: {e}")
     logger.exception("Error initializing authenticator")

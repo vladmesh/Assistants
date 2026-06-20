@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     # Database settings (admin UI does not access DB directly)
     # POSTGRES_USER = os.getenv("POSTGRES_USER", "admin")
 
+    # Admin authentication
+    # Secrets (cookie key, bcrypt password hash) come from the environment and
+    # are never committed. The app refuses to start if they are unset
+    # (see main.py). Generate the hash with streamlit_authenticator's Hasher.
+    ADMIN_USERNAME: str = Field(default="admin")
+    ADMIN_NAME: str = Field(default="Admin User")
+    ADMIN_EMAIL: str = Field(default="admin@example.com")
+    ADMIN_PASSWORD_HASH: str = Field(default="")
+    ADMIN_COOKIE_KEY: str = Field(default="")
+    ADMIN_COOKIE_NAME: str = Field(default="admin_cookie")
+    ADMIN_COOKIE_EXPIRY_DAYS: int = Field(default=30)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -56,4 +56,7 @@ dist/
 # Monitoring - credentials
 monitoring/grafana/provisioning/alerting/contactpoints.yml
 
+# Admin auth secrets (cookie key + bcrypt hash) live in env, never in git
+admin_service/src/config/credentials.yaml
+
 .cursorrules
