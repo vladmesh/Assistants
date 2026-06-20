@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +9,17 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "DEBUG"
     LOG_JSON_FORMAT: bool = True
+
+    # CORS: comma-separated allowed origins (replaces a hardcoded "*").
+    # Credentials are disabled automatically when origins is "*".
+    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost"]
+
+    @field_validator("CORS_ALLOW_ORIGINS", mode="before")
+    @classmethod
+    def _split_cors_origins(cls, v: object) -> object:
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
 
     # Google OAuth settings
     GOOGLE_CLIENT_ID: str
